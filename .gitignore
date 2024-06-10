@@ -14,3 +14,6 @@
 *.ipynb
 /.pytest_cache/
 poetry.lock
+.venv
+venv
+
