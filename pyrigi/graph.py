@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from itertools import combinations
-from typing import List, Any, Union
+from typing import Hashable, List, Any, Union, Tuple, Optional, Dict
+from enum import Enum
 
 import networkx as nx
 from sympy import Matrix
@@ -803,6 +804,125 @@ class Graph(nx.Graph):
         if not clean_list and self.is_rigid():
             clean_list = [self]
         return clean_list
+
+    @doc_category("Generic rigidity")
+    def nac_coloring(self) -> Tuple[bool, Optional[Any]]:
+        """
+        Finds a NAC-coloring of this graph if there exists one.
+        Returns tuple - the first field tells whenever a NAC coloring exists
+        and the second returns the coloring.
+        TODO specify format
+        TODO example
+        """
+
+        print(self)
+
+        class NACReason(Enum):
+            NONE_EXISTS = False
+            # NOT_CONNECTED = True
+            NOT_2_VERTEX_CONNECTED = True
+            NOT_3_EDGE_CONNECTED = True
+            CASE_FOUND = True
+
+        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+            print("NOT_2_VERTEX_CONNECTED")
+            return (NACReason.NOT_2_VERTEX_CONNECTED.value, None)
+        if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
+            print("NOT_3_EDGE_CONNECTED")
+            return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
+
+        # TODO extract to a different part of the project later
+        class UnionFind[T: Hashable]:
+            """
+            Union find data structure implementation
+
+            Use only with types other then int,
+            use more efficient implementation in that case.
+
+            Uses tree collapsing internally to improve performance
+            """
+
+            def __init__(self):
+                # Maps used type into id used for list indexing
+                self._data: Dict[T, T] = {}
+
+            def same_set(self, a: T, b: T) -> bool:
+                return self.find(a) == self.find(b)
+
+            def find(self, a: T) -> T:
+                # initial recursion end
+                if a not in self._data:
+                    self._data[a] = a
+                    return a
+
+                # recursion end
+                val = self._data[a]
+                if val == a:
+                    return a
+
+                res = self.find(val)
+                # used to collapse union find trees
+                self._data[a] = res
+                return res
+
+            def join(self, a: T, b: T) -> None:
+                ca, cb = self.find(a), self.find(b)
+                if ca == cb:
+                    return
+                self._data[b] = ca
+
+            def root_cnt(self, total: int) -> int:
+                """
+                Return no. of root nodes
+
+                Parameters
+                ----------
+                total:
+                    Total number of the nodes handled by this data structure
+                """
+                return total - len(self._data)
+
+        triangle_components = UnionFind[Edge]()
+        for edge in self.edges:
+            v, u = edge
+            vset = set([w for e in self.edges(v) for w in e])
+            uset = set([w for e in self.edges(u) for w in e])
+            intersection = vset.intersection(uset) - set([v, u])
+            for w in intersection:
+                sides: List[Edge] = [
+                    tuple(sorted((u, v))),
+                    tuple(sorted((v, w))),
+                    tuple(sorted((u, w))),
+                ]
+                triangle_components.join(sides[0], sides[1])
+                triangle_components.join(sides[0], sides[2])
+
+        line_graph = Graph()
+        for v in self.vertex_list():
+            edges = list(self.edges(v))
+            for i in range(0, len(edges)):
+                for j in range(i + 1, len(edges)):
+                    c1, c2 = triangle_components.find(
+                        tuple(sorted(edges[i]))
+                    ), triangle_components.find(tuple(sorted(edges[j])))
+                    if c1 == c2:
+                        continue
+                    if c1 > c2:
+                        c1, c2 = c2, c1
+                    line_graph.add_edge(c1, c2)
+
+        print(line_graph)
+
+        return (False, None)
+
+    @doc_category("Generic rigidity")
+    def is_nac_coloring(self, coloring: Any) -> bool:
+        """
+        Check if the coloring given is a NAC coloring.
+        The algorithm checks if all the edges are in the same component.
+        (TODO format)
+        """
+        raise NotImplementedError()
 
     @doc_category("General graph theoretical properties")
     def is_isomorphic(self, graph: GraphType) -> bool:
