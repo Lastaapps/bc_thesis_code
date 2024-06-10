@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from itertools import combinations
-from typing import Hashable, List, Any, Union, Tuple, Optional, Dict
+from typing import Hashable, Iterable, List, Any, Union, Tuple, Optional, Dict, Set
 from enum import Enum
 
 import networkx as nx
@@ -196,7 +196,7 @@ class Graph(nx.Graph):
         self.remove_node(vertex)
 
     @doc_category("Graph manipulation")
-    def delete_vertices(self, vertices: List[Vertex]) -> None:
+    def delete_vertices(self, vertices: Iterable[Vertex]) -> None:
         """Alias for :meth:`networkx.Graph.remove_nodes_from`."""
         self.remove_nodes_from(vertices)
 
@@ -206,7 +206,7 @@ class Graph(nx.Graph):
         self.remove_edge(*edge)
 
     @doc_category("Graph manipulation")
-    def delete_edges(self, edges: List[Edge]) -> None:
+    def delete_edges(self, edges: Iterable[Edge]) -> None:
         """Alias for :meth:`networkx.Graph.remove_edges_from`."""
         self.remove_edges_from(edges)
 
@@ -216,12 +216,12 @@ class Graph(nx.Graph):
         self.add_node(vertex)
 
     @doc_category("Graph manipulation")
-    def add_vertices(self, vertices: List[Vertex]) -> None:
+    def add_vertices(self, vertices: Iterable[Vertex]) -> None:
         """Alias for :meth:`networkx.Graph.add_nodes_from`."""
         self.add_nodes_from(vertices)
 
     @doc_category("Graph manipulation")
-    def add_edges(self, edges: List[Edge]) -> None:
+    def add_edges(self, edges: Iterable[Edge]) -> None:
         """Alias for :meth:`networkx.Graph.add_edges_from`."""
         self.add_edges_from(edges)
 
@@ -912,17 +912,50 @@ class Graph(nx.Graph):
                     line_graph.add_edge(c1, c2)
 
         print(line_graph)
+        print([a for a in line_graph.edges])
 
         return (False, None)
 
     @doc_category("Generic rigidity")
-    def is_nac_coloring(self, coloring: Any) -> bool:
+    def is_nac_coloring(self, colors: Tuple[Set[Edge], Set[Edge]]) -> bool:
         """
         Check if the coloring given is a NAC coloring.
         The algorithm checks if all the edges are in the same component.
         (TODO format)
         """
-        raise NotImplementedError()
+
+        # Both colors have to be used
+        if len(colors[0]) == 0 or len(colors[1]) == 0:
+            return False
+
+        # We should rather check if the edges match exactly,
+        # but that would be a little slower
+        if len(colors[0]) + len(colors[1]) == len(self.edges):
+            return False
+        if len(colors[0].intersection(colors[1])) != 0:
+            return False
+
+        G = Graph()
+        G.add_vertices(self.vertex_list())
+
+        def check_coloring(red: Set[Edge], blue: Set[Edge]) -> bool:
+            G.clear_edges()
+            G.add_edges(red)
+
+            component_mapping: Dict[Vertex, int] = {}
+            vertices: Set[Vertex]
+            for i, vertices in enumerate(nx.components.connected_components(G)):
+                for v in vertices:
+                    component_mapping[v] = i
+
+            for e1, e2 in blue:
+                if component_mapping[e1] == component_mapping[e2]:
+                    return False
+            return True
+
+        return check_coloring(colors[0], colors[1]) and check_coloring(
+            colors[1], colors[0]
+        )
 
     @doc_category("General graph theoretical properties")
     def is_isomorphic(self, graph: GraphType) -> bool:

@@ -1,3 +1,5 @@
+from typing import Set, Tuple
+from pyrigi.data_type import Edge
 from pyrigi.graph import Graph
 import pyrigi.graphDB as graphs
 from pyrigi.exception import LoopError
@@ -223,12 +225,41 @@ def test_min_max_rigid_subgraphs():
 @pytest.mark.parametrize(
     "graph",
     [
-        # TODO name and move to database
-        Graph.from_vertices_and_edges([0, 1, 2, 3, 4, 5], [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3), (0, 3), (1, 4), (2, 5)]),
+        graphs.ThreePrism(),
     ],
 )
 def test_nac_coloring(graph):
     assert graph.nac_coloring()[0]
+
+
+@pytest.mark.parametrize(
+    "graph,coloring,result",
+    [
+        (
+            graphs.SmallestFlexibleLamanGraph(),
+            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]), set([(1, 4), (3, 4)])),
+            True,
+        ),
+        (
+            graphs.SmallestFlexibleLamanGraph(),
+            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
+            False,
+        ),
+        (
+            graphs.SmallestFlexibleLamanGraph(),
+            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
+            False,
+        ),
+        (
+            graphs.SmallestFlexibleLamanGraph(),
+            (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
+            False,
+        ),
+        # TODO more tests
+    ],
+)
+def test_is_nac_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool):
+    assert graph.is_nac_coloring(coloring) == result
 
 
 def test_str():

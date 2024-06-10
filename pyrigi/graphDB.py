@@ -50,3 +50,13 @@ def ThreePrismPlusEdge():
     return Graph(
         [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5), (0, 3), (1, 4), (2, 5), (0, 5)]
     )
+
+
+def SmallestFlexibleLamanGraph():
+    """
+    Return the smallest flexible Laman graph
+    (the diamond with 2 connected extra edges from the opposite spikes).
+    """
+    return Graph(
+        [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)],
+    )
