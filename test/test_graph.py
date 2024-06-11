@@ -236,7 +236,7 @@ def test_min_max_rigid_subgraphs():
         (graphs.ThreePrismPlusEdge(), False),
         (graphs.SmallestFlexibleLamanGraph(), True),
     ],
-    ids=["path", "cycle", "cycle4", "cycle5", "complete5", "bipartite5", "diamond", "prism", "prismPlus", "laman"],
+    ids=["path", "cycle3", "cycle4", "cycle5", "complete5", "bipartite5", "diamond", "prism", "prismPlus", "laman"],
 )
 def test_find_nac_coloring(graph, result: bool):
     coloringList = graph.find_nac_coloring(limit=None)

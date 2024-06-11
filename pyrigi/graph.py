@@ -807,61 +807,77 @@ class Graph(nx.Graph):
         return clean_list
 
     @staticmethod
-    def _find_triangle_components(graph: Graph) -> UnionFind[Edge]:
+    def _find_triangle_components(
+        graph: Graph,
+    ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
         """
         Finds all the components of triangle equivalence.
-        Returns an union find data structure witch
-        for each edge gives corresponding components represented by an edge
-        of the component. Make sure to use edges in sorted order.
+
+        Returns mapping from edges to their component id (int)
+        and the other way around from component to set of edges
+        Order of vertices in the edge pairs is arbitrary.
         """
         triangle_components = UnionFind[Edge]()
         for edge in graph.edges:
             v, u = edge
+
+            # We cannot sort vertices and we cannot expect
+            # any regularity or order of the vertices
+            triangle_components.join((u, v), (v, u))
+
             vset = set([w for e in graph.edges(v) for w in e])
             uset = set([w for e in graph.edges(u) for w in e])
             intersection = vset.intersection(uset) - set([v, u])
             for w in intersection:
-                sides: List[Edge] = [
-                    tuple(sorted((u, v))),
-                    tuple(sorted((v, w))),
-                    tuple(sorted((u, w))),
-                ]
-                triangle_components.join(sides[0], sides[1])
-                triangle_components.join(sides[0], sides[2])
+                triangle_components.join((u, v), (w, v))
+                triangle_components.join((u, v), (w, u))
 
-        return triangle_components
+        edge_to_component: Dict[Edge, int] = {}
+        component_to_edge: List[List[Edge]] = [[]]
+
+        for edge in graph.edges:
+            root = triangle_components.find(edge)
+
+            if root not in edge_to_component:
+                edge_to_component[root] = id = len(component_to_edge)
+                component_to_edge.append([])
+            else:
+                id = edge_to_component[root]
+
+            edge_to_component[edge] = id
+            component_to_edge[id].append(edge)
+
+        return edge_to_component, component_to_edge
 
     @staticmethod
     def _create_line_graph_from_components(
         graph: Graph,
-        components: UnionFind[Edge],
-    ) -> Tuple[nx.Graph, Dict[Edge, List[Edge]]]:
+        edges_to_components: Dict[Edge, int],
+    ) -> nx.Graph:
         """
         Creates a line graph from the components given.
         Each edge must belong to a component.
-        Names of these components are then used
+        Ids of these components are then used
         as vertexes of the new graph.
         """
 
         # graph used to find NAC coloring easily
         line_graph = nx.Graph()
-        # used to transform a found NAC coloring back
-        component_to_edges: Dict[Edge, List[Edge]] = {}
+
+        def get_edge_component(e: Edge) -> int:
+            u, v = e
+            res = edges_to_components.get((u, v))
+            if res is None:
+                res = edges_to_components[(v, u)]
+            return res
 
         for v in graph.vertex_list():
-            edges = [tuple(sorted(e)) for e in graph.edges(v)]
+            edges = list(graph.edges(v))
             for i in range(0, len(edges)):
-                o1 = edges[i]
-                c1 = components.find(o1)
-
-                # store items for inverse tracking of the edges
-                if c1 not in component_to_edges:
-                    component_to_edges[c1] = []
-                component_to_edges[c1].append(o1)
+                c1 = get_edge_component(edges[i])
 
                 for j in range(i + 1, len(edges)):
-                    o2 = edges[j]
-                    c2 = components.find(o2)
+                    c2 = get_edge_component(edges[j])
                     if c1 == c2:
                         continue
                     elif c1 < c2:
@@ -869,13 +885,13 @@ class Graph(nx.Graph):
                     else:
                         line_graph.add_edge(c2, c1)
 
-        return (line_graph, component_to_edges)
+        return line_graph
 
     @staticmethod
     def _find_nac_coloring_naive(
         graph: Graph,
         line_graph: nx.Graph,
-        component_to_edges: Dict[Edge, List[Edge]],
+        component_to_edges: List[List[Edge]],
         limit: int | None,
     ) -> List[NACColoring]:
         coloringList: List[NACColoring] = []
@@ -921,7 +937,6 @@ class Graph(nx.Graph):
         assert limit is None or limit >= 1
 
         # TODO to implement
-        # don't require the Vertex type to be comparable
         # find cycles of 4/5 and use pseudo CSP
         # coloring caching
 
@@ -954,14 +969,10 @@ class Graph(nx.Graph):
         #     print("NOT_3_EDGE_CONNECTED")
         #     return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
 
-        triangle_components = Graph._find_triangle_components(self)
-        line_graph, component_to_edges = Graph._create_line_graph_from_components(
-            self, triangle_components
-        )
+        edge_to_component, component_to_edge = Graph._find_triangle_components(self)
+        line_graph = Graph._create_line_graph_from_components(self, edge_to_component)
 
-        res = Graph._find_nac_coloring_naive(
-            self, line_graph, component_to_edges, limit
-        )
+        res = Graph._find_nac_coloring_naive(self, line_graph, component_to_edge, limit)
         return res
 
     @doc_category("Generic rigidity")
