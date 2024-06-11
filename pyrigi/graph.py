@@ -871,29 +871,59 @@ class Graph(nx.Graph):
 
         return (line_graph, component_to_edges)
 
+    @staticmethod
+    def _find_nac_coloring_naive(
+        graph: Graph,
+        line_graph: nx.Graph,
+        component_to_edges: Dict[Edge, List[Edge]],
+        limit: int | None,
+    ) -> List[NACColoring]:
+        coloringList: List[NACColoring] = []
+        vertices = list(line_graph.nodes())
+
+        # iterate all the coloring variants
+        # division by 2 is used as the problem is symmetrical
+        for mask in range(1, 2 ** len(vertices) // 2):
+            coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
+            for i, e in enumerate(vertices):
+                (coloring[0] if mask & (1 << i) else coloring[1]).update(
+                    component_to_edges[e]
+                )
+
+            if not graph.is_nac_coloring(coloring):
+                continue
+
+            coloringList.append(coloring)
+
+            # short circuit if the limit is reached
+            if limit is not None and len(coloringList) >= limit:
+                return coloringList
+
+        return coloringList
+
     @doc_category("Generic rigidity")
     def find_nac_coloring(self, limit: int | None = 1) -> List[NACColoring]:
         """
         Finds a NAC-coloring of this graph if there exists one.
         Returns a list of NAC colorings found (certificates)
-        up to the limit given.
+        up to the limit given in an unspecified order.
 
         Parameters
         ----------
         limit:
             Maximum number of colorings to search for.
             Use `None` for unlimited search.
+            The value should be positive.
         ----------
         TODO specify format
         TODO example
         """
+        assert limit is None or limit >= 1
 
         # TODO to implement
-        # always return a certificate
-        # COLORING caching
-        # return all/more the colorings
-        # find cycles of 4/5 and use pseudo CSP
         # don't require the Vertex type to be comparable
+        # find cycles of 4/5 and use pseudo CSP
+        # coloring caching
 
         # TODO return this instead of a boolean flag
         class NACReason(Enum):
@@ -905,10 +935,19 @@ class Graph(nx.Graph):
             # NOT_3_EDGE_CONNECTED = True
             CASE_FOUND = True
 
-        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+        # I'm not sure how to generate all the certificates,
+        # so if more are requested, I fallback to the main solver.
+        if limit == 1 and not nx.algorithms.connectivity.node_connectivity(self) >= 2:
             print("NOT_2_VERTEX_CONNECTED")
-            # TODO build a proof
-            return []
+            generator = nx.algorithms.biconnected_components(self)
+            component: Set[Vertex] = next(generator)
+            assert next(generator)  # make sure there are more components
+
+            red, blue = set(), set()
+            for v, u in self.edges:
+                (red if v in component and u in component else blue).add((u, v))
+
+            return [(red, blue)]
 
         # TODO consult with Legersky
         # if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
@@ -920,31 +959,9 @@ class Graph(nx.Graph):
             self, triangle_components
         )
 
-        def naive() -> List[NACColoring]:
-            coloringList: List[NACColoring] = []
-            vertices = list(line_graph.nodes())
-
-            # iterate all the coloring variants
-            # division by 2 is used as the problem is symmetrical
-            for mask in range(1, 2 ** len(vertices) // 2):
-                coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
-                for i, e in enumerate(vertices):
-                    (coloring[0] if mask & (1 << i) else coloring[1]).update(
-                        component_to_edges[e]
-                    )
-
-                if not self.is_nac_coloring(coloring):
-                    continue
-
-                coloringList.append(coloring)
-
-                # short circuit if the limit is reached
-                if limit is not None and len(coloringList) >= limit:
-                    return coloringList
-
-            return coloringList
-
-        res = naive()
+        res = Graph._find_nac_coloring_naive(
+            self, line_graph, component_to_edges, limit
+        )
         return res
 
     @doc_category("Generic rigidity")
