@@ -6,14 +6,15 @@ from __future__ import annotations
 
 from copy import deepcopy
 from itertools import combinations
-from typing import Hashable, Iterable, List, Any, Union, Tuple, Optional, Dict, Set
+from typing import Iterable, List, Any, Union, Tuple, Optional, Dict, Set
 from enum import Enum
 
 import networkx as nx
 from sympy import Matrix
 import math
 
-from pyrigi.data_type import Vertex, Edge, GraphType, FrameworkType
+from pyrigi.datastructures.union_find import UnionFind
+from pyrigi.data_type import NACColoring, Vertex, Edge, GraphType, FrameworkType
 from pyrigi.misc import doc_category, generate_category_tables
 from pyrigi.exception import LoopError
 
@@ -805,22 +806,94 @@ class Graph(nx.Graph):
             clean_list = [self]
         return clean_list
 
+    @staticmethod
+    def _find_triangle_components(graph: Graph) -> UnionFind[Edge]:
+        """
+        Finds all the components of triangle equivalence.
+        Returns an union find data structure witch
+        for each edge gives corresponding components represented by an edge
+        of the component. Make sure to use edges in sorted order.
+        """
+        triangle_components = UnionFind[Edge]()
+        for edge in graph.edges:
+            v, u = edge
+            vset = set([w for e in graph.edges(v) for w in e])
+            uset = set([w for e in graph.edges(u) for w in e])
+            intersection = vset.intersection(uset) - set([v, u])
+            for w in intersection:
+                sides: List[Edge] = [
+                    tuple(sorted((u, v))),
+                    tuple(sorted((v, w))),
+                    tuple(sorted((u, w))),
+                ]
+                triangle_components.join(sides[0], sides[1])
+                triangle_components.join(sides[0], sides[2])
+
+        return triangle_components
+
+    @staticmethod
+    def _create_line_graph_from_components(
+        graph: Graph,
+        components: UnionFind[Edge],
+    ) -> Tuple[nx.Graph, Dict[Edge, List[Edge]]]:
+        """
+        Creates a line graph from the components given.
+        Each edge must belong to a component.
+        Names of these components are then used
+        as vertexes of the new graph.
+        """
+
+        # graph used to find NAC coloring easily
+        line_graph = nx.Graph()
+        # used to transform a found NAC coloring back
+        component_to_edges: Dict[Edge, List[Edge]] = {}
+
+        for v in graph.vertex_list():
+            edges = [tuple(sorted(e)) for e in graph.edges(v)]
+            for i in range(0, len(edges)):
+                o1 = edges[i]
+                c1 = components.find(o1)
+
+                # store items for inverse tracking of the edges
+                if c1 not in component_to_edges:
+                    component_to_edges[c1] = []
+                component_to_edges[c1].append(o1)
+
+                for j in range(i + 1, len(edges)):
+                    o2 = edges[j]
+                    c2 = components.find(o2)
+                    if c1 == c2:
+                        continue
+                    elif c1 < c2:
+                        line_graph.add_edge(c1, c2)
+                    else:
+                        line_graph.add_edge(c2, c1)
+
+        return (line_graph, component_to_edges)
+
     @doc_category("Generic rigidity")
-    def find_nac_coloring(self) -> Tuple[bool, Optional[Any]]:
+    def find_nac_coloring(self, limit: int | None = 1) -> List[NACColoring]:
         """
         Finds a NAC-coloring of this graph if there exists one.
-        Returns tuple - the first field tells whenever a NAC coloring exists
-        and the second returns the coloring.
+        Returns a list of NAC colorings found (certificates)
+        up to the limit given.
+
+        Parameters
+        ----------
+        limit:
+            Maximum number of colorings to search for.
+            Use `None` for unlimited search.
+        ----------
         TODO specify format
         TODO example
         """
 
         # TODO to implement
-        # split into functions
         # always return a certificate
         # COLORING caching
         # return all/more the colorings
         # find cycles of 4/5 and use pseudo CSP
+        # don't require the Vertex type to be comparable
 
         # TODO return this instead of a boolean flag
         class NACReason(Enum):
@@ -834,107 +907,24 @@ class Graph(nx.Graph):
 
         if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
             print("NOT_2_VERTEX_CONNECTED")
-            return (NACReason.NOT_2_VERTEX_CONNECTED.value, None)
+            # TODO build a proof
+            return []
+
         # TODO consult with Legersky
         # if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
         #     print("NOT_3_EDGE_CONNECTED")
         #     return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
 
-        # TODO extract to a different part of the project later
-        class UnionFind[T: Hashable]:
-            """
-            Union find data structure implementation
+        triangle_components = Graph._find_triangle_components(self)
+        line_graph, component_to_edges = Graph._create_line_graph_from_components(
+            self, triangle_components
+        )
 
-            Use only with types other then int,
-            use more efficient implementation in that case.
-
-            Uses tree collapsing internally to improve performance
-            """
-
-            def __init__(self):
-                # Maps used type into id used for list indexing
-                self._data: Dict[T, T] = {}
-
-            def same_set(self, a: T, b: T) -> bool:
-                return self.find(a) == self.find(b)
-
-            def find(self, a: T) -> T:
-                # initial recursion end
-                if a not in self._data:
-                    self._data[a] = a
-                    return a
-
-                # recursion end
-                val = self._data[a]
-                if val == a:
-                    return a
-
-                res = self.find(val)
-                # used to collapse union find trees
-                self._data[a] = res
-                return res
-
-            def join(self, a: T, b: T) -> None:
-                ca, cb = self.find(a), self.find(b)
-                if ca == cb:
-                    return
-                self._data[b] = ca
-
-            def root_cnt(self, total: int) -> int:
-                """
-                Return no. of root nodes
-
-                Parameters
-                ----------
-                total:
-                    Total number of the nodes handled by this data structure
-                """
-                return total - len(self._data)
-
-        triangle_components = UnionFind[Edge]()
-        for edge in self.edges:
-            v, u = edge
-            vset = set([w for e in self.edges(v) for w in e])
-            uset = set([w for e in self.edges(u) for w in e])
-            intersection = vset.intersection(uset) - set([v, u])
-            for w in intersection:
-                sides: List[Edge] = [
-                    tuple(sorted((u, v))),
-                    tuple(sorted((v, w))),
-                    tuple(sorted((u, w))),
-                ]
-                triangle_components.join(sides[0], sides[1])
-                triangle_components.join(sides[0], sides[2])
-
-        # graph used to find NAC coloring easily
-        line_graph = nx.Graph()
-        # used to transform a found NAC coloring back
-        component_to_edges: Dict[Edge, List[Edge]] = {}
-
-        for v in self.vertex_list():
-            edges = [tuple(sorted(e)) for e in self.edges(v)]
-            for i in range(0, len(edges)):
-                o1 = edges[i]
-                c1 = triangle_components.find(o1)
-
-                # store items for inverse tracking of the edges
-                if c1 not in component_to_edges:
-                    component_to_edges[c1] = []
-                component_to_edges[c1].append(o1)
-
-                for j in range(i + 1, len(edges)):
-                    o2 = edges[j]
-                    c2 = triangle_components.find(o2)
-                    if c1 == c2:
-                        continue
-                    elif c1 < c2:
-                        line_graph.add_edge(c1, c2)
-                    else:
-                        line_graph.add_edge(c2, c1)
-
-        def naive() -> Optional[Tuple[Set[Edge], Set[Edge]]]:
+        def naive() -> List[NACColoring]:
+            coloringList: List[NACColoring] = []
             vertices = list(line_graph.nodes())
 
+            # iterate all the coloring variants
             # division by 2 is used as the problem is symmetrical
             for mask in range(1, 2 ** len(vertices) // 2):
                 coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
@@ -942,15 +932,23 @@ class Graph(nx.Graph):
                     (coloring[0] if mask & (1 << i) else coloring[1]).update(
                         component_to_edges[e]
                     )
-                if self.is_nac_coloring(coloring):
-                    return coloring
-            return None
+
+                if not self.is_nac_coloring(coloring):
+                    continue
+
+                coloringList.append(coloring)
+
+                # short circuit if the limit is reached
+                if limit is not None and len(coloringList) >= limit:
+                    return coloringList
+
+            return coloringList
 
         res = naive()
-        return (res is not None, res)
+        return res
 
     @doc_category("Generic rigidity")
-    def is_nac_coloring(self, colors: Tuple[Set[Edge], Set[Edge]]) -> bool:
+    def is_nac_coloring(self, colors: NACColoring) -> bool:
         """
         Check if the coloring given is a NAC coloring.
         The algorithm checks if all the edges are in the same component.

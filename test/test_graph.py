@@ -237,12 +237,13 @@ def test_min_max_rigid_subgraphs():
     ],
 )
 def test_find_nac_coloring(graph, result: bool):
-    res, coloring = graph.find_nac_coloring()
-    print(graph, coloring)
-    assert res == result
-    # TODO enable later
-    # if res:
-    #     assert graph.is_nac_coloring(coloring)
+    coloringList = graph.find_nac_coloring()
+    print(graph, coloringList)
+
+    assert (len(coloringList) > 0) == result
+
+    for coloring in coloringList:
+        assert graph.is_nac_coloring(coloring)
 
 
 @pytest.mark.parametrize(

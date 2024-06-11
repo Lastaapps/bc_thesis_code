@@ -4,7 +4,7 @@ Module for defining data type used for type hinting.
 
 """
 
-from typing import TypeVar, List, Tuple, Hashable
+from typing import Set, TypeVar, List, Tuple, Hashable
 
 
 Vertex = Hashable
@@ -25,3 +25,5 @@ A Point is a list of coordinates whose length is the dimension of its affine spa
 GraphType = TypeVar("Graph")
 FrameworkType = TypeVar("Framework")
 MatroidType = TypeVar("Matroid")
+
+NACColoring = Tuple[Set[Edge], Set[Edge]]
