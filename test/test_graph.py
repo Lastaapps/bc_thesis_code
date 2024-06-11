@@ -223,13 +223,26 @@ def test_min_max_rigid_subgraphs():
 
 
 @pytest.mark.parametrize(
-    "graph",
+    "graph,result",
     [
-        graphs.ThreePrism(),
+        (graphs.Cycle(3), False),
+        (graphs.Cycle(4), True),
+        (graphs.Cycle(5), True),
+        (graphs.Complete(5), False),
+        (graphs.CompleteBipartite(5, 5), True),
+        (graphs.Diamond(), False),
+        (graphs.ThreePrism(), True),
+        (graphs.ThreePrismPlusEdge(), False),
+        (graphs.SmallestFlexibleLamanGraph(), True),
     ],
 )
-def test_nac_coloring(graph):
-    assert graph.nac_coloring()[0]
+def test_find_nac_coloring(graph, result: bool):
+    res, coloring = graph.find_nac_coloring()
+    print(graph, coloring)
+    assert res == result
+    # TODO enable later
+    # if res:
+    #     assert graph.is_nac_coloring(coloring)
 
 
 @pytest.mark.parametrize(
@@ -254,6 +267,14 @@ def test_nac_coloring(graph):
             graphs.SmallestFlexibleLamanGraph(),
             (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
             False,
+        ),
+        (
+            graphs.ThreePrism(),
+            (
+                set([(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3)]),
+                set([(0, 3), (1, 4), (2, 5)]),
+            ),
+            True,
         ),
         # TODO more tests
     ],

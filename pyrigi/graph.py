@@ -806,7 +806,7 @@ class Graph(nx.Graph):
         return clean_list
 
     @doc_category("Generic rigidity")
-    def nac_coloring(self) -> Tuple[bool, Optional[Any]]:
+    def find_nac_coloring(self) -> Tuple[bool, Optional[Any]]:
         """
         Finds a NAC-coloring of this graph if there exists one.
         Returns tuple - the first field tells whenever a NAC coloring exists
@@ -815,21 +815,30 @@ class Graph(nx.Graph):
         TODO example
         """
 
-        print(self)
+        # TODO to implement
+        # split into functions
+        # always return a certificate
+        # COLORING caching
+        # return all/more the colorings
+        # find cycles of 4/5 and use pseudo CSP
 
+        # TODO return this instead of a boolean flag
         class NACReason(Enum):
+            """Result of a NAC coloring search"""
+
             NONE_EXISTS = False
             # NOT_CONNECTED = True
             NOT_2_VERTEX_CONNECTED = True
-            NOT_3_EDGE_CONNECTED = True
+            # NOT_3_EDGE_CONNECTED = True
             CASE_FOUND = True
 
         if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
             print("NOT_2_VERTEX_CONNECTED")
             return (NACReason.NOT_2_VERTEX_CONNECTED.value, None)
-        if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
-            print("NOT_3_EDGE_CONNECTED")
-            return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
+        # TODO consult with Legersky
+        # if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
+        #     print("NOT_3_EDGE_CONNECTED")
+        #     return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
 
         # TODO extract to a different part of the project later
         class UnionFind[T: Hashable]:
@@ -897,24 +906,48 @@ class Graph(nx.Graph):
                 triangle_components.join(sides[0], sides[1])
                 triangle_components.join(sides[0], sides[2])
 
-        line_graph = Graph()
+        # graph used to find NAC coloring easily
+        line_graph = nx.Graph()
+        # used to transform a found NAC coloring back
+        component_to_edges: Dict[Edge, List[Edge]] = {}
+
         for v in self.vertex_list():
-            edges = list(self.edges(v))
+            edges = [tuple(sorted(e)) for e in self.edges(v)]
             for i in range(0, len(edges)):
+                o1 = edges[i]
+                c1 = triangle_components.find(o1)
+
+                # store items for inverse tracking of the edges
+                if c1 not in component_to_edges:
+                    component_to_edges[c1] = []
+                component_to_edges[c1].append(o1)
+
                 for j in range(i + 1, len(edges)):
-                    c1, c2 = triangle_components.find(
-                        tuple(sorted(edges[i]))
-                    ), triangle_components.find(tuple(sorted(edges[j])))
+                    o2 = edges[j]
+                    c2 = triangle_components.find(o2)
                     if c1 == c2:
                         continue
-                    if c1 > c2:
-                        c1, c2 = c2, c1
-                    line_graph.add_edge(c1, c2)
+                    elif c1 < c2:
+                        line_graph.add_edge(c1, c2)
+                    else:
+                        line_graph.add_edge(c2, c1)
 
-        print(line_graph)
-        print([a for a in line_graph.edges])
+        def naive() -> Optional[Tuple[Set[Edge], Set[Edge]]]:
+            vertices = list(line_graph.nodes())
 
-        return (False, None)
+            # division by 2 is used as the problem is symmetrical
+            for mask in range(1, 2 ** len(vertices) // 2):
+                coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
+                for i, e in enumerate(vertices):
+                    (coloring[0] if mask & (1 << i) else coloring[1]).update(
+                        component_to_edges[e]
+                    )
+                if self.is_nac_coloring(coloring):
+                    return coloring
+            return None
+
+        res = naive()
+        return (res is not None, res)
 
     @doc_category("Generic rigidity")
     def is_nac_coloring(self, colors: Tuple[Set[Edge], Set[Edge]]) -> bool:
@@ -930,7 +963,7 @@ class Graph(nx.Graph):
 
         # We should rather check if the edges match exactly,
         # but that would be a little slower
-        if len(colors[0]) + len(colors[1]) == len(self.edges):
+        if len(colors[0]) + len(colors[1]) != len(self.edges):
             return False
         if len(colors[0].intersection(colors[1])) != 0:
             return False
