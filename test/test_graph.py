@@ -303,7 +303,8 @@ def test__find_cycles(graph, result: Set[Tuple]):
     ],
 )
 def test_find_nac_coloring(graph, result: bool):
-    coloringList = graph.find_nac_coloring(limit=None)
+    algorithm = ["naive", "cycles"][1]
+    coloringList = graph.find_nac_coloring(limit=None, algorithm=algorithm)
     print(graph, len(coloringList), coloringList)
 
     assert (len(coloringList) > 0) == result

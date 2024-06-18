@@ -817,6 +817,7 @@ class Graph(nx.Graph):
         Returns mapping from edges to their component id (int)
         and the other way around from component to set of edges
         Order of vertices in the edge pairs is arbitrary.
+        Components are indexed from 0
         """
         triangle_components = UnionFind[Edge]()
         for edge in graph.edges:
@@ -834,7 +835,7 @@ class Graph(nx.Graph):
                 triangle_components.join((u, v), (w, u))
 
         edge_to_component: Dict[Edge, int] = {}
-        component_to_edge: List[List[Edge]] = [[]]
+        component_to_edge: List[List[Edge]] = []
 
         for edge in graph.edges:
             root = triangle_components.find(edge)
@@ -860,6 +861,7 @@ class Graph(nx.Graph):
         Each edge must belong to a component.
         Ids of these components are then used
         as vertexes of the new graph.
+        Id's start from 0
         """
 
         # graph used to find NAC coloring easily
@@ -894,8 +896,12 @@ class Graph(nx.Graph):
         line_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         limit: int | None,
-    ) -> List[NACColoring]:
+    ) -> Tuple[List[NACColoring], int]:
+        # the NAC coloring found
         coloringList: List[NACColoring] = []
+        # number of the is_nac_coloring calls
+        checks_cnt = 0
+
         vertices = list(line_graph.nodes())
 
         # iterate all the coloring variants
@@ -907,6 +913,7 @@ class Graph(nx.Graph):
                     component_to_edges[e]
                 )
 
+            checks_cnt += 1
             if not graph.is_nac_coloring(coloring):
                 continue
 
@@ -914,14 +921,12 @@ class Graph(nx.Graph):
 
             # short circuit if the limit is reached
             if limit is not None and len(coloringList) >= limit:
-                return coloringList
+                return (coloringList, checks_cnt)
 
-        return coloringList
+        return (coloringList, checks_cnt)
 
     @staticmethod
-    def _find_cycles(
-        graph: nx.Graph, all: bool = False, seed: int = 42
-    ) -> Set[Tuple[int, ...]]:
+    def _find_cycles(graph: nx.Graph, all: bool = False) -> Set[Tuple[int, ...]]:
         """
         For each vertex finds one/all of the shortest cycles it lays on
 
@@ -1047,19 +1052,77 @@ class Graph(nx.Graph):
         line_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         limit: int | None,
-    ) -> List[NACColoring]:
+    ) -> Tuple[List[NACColoring], int]:
+        # the NAC coloring found
         coloringList: List[NACColoring] = []
+        # number of the is_nac_coloring calls
+        checks_cnt = 0
+
         vertices = list(line_graph.nodes())
+        # so we start with 0
+        vertices.sort()
+
+        # find some small cycles for state filtering
+        cycles = Graph._find_cycles(line_graph, all=False)
+        # the idea is that smaller cycles reduce the state space more
+        cycles = sorted(cycles, key=lambda c: len(c))
+
+        def create_bitmask(cycle: Tuple[int, ...]) -> int | None:
+            mask = 0
+            for v in cycle:
+                # # This cycle contains a triangle component,
+                # # this trick cannot be used
+                # if len(component_to_edges[v]) > 1:
+                #     return None
+
+                mask |= 1 << v
+            print(cycle, bin(mask))
+            return mask
+
+        cycle_masks = list(filter(None, [create_bitmask(c) for c in cycles]))
+
+        # holds all the vertices that represent more edges
+        triangle_components_mask = 0
+        for v in vertices:
+            if len(component_to_edges[v]) > 1:
+                triangle_components_mask |= 1 << v
 
         # iterate all the coloring variants
         # division by 2 is used as the problem is symmetrical
         for mask in range(1, 2 ** len(vertices) // 2):
+
+            # Cycles checking
+            # in this section we check trivial cycles if they are correct
+            # before checking the whole graph
+            wrong_mask_found = False
+
+            for template in cycle_masks:
+                stamp1, stamp2 = mask & template, (~mask) & template
+                cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
+                stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
+
+                if cnt != 1:
+                    continue
+
+                # now we know there is one node that has a wrong color
+                # we check if the node is a triangle component
+                # if so, we cannot skip this run
+                if (stamp & triangle_components_mask) > 0:
+                    continue
+
+                wrong_mask_found = True
+                break
+
+            if wrong_mask_found:
+                continue
+
             coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
             for i, e in enumerate(vertices):
                 (coloring[0] if mask & (1 << i) else coloring[1]).update(
                     component_to_edges[e]
                 )
 
+            checks_cnt += 1
             if not graph.is_nac_coloring(coloring):
                 continue
 
@@ -1067,9 +1130,9 @@ class Graph(nx.Graph):
 
             # short circuit if the limit is reached
             if limit is not None and len(coloringList) >= limit:
-                return coloringList
+                return (coloringList, checks_cnt)
 
-        return coloringList
+        return (coloringList, checks_cnt)
 
     @doc_category("Generic rigidity")
     def find_nac_coloring(
@@ -1156,7 +1219,8 @@ class Graph(nx.Graph):
                 )
             case _:
                 raise ValueError(f"Unknown algorighm type: {algorithm}")
-        return res
+        # print("Process took", res[1], "iterations")
+        return res[0]
 
     @doc_category("Generic rigidity")
     def is_nac_coloring(self, colors: NACColoring) -> bool:
