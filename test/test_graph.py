@@ -223,7 +223,60 @@ def test_min_max_rigid_subgraphs():
 
 
 @pytest.mark.parametrize(
-    "graph,result",
+    ("graph", "result"),
+    [
+        (
+            graphs.Path(3),
+            set(),
+        ),
+        (
+            graphs.Cycle(3),
+            set([(0, 1, 2)]),
+        ),
+        (
+            graphs.Cycle(4),
+            set([(0, 1, 2, 3)]),
+        ),
+        (
+            graphs.Cycle(5),
+            set([(0, 1, 2, 3, 4)]),
+        ),
+        (
+            graphs.Diamond(),
+            set([(0, 1, 2), (0, 2, 3)]),
+        ),
+        (
+            graphs.ThreePrism(),
+            set([(0, 1, 2), (3, 4, 5)]),
+        ),
+        (
+            graphs.ThreePrismPlusEdge(),
+            set([(0, 1, 2), (3, 4, 5), (0, 2, 5), (0, 3, 5)]),
+        ),
+        (
+            graphs.SmallestFlexibleLamanGraph(),
+            set([(0, 1, 2), (0, 2, 3), (0, 1, 4, 3), (1, 2, 3, 4)]),
+        ),
+    ],
+    ids=[
+        "path",
+        "cycle3",
+        "cycle4",
+        "cycle5",
+        "diamond",
+        "prism",
+        "prismPlus",
+        "laman",
+    ],
+)
+def test__find_cycles(graph, result: Set[Tuple]):
+    res = Graph._find_cycles(graph, all=True)
+    print(res)
+    assert res == result
+
+
+@pytest.mark.parametrize(
+    ("graph", "result"),
     [
         (graphs.Path(3), True),
         (graphs.Cycle(3), False),
@@ -236,7 +289,18 @@ def test_min_max_rigid_subgraphs():
         (graphs.ThreePrismPlusEdge(), False),
         (graphs.SmallestFlexibleLamanGraph(), True),
     ],
-    ids=["path", "cycle3", "cycle4", "cycle5", "complete5", "bipartite5", "diamond", "prism", "prismPlus", "laman"],
+    ids=[
+        "path",
+        "cycle3",
+        "cycle4",
+        "cycle5",
+        "complete5",
+        "bipartite5",
+        "diamond",
+        "prism",
+        "prismPlus",
+        "laman",
+    ],
 )
 def test_find_nac_coloring(graph, result: bool):
     coloringList = graph.find_nac_coloring(limit=None)
@@ -249,7 +313,7 @@ def test_find_nac_coloring(graph, result: bool):
 
 
 @pytest.mark.parametrize(
-    "graph,coloring,result",
+    ("graph", "coloring", "result"),
     [
         (
             graphs.SmallestFlexibleLamanGraph(),

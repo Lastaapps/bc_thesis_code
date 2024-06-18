@@ -4,6 +4,7 @@ Module for rigidity related graph properties.
 
 from __future__ import annotations
 
+from collections import deque
 from copy import deepcopy
 from itertools import combinations
 from typing import Iterable, List, Any, Union, Tuple, Optional, Dict, Set
@@ -917,8 +918,163 @@ class Graph(nx.Graph):
 
         return coloringList
 
+    @staticmethod
+    def _find_cycles(
+        graph: nx.Graph, all: bool = False, seed: int = 42
+    ) -> Set[Tuple[int, ...]]:
+        """
+        For each vertex finds one/all of the shortest cycles it lays on
+
+        Parameters
+        ----------
+        graph:
+            The graph to work with, vertices should be integers indexed from 0
+        all:
+            if set to True, all the shortest cycles are returned
+            Notice that for dense graphs the number of cycles can be quite huge
+            if set to False, some cycle is returned for each vertex
+            Defaults to False
+        ----------
+        """
+        found_cycles: Set[Tuple[int, ...]] = set()
+
+        vertices = list(graph.nodes)
+
+        def insert_found_cycle(cycle: List[int]) -> None:
+            """
+            Runs post-processing on a cycle
+            Makes sure the first element is the smallest one
+            and the second one is greater than the last one.
+            This is required for equality checks in set later.
+            """
+            # TODO use np.argmin
+
+            # find the smallest element index
+            smallest = 0
+            for i, e in enumerate(cycle):
+                if e < cycle[smallest]:
+                    smallest = i
+
+            # makes sure that the element following the smallest one
+            # is greater than the one preceding it
+            if cycle[smallest - 1] < cycle[(smallest + 1) % len(cycle)]:
+                cycle = list(reversed(cycle))
+                smallest = len(cycle) - smallest - 1
+
+            # rotates the list so the smallest element is first
+            cycle = cycle[smallest:] + cycle[:smallest]
+
+            found_cycles.add(tuple(cycle))
+
+        def bfs(start: int) -> None:
+            """
+            Finds the shortest cycle(s) for the vertex given
+            """
+            queue = deque([start])
+            parents = [-1 for _ in range(len(vertices))]
+            parents[start] = start
+            local_cycle_len = -1
+
+            def backtrack(v: int, u: int) -> List[int]:
+                """
+                Reconstructs the found cycle
+                """
+                cycles: List[int] = []
+
+                # reconstructs one part of the cycle
+                cycles.append(u)
+                p = parents[u]
+                while p != start:
+                    cycles.append(p)
+                    p = parents[p]
+                cycles = list(reversed(cycles))
+
+                # and the other one
+                cycles.append(v)
+                p = parents[v]
+                while p != start:
+                    cycles.append(p)
+                    p = parents[p]
+
+                cycles.append(start)
+                return cycles
+
+            # typical BFS
+            while queue:
+                v = queue.popleft()
+                parent = parents[v]
+
+                # TODO consider shuffling
+                for u in graph.neighbors(v):
+                    # so I don't create cycle on 1 edge
+                    # this could be done sooner, I know...
+                    if u == parent:
+                        continue
+
+                    # newly found item
+                    if parents[u] == -1:
+                        parents[u] = v
+                        queue.append(u)
+                        continue
+
+                    # a cycle was found
+                    cycle = backtrack(v, u)
+
+                    if local_cycle_len == -1:
+                        local_cycle_len = len(cycle)
+
+                    # We are so far in the bfs process that all
+                    # the cycles will be longer now
+                    if len(cycle) > local_cycle_len:
+                        return
+
+                    insert_found_cycle(cycle)
+
+                    if all:
+                        continue
+                    else:
+                        return
+
+        for start in vertices:
+            # bfs is a separate function so I can use return in it
+            bfs(start)
+
+        return found_cycles
+
+    @staticmethod
+    def _find_nac_coloring_cycles(
+        graph: Graph,
+        line_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        limit: int | None,
+    ) -> List[NACColoring]:
+        coloringList: List[NACColoring] = []
+        vertices = list(line_graph.nodes())
+
+        # iterate all the coloring variants
+        # division by 2 is used as the problem is symmetrical
+        for mask in range(1, 2 ** len(vertices) // 2):
+            coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
+            for i, e in enumerate(vertices):
+                (coloring[0] if mask & (1 << i) else coloring[1]).update(
+                    component_to_edges[e]
+                )
+
+            if not graph.is_nac_coloring(coloring):
+                continue
+
+            coloringList.append(coloring)
+
+            # short circuit if the limit is reached
+            if limit is not None and len(coloringList) >= limit:
+                return coloringList
+
+        return coloringList
+
     @doc_category("Generic rigidity")
-    def find_nac_coloring(self, limit: int | None = 1) -> List[NACColoring]:
+    def find_nac_coloring(
+        self, limit: int | None = 1, algorithm: str = "cycles"
+    ) -> List[NACColoring]:
         """
         Finds a NAC-coloring of this graph if there exists one.
         Returns a list of NAC colorings found (certificates)
@@ -930,11 +1086,28 @@ class Graph(nx.Graph):
             Maximum number of colorings to search for.
             Use `None` for unlimited search.
             The value should be positive.
+        algorithm:
+            some options may provide better performance
+            - naive - basic implementation, previous SOA
+            - cycles - finds some small cycles and uses them to reduce state space
         ----------
-        TODO specify format
+
         TODO example
         """
         assert limit is None or limit >= 1
+        if algorithm not in ["naive", "cycles"]:
+            raise ValueError(f"Unknown algorighm type: {algorithm}")
+
+        if nx.number_of_selfloops(self) > 0:
+            raise LoopError()
+
+        if self.vertex_list() == 0:
+            # TODO make own error type later
+            raise "Undefined for an empty graph"
+        # TODO graph with 1 vertex
+
+        if nx.is_directed(self):
+            raise "Cannot process a directed graph"
 
         # TODO to implement
         # find cycles of 4/5 and use pseudo CSP
@@ -972,7 +1145,17 @@ class Graph(nx.Graph):
         edge_to_component, component_to_edge = Graph._find_triangle_components(self)
         line_graph = Graph._create_line_graph_from_components(self, edge_to_component)
 
-        res = Graph._find_nac_coloring_naive(self, line_graph, component_to_edge, limit)
+        match algorithm:
+            case "naive":
+                res = Graph._find_nac_coloring_naive(
+                    self, line_graph, component_to_edge, limit
+                )
+            case "cycles":
+                res = Graph._find_nac_coloring_cycles(
+                    self, line_graph, component_to_edge, limit
+                )
+            case _:
+                raise ValueError(f"Unknown algorighm type: {algorithm}")
         return res
 
     @doc_category("Generic rigidity")
