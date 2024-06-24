@@ -895,10 +895,7 @@ class Graph(nx.Graph):
         graph: Graph,
         line_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        limit: int | None,
-    ) -> Tuple[List[NACColoring], int]:
-        # the NAC coloring found
-        coloringList: List[NACColoring] = []
+    ) -> Iterable[NACColoring]:
         # number of the is_nac_coloring calls
         checks_cnt = 0
 
@@ -917,13 +914,7 @@ class Graph(nx.Graph):
             if not graph.is_nac_coloring(coloring):
                 continue
 
-            coloringList.append(coloring)
-
-            # short circuit if the limit is reached
-            if limit is not None and len(coloringList) >= limit:
-                return (coloringList, checks_cnt)
-
-        return (coloringList, checks_cnt)
+            yield coloring
 
     @staticmethod
     def _find_cycles(graph: nx.Graph, all: bool = False) -> Set[Tuple[int, ...]]:
@@ -1051,10 +1042,7 @@ class Graph(nx.Graph):
         graph: Graph,
         line_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        limit: int | None,
-    ) -> Tuple[List[NACColoring], int]:
-        # the NAC coloring found
-        coloringList: List[NACColoring] = []
+    ) -> Iterable[NACColoring]:
         # number of the is_nac_coloring calls
         checks_cnt = 0
 
@@ -1126,29 +1114,18 @@ class Graph(nx.Graph):
             if not graph.is_nac_coloring(coloring):
                 continue
 
-            coloringList.append(coloring)
-
-            # short circuit if the limit is reached
-            if limit is not None and len(coloringList) >= limit:
-                return (coloringList, checks_cnt)
-
-        return (coloringList, checks_cnt)
+            yield coloring
 
     @doc_category("Generic rigidity")
-    def find_nac_coloring(
-        self, limit: int | None = 1, algorithm: str = "cycles"
-    ) -> List[NACColoring]:
+    def find_nac_coloring(self, algorithm: str = "cycles") -> Iterable[NACColoring]:
         """
-        Finds a NAC-coloring of this graph if there exists one.
-        Returns a list of NAC colorings found (certificates)
+        Finds all NAC-colorings of a graph.
+        Returns a lazy iterator of NAC colorings found (certificates)
         up to the limit given in an unspecified order.
+        If none NAC coloring exists, the iterator is empty.
 
         Parameters
         ----------
-        limit:
-            Maximum number of colorings to search for.
-            Use `None` for unlimited search.
-            The value should be positive.
         algorithm:
             some options may provide better performance
             - naive - basic implementation, previous SOA
@@ -1157,7 +1134,6 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        assert limit is None or limit >= 1
         if algorithm not in ["naive", "cycles"]:
             raise ValueError(f"Unknown algorighm type: {algorithm}")
 
@@ -1165,30 +1141,17 @@ class Graph(nx.Graph):
             raise LoopError()
 
         if self.vertex_list() == 0:
-            # TODO make own error type later
-            raise "Undefined for an empty graph"
+            raise ValueError("Undefined for an empty graph")
+
         # TODO graph with 1 vertex
 
         if nx.is_directed(self):
-            raise "Cannot process a directed graph"
+            raise ValueError("Cannot process a directed graph")
 
-        # TODO to implement
-        # find cycles of 4/5 and use pseudo CSP
-        # coloring caching
-
-        # TODO return this instead of a boolean flag
-        class NACReason(Enum):
-            """Result of a NAC coloring search"""
-
-            NONE_EXISTS = False
-            # NOT_CONNECTED = True
-            NOT_2_VERTEX_CONNECTED = True
-            # NOT_3_EDGE_CONNECTED = True
-            CASE_FOUND = True
-
-        # I'm not sure how to generate all the certificates,
-        # so if more are requested, I fallback to the main solver.
-        if limit == 1 and not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+        # I'm not sure how to generate all the certificates in this case
+        # therefore it is disabled for now
+        # This can be used later in something like `has_nac_coloring()`
+        if False and not nx.algorithms.connectivity.node_connectivity(self) >= 2:
             print("NOT_2_VERTEX_CONNECTED")
             generator = nx.algorithms.biconnected_components(self)
             component: Set[Vertex] = next(generator)
@@ -1210,17 +1173,15 @@ class Graph(nx.Graph):
 
         match algorithm:
             case "naive":
-                res = Graph._find_nac_coloring_naive(
-                    self, line_graph, component_to_edge, limit
+                return Graph._find_nac_coloring_naive(
+                    self, line_graph, component_to_edge
                 )
             case "cycles":
-                res = Graph._find_nac_coloring_cycles(
-                    self, line_graph, component_to_edge, limit
+                return Graph._find_nac_coloring_cycles(
+                    self, line_graph, component_to_edge
                 )
             case _:
                 raise ValueError(f"Unknown algorighm type: {algorithm}")
-        # print("Process took", res[1], "iterations")
-        return res[0]
 
     @doc_category("Generic rigidity")
     def is_nac_coloring(self, colors: NACColoring) -> bool:
