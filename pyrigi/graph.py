@@ -807,6 +807,86 @@ class Graph(nx.Graph):
             clean_list = [self]
         return clean_list
 
+    def _check_NAC_constrains(self) -> bool:
+        """
+        Checks some basic constrains for NAC coloring to even make sense
+
+        Throws:
+            ValueError: if the graph is empty or has loops
+
+        Returns:
+            True if a NAC coloring may exist, False if none exists for sure
+        """
+        if nx.number_of_selfloops(self) > 0:
+            raise LoopError()
+
+        if self.nodes() == 0:
+            raise ValueError("Undefined for an empty graph")
+
+        if nx.is_directed(self):
+            raise ValueError("Cannot process a directed graph")
+
+        # NAC is a surjective edge coloring, you passed a graph with less then 2 edges
+        if len(nx.edges(self)) < 2:
+            return False
+
+        return True
+
+    def has_NAC_coloring(self) -> bool:
+        """
+        Same as single_NAC_coloring, but the certificate may not be created,
+        so some additional tricks are used the performance may be improved.
+        """
+        if not self._check_NAC_constrains():
+            return False
+
+        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+            return True
+        return self.single_NAC_coloring() is not None
+
+    def single_NAC_coloring(self) -> Optional[NACColoring]:
+        """
+        Finds only a single NAC coloring if it exists.
+        Some other optimizations may be used
+        to improve performance for some graph classes.
+        """
+        if not self._check_NAC_constrains():
+            return None
+
+        print(self.nodes, self.edges)
+        components = list(nx.algorithms.components.connected_components(self))
+        print(components)
+        if len(components) > 1:
+            # filter all the single nodes
+            components = list(filter(lambda nodes: len(nodes) > 1, components))
+            component: Set[Vertex] = components[0]
+            print(component)
+
+            # there are more disconnected components with at least one edge,
+            # we can color both of them with different color and be done.
+            if len(components) > 1:
+                red, blue = set(), set()
+                for u, v in nx.edges(self):
+                    (red if u in component else blue).add((u, v))
+                return (red, blue)
+
+            # if there is only one component with all the edges,
+            # the NAC coloring exists <=> this component has NAC coloring
+            return Graph.single_NAC_coloring(Graph(self.subgraph(component)))
+
+        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+            generator = nx.algorithms.biconnected_components(self)
+            component: Set[Vertex] = next(generator)
+            assert next(generator)  # make sure there are more components
+
+            red, blue = set(), set()
+            for v, u in self.edges:
+                (red if v in component and u in component else blue).add((u, v))
+
+            return (red, blue)
+
+        return next(self.NAC_colorings(), None)
+
     @staticmethod
     def _find_triangle_components(
         graph: Graph,
@@ -852,12 +932,12 @@ class Graph(nx.Graph):
         return edge_to_component, component_to_edge
 
     @staticmethod
-    def _create_line_graph_from_components(
+    def _create_T_graph_from_components(
         graph: Graph,
         edges_to_components: Dict[Edge, int],
     ) -> nx.Graph:
         """
-        Creates a line graph from the components given.
+        Creates a T graph from the components given.
         Each edge must belong to a component.
         Ids of these components are then used
         as vertexes of the new graph.
@@ -865,7 +945,7 @@ class Graph(nx.Graph):
         """
 
         # graph used to find NAC coloring easily
-        line_graph = nx.Graph()
+        t_graph = nx.Graph()
 
         def get_edge_component(e: Edge) -> int:
             u, v = e
@@ -884,22 +964,22 @@ class Graph(nx.Graph):
                     if c1 == c2:
                         continue
                     elif c1 < c2:
-                        line_graph.add_edge(c1, c2)
+                        t_graph.add_edge(c1, c2)
                     else:
-                        line_graph.add_edge(c2, c1)
+                        t_graph.add_edge(c2, c1)
 
-        return line_graph
+        return t_graph
 
     @staticmethod
-    def _find_nac_coloring_naive(
+    def _NAC_colorings_naive(
         graph: Graph,
-        line_graph: nx.Graph,
+        t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> Iterable[NACColoring]:
-        # number of the is_nac_coloring calls
+        # number of the is_NAC_coloring calls
         checks_cnt = 0
 
-        vertices = list(line_graph.nodes())
+        vertices = list(t_graph.nodes())
 
         # iterate all the coloring variants
         # division by 2 is used as the problem is symmetrical
@@ -911,7 +991,7 @@ class Graph(nx.Graph):
                 )
 
             checks_cnt += 1
-            if not graph.is_nac_coloring(coloring):
+            if not graph.is_NAC_coloring(coloring):
                 continue
 
             yield coloring
@@ -1038,20 +1118,20 @@ class Graph(nx.Graph):
         return found_cycles
 
     @staticmethod
-    def _find_nac_coloring_cycles(
+    def _NAC_colorings_cycles(
         graph: Graph,
-        line_graph: nx.Graph,
+        t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> Iterable[NACColoring]:
-        # number of the is_nac_coloring calls
+        # number of the is_NAC_coloring calls
         checks_cnt = 0
 
-        vertices = list(line_graph.nodes())
+        vertices = list(t_graph.nodes())
         # so we start with 0
         vertices.sort()
 
         # find some small cycles for state filtering
-        cycles = Graph._find_cycles(line_graph, all=False)
+        cycles = Graph._find_cycles(t_graph, all=False)
         # the idea is that smaller cycles reduce the state space more
         cycles = sorted(cycles, key=lambda c: len(c))
 
@@ -1111,13 +1191,13 @@ class Graph(nx.Graph):
                 )
 
             checks_cnt += 1
-            if not graph.is_nac_coloring(coloring):
+            if not graph.is_NAC_coloring(coloring):
                 continue
 
             yield coloring
 
     @doc_category("Generic rigidity")
-    def find_nac_coloring(self, algorithm: str = "cycles") -> Iterable[NACColoring]:
+    def NAC_colorings(self, algorithm: str = "cycles") -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
         Returns a lazy iterator of NAC colorings found (certificates)
@@ -1137,59 +1217,29 @@ class Graph(nx.Graph):
         if algorithm not in ["naive", "cycles"]:
             raise ValueError(f"Unknown algorighm type: {algorithm}")
 
-        if nx.number_of_selfloops(self) > 0:
-            raise LoopError()
-
-        if self.vertex_list() == 0:
-            raise ValueError("Undefined for an empty graph")
-
-        # TODO graph with 1 vertex
-
-        if nx.is_directed(self):
-            raise ValueError("Cannot process a directed graph")
-
-        # I'm not sure how to generate all the certificates in this case
-        # therefore it is disabled for now
-        # This can be used later in something like `has_nac_coloring()`
-        if False and not nx.algorithms.connectivity.node_connectivity(self) >= 2:
-            print("NOT_2_VERTEX_CONNECTED")
-            generator = nx.algorithms.biconnected_components(self)
-            component: Set[Vertex] = next(generator)
-            assert next(generator)  # make sure there are more components
-
-            red, blue = set(), set()
-            for v, u in self.edges:
-                (red if v in component and u in component else blue).add((u, v))
-
-            return [(red, blue)]
-
-        # TODO consult with Legersky
-        # if not nx.algorithms.connectivity.is_k_edge_connected(self, 3):
-        #     print("NOT_3_EDGE_CONNECTED")
-        #     return (NACReason.NOT_3_EDGE_CONNECTED.value, None)
+        if not self._check_NAC_constrains():
+            return []
 
         edge_to_component, component_to_edge = Graph._find_triangle_components(self)
-        line_graph = Graph._create_line_graph_from_components(self, edge_to_component)
+        t_graph = Graph._create_T_graph_from_components(self, edge_to_component)
 
         match algorithm:
             case "naive":
-                return Graph._find_nac_coloring_naive(
-                    self, line_graph, component_to_edge
-                )
+                return Graph._NAC_colorings_naive(self, t_graph, component_to_edge)
             case "cycles":
-                return Graph._find_nac_coloring_cycles(
-                    self, line_graph, component_to_edge
-                )
+                return Graph._NAC_colorings_cycles(self, t_graph, component_to_edge)
             case _:
                 raise ValueError(f"Unknown algorighm type: {algorithm}")
 
     @doc_category("Generic rigidity")
-    def is_nac_coloring(self, colors: NACColoring) -> bool:
+    def is_NAC_coloring(self, colors: NACColoring) -> bool:
         """
         Check if the coloring given is a NAC coloring.
         The algorithm checks if all the edges are in the same component.
         (TODO format)
         """
+        if not self._check_NAC_constrains():
+            return False
 
         # Both colors have to be used
         if len(colors[0]) == 0 or len(colors[1]) == 0:

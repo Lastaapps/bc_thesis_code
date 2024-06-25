@@ -52,9 +52,9 @@ def ThreePrismPlusEdge():
     )
 
 
-def SmallestFlexibleLamanGraph():
+def SmallestMinimallyRigitGraph():
     """
-    Return the smallest flexible Laman graph
+    Return the smallest flexible minimally rigid graph
     (the diamond with 2 connected extra edges from the opposite spikes).
     """
     return Graph(
