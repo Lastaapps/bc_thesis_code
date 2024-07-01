@@ -1171,9 +1171,11 @@ class Graph(nx.Graph):
                 # print(f"{prev=} {curr=} {next=}")
                 vertices_curr = {v for e in component_to_edges[curr] for v in e}
 
-                # check for a single edge (2 vertices)
-                if len(vertices_curr) == 2:
-                    return True
+                # You may think that if the component is a single edge,
+                # it must connect the circle. Because we are using a t-graph,
+                # which is based on the line graph idea, the edge can share
+                # a vertex with both the neighboring components.
+                # An example for this is a star with 3 edges.
 
                 vertices_prev = {v for e in component_to_edges[prev] for v in e}
                 vertices_next = {v for e in component_to_edges[next] for v in e}
@@ -1195,7 +1197,7 @@ class Graph(nx.Graph):
                 if check_for_connecting_edge(prev, curr, next):
                     valid |= 1 << curr
 
-            print(cycle, bin(template), bin(valid))
+            # print(cycle, bin(template), bin(valid))
             return template, valid
 
         templates = [create_bitmask(c) for c in cycles]

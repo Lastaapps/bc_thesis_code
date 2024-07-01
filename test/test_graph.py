@@ -316,6 +316,19 @@ def test__find_cycles(graph, result: Set[Tuple]):
         (graphs.Cycle(5), 20),
         (graphs.Complete(5), 0),
         (graphs.CompleteBipartite(1, 3), 6),
+        (
+            Graph.from_vertices_and_edges(
+                [0, 1, 2, 3], [(0, 1), (0, 2), (0, 3), (2, 3)]
+            ),
+            2,
+        ),
+        (graphs.CompleteBipartite(1, 4), 14),
+        (
+            Graph.from_vertices_and_edges(
+                [0, 1, 2, 3, 4], [(0, 1), (0, 2), (0, 3), (0, 4), (3, 4)]
+            ),
+            6,
+        ),
         (graphs.CompleteBipartite(2, 3), 14),
         (graphs.CompleteBipartite(2, 4), 30),
         (graphs.CompleteBipartite(3, 3), 30),
@@ -332,6 +345,9 @@ def test__find_cycles(graph, result: Set[Tuple]):
         "cycle5",
         "complete5",
         "bipartite1x3",
+        "bipartite1x3-improved",
+        "bipartite1x4",
+        "bipartite1x4-improved",
         "bipartite2x3",
         "bipartite2x4",
         "bipartite3x3",
@@ -344,7 +360,7 @@ def test__find_cycles(graph, result: Set[Tuple]):
 )
 def test_NAC_colorings(graph, colorings_no: int):
     print(f"{graph=}")
-    algorithm = ["naive", "cycles", "subgraphs"][2]
+    algorithm = ["naive", "cycles", "subgraphs"][1]
     coloringList = list(graph.NAC_colorings(algorithm=algorithm))
     print(f"{coloringList=}")
 
