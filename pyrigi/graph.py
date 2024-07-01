@@ -7,12 +7,14 @@ from __future__ import annotations
 from collections import deque
 from copy import deepcopy
 from itertools import combinations
+import itertools
 from typing import Iterable, List, Any, Union, Tuple, Optional, Dict, Set
 from enum import Enum
 
 import networkx as nx
 from sympy import Matrix
 import math
+import numpy as np
 
 from pyrigi.datastructures.union_find import UnionFind
 from pyrigi.data_type import NACColoring, Vertex, Edge, GraphType, FrameworkType
@@ -947,6 +949,10 @@ class Graph(nx.Graph):
         # graph used to find NAC coloring easily
         t_graph = nx.Graph()
 
+        # if there is only one component, this vertex would not be added
+        # by the following algorithm
+        t_graph.add_node(0)
+
         def get_edge_component(e: Edge) -> int:
             u, v = e
             res = edges_to_components.get((u, v))
@@ -971,6 +977,18 @@ class Graph(nx.Graph):
         return t_graph
 
     @staticmethod
+    def _coloring_from_mask(
+        vertices: List[int],
+        mask: int,
+        component_to_edges: List[List[Edge]],
+    ) -> NACColoring:
+        red, blue = set(), set()
+        for i, e in enumerate(vertices):
+            edges = component_to_edges[e]
+            (red if mask & (1 << i) else blue).update(edges)
+        return (red, blue)
+
+    @staticmethod
     def _NAC_colorings_naive(
         graph: Graph,
         t_graph: nx.Graph,
@@ -984,11 +1002,7 @@ class Graph(nx.Graph):
         # iterate all the coloring variants
         # division by 2 is used as the problem is symmetrical
         for mask in range(1, 2 ** len(vertices) // 2):
-            coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
-            for i, e in enumerate(vertices):
-                (coloring[0] if mask & (1 << i) else coloring[1]).update(
-                    component_to_edges[e]
-                )
+            coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
             checks_cnt += 1
             if not graph.is_NAC_coloring(coloring):
@@ -1136,25 +1150,60 @@ class Graph(nx.Graph):
         # the idea is that smaller cycles reduce the state space more
         cycles = sorted(cycles, key=lambda c: len(c))
 
-        def create_bitmask(cycle: Tuple[int, ...]) -> int | None:
-            mask = 0
+        def create_bitmask(cycle: Tuple[int, ...]) -> Tuple[int, int]:
+            """
+            Creates a bit mask (template) to match vertices in the cycle
+            and a mask matching vertices of the cycle that make NAC coloring
+            impossible if they are the only ones with different color
+            """
+
+            template = 0
+            valid = 0
             for v in cycle:
-                # # This cycle contains a triangle component,
-                # # this trick cannot be used
-                # if len(component_to_edges[v]) > 1:
-                #     return None
+                template |= 1 << v
 
-                mask |= 1 << v
-            print(cycle, bin(mask))
-            return mask
+            def check_for_connecting_edge(prev: int, curr: int, next: int) -> bool:
+                """
+                Checks if for the component given (curr) exists path trough the
+                component using single edge only - in that case color change of
+                the triangle component can ruin NAC coloring.
+                """
+                # print(f"{prev=} {curr=} {next=}")
+                vertices_curr = {v for e in component_to_edges[curr] for v in e}
 
-        cycle_masks = list(filter(None, [create_bitmask(c) for c in cycles]))
+                # check for a single edge (2 vertices)
+                if len(vertices_curr) == 2:
+                    return True
 
-        # holds all the vertices that represent more edges
-        triangle_components_mask = 0
-        for v in vertices:
-            if len(component_to_edges[v]) > 1:
-                triangle_components_mask |= 1 << v
+                vertices_prev = {v for e in component_to_edges[prev] for v in e}
+                vertices_next = {v for e in component_to_edges[next] for v in e}
+                # print(f"{vertices_prev=} {vertices_curr=} {vertices_next=}")
+                intersections_prev = vertices_prev.intersection(vertices_curr)
+                intersections_next = vertices_next.intersection(vertices_curr)
+                # print(f"{intersections_prev=} {intersections_next=}")
+
+                for p in intersections_prev:
+                    neighbors = set(graph.neighbors(p))
+                    for n in intersections_next:
+                        if n in neighbors:
+                            return True
+                return False
+
+            for prev, curr, next in zip(
+                cycle[-1:] + cycle[:-1], cycle, cycle[1:] + cycle[:1]
+            ):
+                if check_for_connecting_edge(prev, curr, next):
+                    valid |= 1 << curr
+
+            print(cycle, bin(template), bin(valid))
+            return template, valid
+
+        templates = [create_bitmask(c) for c in cycles]
+
+        # this is used for mask inversion, because how ~ works on python
+        # numbers, if we used some kind of bit arrays,
+        # this would not be needed.
+        all_ones = 2 ** len(vertices) - 1
 
         # iterate all the coloring variants
         # division by 2 is used as the problem is symmetrical
@@ -1165,8 +1214,8 @@ class Graph(nx.Graph):
             # before checking the whole graph
             wrong_mask_found = False
 
-            for template in cycle_masks:
-                stamp1, stamp2 = mask & template, (~mask) & template
+            for template, validity in templates:
+                stamp1, stamp2 = mask & template, (mask ^ all_ones) & template
                 cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
                 stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
 
@@ -1175,21 +1224,15 @@ class Graph(nx.Graph):
 
                 # now we know there is one node that has a wrong color
                 # we check if the node is a triangle component
-                # if so, we cannot skip this run
-                if (stamp & triangle_components_mask) > 0:
-                    continue
-
-                wrong_mask_found = True
-                break
+                # if so, we need to know it if also ruins the coloring
+                if stamp & validity:
+                    wrong_mask_found = True
+                    break
 
             if wrong_mask_found:
                 continue
 
-            coloring: Tuple[Set[Edge], Set[Edge]] = (set(), set())
-            for i, e in enumerate(vertices):
-                (coloring[0] if mask & (1 << i) else coloring[1]).update(
-                    component_to_edges[e]
-                )
+            coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
             checks_cnt += 1
             if not graph.is_NAC_coloring(coloring):
@@ -1198,8 +1241,214 @@ class Graph(nx.Graph):
             yield (coloring[0], coloring[1])
             yield (coloring[1], coloring[0])
 
+    @staticmethod
+    def _NAC_colorings_subgraphs(
+        graph: Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        # TODO test with True
+        use_log_approach: bool = False,
+        min_chunk_size: int = 4,
+    ) -> Iterable[NACColoring]:
+        """
+        This version of the algorithm splits the graphs into subgraphs,
+        find NAC colorings for each of them. The subgraphs are then merged
+        and new colorings are reevaluated till we reach the original graph again.
+        The algorithm tries to find optimal subgraphs and merge strategy.
+        """
+        # number of the is_NAC_coloring calls
+        checks_cnt = 0
+
+        # Finds all the shortest cycles in the graph
+        cycles = Graph._find_cycles(t_graph, all=True)
+
+        # for each vertex we find all the cycles that contain it
+        vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
+        for cycle in cycles:
+            for v in cycle:
+                vertex_cycles[v].append(cycle)
+
+        # We sort the vertices by degree
+        vertices = list(
+            map(
+                lambda x: x[0],
+                sorted(
+                    t_graph.degree(),
+                    key=lambda x: x[1],
+                    reverse=True,
+                ),
+            )
+        )
+
+        # TODO add BFS strategy and follow cycles strategy
+        ordered_vertices: List[int] = []
+        used_vertices: Set[int] = set()
+        for v in vertices:
+            # Handle vertices with no cycles
+            if v not in used_vertices:
+                ordered_vertices.append(v)
+                used_vertices.add(v)
+
+            for cycle in vertex_cycles[v]:
+                for u in cycle:
+                    if u in used_vertices:
+                        continue
+                    ordered_vertices.append(u)
+                    used_vertices.add(u)
+        vertices = ordered_vertices
+
+        # Represents size (no. of vertices of the t-graph) of a basic subgraph
+        chunk_size = max(
+            int(np.sqrt(len(vertices))), min(min_chunk_size, len(vertices))
+        )
+        chunk_no = (len(vertices) + chunk_size - 1) // chunk_size
+
+        def join_epochs(
+            epoch1: List[int], all_ones_1: int, epoch2: List[int], all_ones_2: int
+        ) -> Tuple[List[int], int]:
+            """
+            Joins almost NAC colorings of two disjoined subgraphs of a t-graph.
+            This function works by doing a cross product of the almost NAC colorings
+            on subgraphs, joining the subgraps into a single sub graph
+            and checking if the joined colorings are still almost NAC.
+
+            Almost NAC coloring is NAC coloring that is not necessarily surjective.
+
+            Returns found almost NAC colorings and mask of the new subgraph
+            """
+            epoch_colorings: List[int] = []
+
+            print(f"Joining {epoch1} {bin(all_ones_1)} & {epoch2} {bin(all_ones_2)}")
+
+            if all_ones_1 & all_ones_2:
+                raise ValueError("Cannot join two subgraphs with common nodes")
+
+            all_ones = all_ones_1 | all_ones_2
+
+            for mask1 in epoch1:
+                for mask2 in epoch2:
+                    mask = mask1 | mask2
+
+                    # TODO use numpy and boolean addressing
+                    coloring = Graph._coloring_from_mask(
+                        vertices, mask, component_to_edges
+                    )
+
+                    print(f"Checking {coloring=}")
+                    if not graph.is_NAC_coloring(
+                        coloring, allow_non_surjective=True, runs_on_subgraph=True
+                    ):
+                        continue
+
+                    epoch_colorings.append(mask)
+            print(f"{epoch_colorings=}")
+            return epoch_colorings, all_ones
+
+        # Holds all the NAC colorings for a subgraph represented by the second bitmask
+        all_epochs: List[Tuple[List[int], int]] = []
+        for chunk_id in range(chunk_no):
+            epoch_colorings: List[int] = []
+
+            # No. of vertices already processed in previous chunks
+            offset = chunk_size * chunk_id
+
+            # The last chunk can be smaller
+            local_vertex_no = min(chunk_size, len(vertices) - offset)
+            local_vertices = vertices[offset : offset + local_vertex_no]
+            # Mask current vertex region
+            all_ones = (2**local_vertex_no - 1) << offset
+
+            print(f"Chunk: {local_vertices}, {bin(all_ones)}")
+
+            # iterate all the coloring variants
+            # division by 2 is used as the problem is symmetrical
+            for mask in range(0, 2**local_vertex_no // 2):
+                mask <<= offset
+                coloring = Graph._coloring_from_mask(
+                    local_vertices, mask >> offset, component_to_edges
+                )
+
+                checks_cnt += 1
+                print(f"Checking {coloring=}")
+                if not graph.is_NAC_coloring(
+                    coloring, allow_non_surjective=True, runs_on_subgraph=True
+                ):
+                    continue
+                print("Passed")
+
+                epoch_colorings.append(mask)
+
+            all_epochs.append((epoch_colorings, all_ones))
+            print(f"{epoch_colorings=}")
+
+            # Resolves crossproduct with the previous epoch (linear approach)
+            if use_log_approach:
+                continue
+
+            if len(all_epochs) <= 1:
+                # Nothing to join
+                continue
+
+            (epoch1, all_ones_1), (epoch2, all_ones_2) = (
+                all_epochs.pop(),
+                all_epochs.pop(),
+            )
+            # as the previous part of the algorithm does not generate colorings
+            # that are symmetric to each other (same if we switch red and blue),
+            # we also need to mirror one side of the join to get really all
+            # the NAC colorings.
+            epoch1_switched = [coloring ^ all_ones_1 for coloring in epoch1]
+            all_epochs.append(
+                (
+                    join_epochs(epoch1, all_ones_1, epoch2, all_ones_2)[0]
+                    + join_epochs(epoch1_switched, all_ones_1, epoch2, all_ones_2)[0],
+                    all_ones_1 | all_ones_2,
+                )
+            )
+
+        # Joins the subgraphs like a tree
+        while use_log_approach and len(all_epochs) > 1:
+            next_all_epochs: List[Tuple[List[int], int]] = []
+
+            # always join 2 subgraphs
+            for batch in itertools.batched(all_epochs, 2):
+                if len(batch) == 1:
+                    next_all_epochs.append(batch[0])
+                    continue
+                (epoch1, all_ones_1), (epoch2, all_ones_2) = batch[0], batch[1]
+                epoch1_switched = [coloring ^ all_ones_1 for coloring in epoch1]
+                next_all_epochs.append(
+                    (
+                        join_epochs(epoch1, all_ones_1, epoch2, all_ones_2)[0]
+                        + join_epochs(epoch1_switched, all_ones_1, epoch2, all_ones_2)[
+                            0
+                        ],
+                        all_ones_1 | all_ones_2,
+                    )
+                )
+                all_epochs = next_all_epochs
+
+        assert len(all_epochs) == 1
+        expected_all_ones = 2 ** len(vertices) - 1
+        assert expected_all_ones == all_epochs[0][1]
+
+        for mask in all_epochs[0][0]:
+            if mask == 0 or mask.bit_count() == len(vertices):
+                continue
+
+            coloring: NACColoring = (set(), set())
+            for i, e in enumerate(vertices):
+                (coloring[0] if mask & (1 << i) else coloring[1]).update(
+                    component_to_edges[e]
+                )
+
+            yield (coloring[0], coloring[1])
+            yield (coloring[1], coloring[0])
+
     @doc_category("Generic rigidity")
-    def NAC_colorings(self, algorithm: str = "cycles") -> Iterable[NACColoring]:
+    def NAC_colorings(
+        self, algorithm: str | None = "subgraphs"
+    ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
         Returns a lazy iterator of NAC colorings found (certificates)
@@ -1216,8 +1465,10 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        if algorithm not in ["naive", "cycles"]:
+        if algorithm not in ["naive", "cycles", "subgraphs", None]:
             raise ValueError(f"Unknown algorighm type: {algorithm}")
+        if algorithm is None:
+            algorithm = "subgraphs"
 
         if not self._check_NAC_constrains():
             return []
@@ -1230,28 +1481,48 @@ class Graph(nx.Graph):
                 return Graph._NAC_colorings_naive(self, t_graph, component_to_edge)
             case "cycles":
                 return Graph._NAC_colorings_cycles(self, t_graph, component_to_edge)
+            case "subgraphs":
+                return Graph._NAC_colorings_subgraphs(self, t_graph, component_to_edge)
             case _:
                 raise ValueError(f"Unknown algorighm type: {algorithm}")
 
     @doc_category("Generic rigidity")
-    def is_NAC_coloring(self, colors: NACColoring) -> bool:
+    def is_NAC_coloring(
+        self,
+        coloring: NACColoring,
+        allow_non_surjective: bool = False,
+        runs_on_subgraph: bool = False,
+    ) -> bool:
         """
         Check if the coloring given is a NAC coloring.
         The algorithm checks if all the edges are in the same component.
+
+        Parameters:
+        ----------
+            coloring: the coloring to check if it is a NAC coloring.
+            allow_non_surjective: if True, allows the coloring to be non-surjective.
+                This can be useful for checking subgraphs - the can use only one color.
+            runs_on_subgraph: if True, the check that all the graph edges are
+                colored is disabled.
+        ----------
+
+
         (TODO format)
         """
-        if not self._check_NAC_constrains():
-            return False
-
         # Both colors have to be used
-        if len(colors[0]) == 0 or len(colors[1]) == 0:
+        if len(coloring[0]) == 0 or len(coloring[1]) == 0:
+            return allow_non_surjective
+
+        if not self._check_NAC_constrains():
             return False
 
         # We should rather check if the edges match exactly,
         # but that would be a little slower
-        if len(colors[0]) + len(colors[1]) != len(self.edges):
+        if not runs_on_subgraph and len(coloring[0]) + len(coloring[1]) != len(
+            self.edges
+        ):
             return False
-        if len(colors[0].intersection(colors[1])) != 0:
+        if len(coloring[0].intersection(coloring[1])) != 0:
             return False
 
         G = Graph()
@@ -1272,8 +1543,8 @@ class Graph(nx.Graph):
                     return False
             return True
 
-        return check_coloring(colors[0], colors[1]) and check_coloring(
-            colors[1], colors[0]
+        return check_coloring(coloring[0], coloring[1]) and check_coloring(
+            coloring[1], coloring[0]
         )
 
     @doc_category("General graph theoretical properties")

@@ -246,7 +246,7 @@ def test_min_max_rigid_subgraphs():
         "diamond",
         "prism",
         "prismPlus",
-        "laman",
+        "minimallyRigid",
     ],
 )
 def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
@@ -298,28 +298,32 @@ def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
         "diamond",
         "prism",
         "prismPlus",
-        "laman",
+        "minimallyRigid",
     ],
 )
 def test__find_cycles(graph, result: Set[Tuple]):
     res = Graph._find_cycles(graph, all=True)
-    print(res)
+    print(f"{res=}")
     assert res == result
 
 
 @pytest.mark.parametrize(
-    ("graph", "result"),
+    ("graph", "colorings_no"),
     [
-        (graphs.Path(3), True),
-        (graphs.Cycle(3), False),
-        (graphs.Cycle(4), True),
-        (graphs.Cycle(5), True),
-        (graphs.Complete(5), False),
-        (graphs.CompleteBipartite(3, 4), True),
-        (graphs.Diamond(), False),
-        (graphs.ThreePrism(), True),
-        (graphs.ThreePrismPlusEdge(), False),
-        (graphs.SmallestMinimallyRigitGraph(), True),
+        (graphs.Path(3), 2),
+        (graphs.Cycle(3), 0),
+        (graphs.Cycle(4), 6),
+        (graphs.Cycle(5), 20),
+        (graphs.Complete(5), 0),
+        (graphs.CompleteBipartite(1, 3), 6),
+        (graphs.CompleteBipartite(2, 3), 14),
+        (graphs.CompleteBipartite(2, 4), 30),
+        (graphs.CompleteBipartite(3, 3), 30),
+        (graphs.CompleteBipartite(3, 4), 62),
+        (graphs.Diamond(), 0),
+        (graphs.ThreePrism(), 2),
+        (graphs.ThreePrismPlusEdge(), 0),
+        (graphs.SmallestMinimallyRigitGraph(), 2),
     ],
     ids=[
         "path",
@@ -327,19 +331,24 @@ def test__find_cycles(graph, result: Set[Tuple]):
         "cycle4",
         "cycle5",
         "complete5",
-        "bipartite5",
+        "bipartite1x3",
+        "bipartite2x3",
+        "bipartite2x4",
+        "bipartite3x3",
+        "bipartite3x4",
         "diamond",
         "prism",
         "prismPlus",
-        "laman",
+        "minimallyRigid",
     ],
 )
-def test_NAC_colorings(graph, result: bool):
-    algorithm = ["naive", "cycles"][1]
+def test_NAC_colorings(graph, colorings_no: int):
+    print(f"{graph=}")
+    algorithm = ["naive", "cycles", "subgraphs"][2]
     coloringList = list(graph.NAC_colorings(algorithm=algorithm))
-    print(graph, len(coloringList), coloringList)
+    print(f"{coloringList=}")
 
-    assert (len(coloringList) > 0) == result
+    assert len(coloringList) == colorings_no
 
     for coloring in coloringList:
         assert graph.is_NAC_coloring(coloring)
