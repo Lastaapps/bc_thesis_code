@@ -360,9 +360,12 @@ def test__find_cycles(graph, result: Set[Tuple]):
 )
 def test_NAC_colorings(graph, colorings_no: int):
     print(f"{graph=}")
-    algorithm = ["naive", "cycles", "subgraphs"][1]
+    algorithm = ["naive", "cycles", "subgraphs"][2]
     coloringList = list(graph.NAC_colorings(algorithm=algorithm))
     print(f"{coloringList=}")
+
+    for coloring in sorted([str(x) for x in coloringList]):
+        print(coloring)
 
     assert len(coloringList) == colorings_no
 

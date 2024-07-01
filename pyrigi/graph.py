@@ -981,11 +981,22 @@ class Graph(nx.Graph):
         vertices: List[int],
         mask: int,
         component_to_edges: List[List[Edge]],
+        allow_mask: int | None = None,
     ) -> NACColoring:
+
+        # TODO use numpy and boolean addressing
+        if allow_mask is None:
+            allow_mask = 2 ** len(vertices) - 1
+
         red, blue = set(), set()
         for i, e in enumerate(vertices):
+            address = 1 << i
+
+            if address & allow_mask == 0:
+                continue
+
             edges = component_to_edges[e]
-            (red if mask & (1 << i) else blue).update(edges)
+            (red if mask & address else blue).update(edges)
         return (red, blue)
 
     @staticmethod
@@ -1305,6 +1316,9 @@ class Graph(nx.Graph):
         )
         chunk_no = (len(vertices) + chunk_size - 1) // chunk_size
 
+        print(Graph(t_graph))
+        print(f"{component_to_edges}")
+
         def join_epochs(
             epoch1: List[int], all_ones_1: int, epoch2: List[int], all_ones_2: int
         ) -> Tuple[List[int], int]:
@@ -1331,15 +1345,18 @@ class Graph(nx.Graph):
                 for mask2 in epoch2:
                     mask = mask1 | mask2
 
-                    # TODO use numpy and boolean addressing
                     coloring = Graph._coloring_from_mask(
-                        vertices, mask, component_to_edges
+                        vertices,
+                        mask,
+                        component_to_edges,
+                        all_ones,
                     )
 
-                    print(f"Checking {coloring=}")
+                    # print(f"Checking ({bin(mask)}) {coloring=}")
                     if not graph.is_NAC_coloring(
                         coloring, allow_non_surjective=True, runs_on_subgraph=True
                     ):
+                        print(f"Failed ({bin(mask)}) {coloring=}")
                         continue
 
                     epoch_colorings.append(mask)
@@ -1371,12 +1388,12 @@ class Graph(nx.Graph):
                 )
 
                 checks_cnt += 1
-                print(f"Checking {coloring=}")
+                print(f"Checking ({bin(mask >> offset)}) {coloring=}")
                 if not graph.is_NAC_coloring(
                     coloring, allow_non_surjective=True, runs_on_subgraph=True
                 ):
+                    print("Failed")
                     continue
-                print("Passed")
 
                 epoch_colorings.append(mask)
 
