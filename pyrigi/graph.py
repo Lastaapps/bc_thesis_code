@@ -1262,7 +1262,7 @@ class Graph(nx.Graph):
         # TODO test with True
         use_log_approach: bool = False,
         min_chunk_size: int = 4,
-        order_strategy: str = "cycles_match_chunks",
+        order_strategy: str = "components_spredded",
     ) -> Iterable[NACColoring]:
         """
         This version of the algorithm splits the graphs into subgraphs,
@@ -1374,7 +1374,6 @@ class Graph(nx.Graph):
                 used_in_epoch = 0
                 queue: Deque[int] = deque([v])
 
-                # TODO this was sus and idk why
                 while queue and used_in_epoch < chunk_size:
                     u = queue.popleft()
 
@@ -1394,7 +1393,6 @@ class Graph(nx.Graph):
                 while used_in_epoch < chunk_size and len(used_vertices) != len(
                     rank_ordered_vertices
                 ):
-                    print(f"{used_vertices=} vs. {rank_ordered_vertices}")
                     v = all_vertices.pop()
                     ordered_vertices.append(v)
                     used_vertices.add(v)
@@ -1402,20 +1400,74 @@ class Graph(nx.Graph):
 
             return ordered_vertices
 
+        def strategy_components_biggest(
+            t_graph: nx.Graph,
+        ) -> List[int]:
+            # NetworkX crashes otherwise
+            if t_graph.number_of_nodes() < 2:
+                return list(t_graph.nodes())
+
+            k_components = nx.connectivity.k_components(t_graph)
+
+            if len(k_components) == 0:
+                return list(t_graph.nodes())
+
+            biggest = max(k_components.keys())
+
+            ordered_vertices: List[int] = []
+
+            for component in k_components[biggest]:
+                ordered_vertices += component
+
+            return ordered_vertices
+
+        def strategy_components_spredded(
+            t_graph: nx.Graph,
+        ) -> List[int]:
+            # NetworkX crashes otherwise
+            if t_graph.number_of_nodes() < 2:
+                return list(t_graph.nodes())
+
+            k_components = nx.connectivity.k_components(t_graph)
+
+            if len(k_components) == 0:
+                return list(t_graph.nodes())
+
+            keyes = sorted(k_components.keys(), reverse=True)
+
+            k = keyes[-1]
+            for key in keyes:
+                if len(k_components[key]) <= chunk_no:
+                    k = key
+                    break
+
+            ordered_vertices: List[int] = []
+
+            for component in k_components[k]:
+                ordered_vertices += component
+
+            return ordered_vertices
+
+        # TODO turn into enum
         match order_strategy:
+            case "none":
+                vertices = list(t_graph.nodes())
             case "rank":
+                pass  # we just take the already ordered vertices
+            case "rank_cycles":
                 vertices = strategy_highes_rank_naive(vertices, vertex_cycles)
             case "cycles":
                 vertices = strategy_cycles(vertices, vertex_cycles)
             case "cycles_match_chunks":
                 vertices = strategy_cycles_match_chunks(vertices, vertex_cycles)
+            case "components_biggest":
+                vertices = strategy_components_biggest(t_graph)
+            case "components_spredded":
+                vertices = strategy_components_spredded(t_graph)
             case _:
                 raise ValueError(
-                    f"Unknown strategy: {order_strategy}, supported: rank, cycles, cycles_match_chunks"
+                    f"Unknown strategy: {order_strategy}, supported: none, rank, rank_cycles, cycles, cycles_match_chunks, components_biggest, components_spredded"
                 )
-
-        print(Graph(t_graph))
-        print(f"{component_to_edges}")
 
         def join_epochs(
             epoch1: List[int], all_ones_1: int, epoch2: List[int], all_ones_2: int
@@ -1432,7 +1484,7 @@ class Graph(nx.Graph):
             """
             epoch_colorings: List[int] = []
 
-            print(f"Joining {epoch1} {bin(all_ones_1)} & {epoch2} {bin(all_ones_2)}")
+            # print(f"Joining {epoch1} {bin(all_ones_1)} & {epoch2} {bin(all_ones_2)}")
 
             if all_ones_1 & all_ones_2:
                 raise ValueError("Cannot join two subgraphs with common nodes")
@@ -1450,15 +1502,12 @@ class Graph(nx.Graph):
                         all_ones,
                     )
 
-                    # print(f"Checking ({bin(mask)}) {coloring=}")
                     if not graph.is_NAC_coloring(
                         coloring, allow_non_surjective=True, runs_on_subgraph=True
                     ):
-                        print(f"Failed ({bin(mask)}) {coloring=}")
                         continue
 
                     epoch_colorings.append(mask)
-            print(f"{epoch_colorings=}")
             return epoch_colorings, all_ones
 
         # Holds all the NAC colorings for a subgraph represented by the second bitmask
@@ -1475,8 +1524,6 @@ class Graph(nx.Graph):
             # Mask current vertex region
             all_ones = (2**local_vertex_no - 1) << offset
 
-            print(f"Chunk: {local_vertices}, {bin(all_ones)}")
-
             # iterate all the coloring variants
             # division by 2 is used as the problem is symmetrical
             for mask in range(0, 2**local_vertex_no // 2):
@@ -1486,17 +1533,14 @@ class Graph(nx.Graph):
                 )
 
                 checks_cnt += 1
-                print(f"Checking ({bin(mask >> offset)}) {coloring=}")
                 if not graph.is_NAC_coloring(
                     coloring, allow_non_surjective=True, runs_on_subgraph=True
                 ):
-                    print("Failed")
                     continue
 
                 epoch_colorings.append(mask)
 
             all_epochs.append((epoch_colorings, all_ones))
-            print(f"{epoch_colorings=}")
 
             # Resolves crossproduct with the previous epoch (linear approach)
             if use_log_approach:

@@ -311,6 +311,7 @@ def test__find_cycles(graph, result: Set[Tuple]):
     ("graph", "colorings_no"),
     [
         (graphs.Path(3), 2),
+        (Graph.from_vertices_and_edges([0, 1, 2, 3], [(0, 1), (1, 2)]), 2),
         (graphs.Cycle(3), 0),
         (graphs.Cycle(4), 6),
         (graphs.Cycle(5), 20),
@@ -340,6 +341,7 @@ def test__find_cycles(graph, result: Set[Tuple]):
     ],
     ids=[
         "path",
+        "path_and_single_vertex",
         "cycle3",
         "cycle4",
         "cycle5",
