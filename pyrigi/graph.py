@@ -8,7 +8,7 @@ from collections import deque
 from copy import deepcopy
 from itertools import combinations
 import itertools
-from typing import Iterable, List, Any, Union, Tuple, Optional, Dict, Set
+from typing import Deque, Iterable, List, Any, Union, Tuple, Optional, Dict, Set
 from enum import Enum
 
 import networkx as nx
@@ -1262,6 +1262,7 @@ class Graph(nx.Graph):
         # TODO test with True
         use_log_approach: bool = False,
         min_chunk_size: int = 4,
+        order_strategy: str = "cycles_match_chunks",
     ) -> Iterable[NACColoring]:
         """
         This version of the algorithm splits the graphs into subgraphs,
@@ -1269,6 +1270,8 @@ class Graph(nx.Graph):
         and new colorings are reevaluated till we reach the original graph again.
         The algorithm tries to find optimal subgraphs and merge strategy.
         """
+        assert min_chunk_size > 1
+
         # number of the is_NAC_coloring calls
         checks_cnt = 0
 
@@ -1293,28 +1296,123 @@ class Graph(nx.Graph):
             )
         )
 
-        # TODO add BFS strategy and follow cycles strategy
-        ordered_vertices: List[int] = []
-        used_vertices: Set[int] = set()
-        for v in vertices:
-            # Handle vertices with no cycles
-            if v not in used_vertices:
-                ordered_vertices.append(v)
-                used_vertices.add(v)
-
-            for cycle in vertex_cycles[v]:
-                for u in cycle:
-                    if u in used_vertices:
-                        continue
-                    ordered_vertices.append(u)
-                    used_vertices.add(u)
-        vertices = ordered_vertices
-
         # Represents size (no. of vertices of the t-graph) of a basic subgraph
         chunk_size = max(
             int(np.sqrt(len(vertices))), min(min_chunk_size, len(vertices))
         )
         chunk_no = (len(vertices) + chunk_size - 1) // chunk_size
+
+        # TODO add BFS strategy and follow cycles strategy
+        def strategy_highes_rank_naive(
+            rank_ordered_vertices: List[int],
+            vertex_cycles: List[List[Tuple[int, ...]]],
+        ) -> List[int]:
+            ordered_vertices: List[int] = []
+            used_vertices: Set[int] = set()
+            for v in rank_ordered_vertices:
+                # Handle vertices with no cycles
+                if v not in used_vertices:
+                    ordered_vertices.append(v)
+                    used_vertices.add(v)
+
+                for cycle in vertex_cycles[v]:
+                    for u in cycle:
+                        if u in used_vertices:
+                            continue
+                        ordered_vertices.append(u)
+                        used_vertices.add(u)
+            return ordered_vertices
+
+        def strategy_cycles(
+            rank_ordered_vertices: List[int],
+            vertex_cycles: List[List[Tuple[int, ...]]],
+        ) -> List[int]:
+            ordered_vertices: List[int] = []
+            used_vertices: Set[int] = set()
+            all_vertices = deque(rank_ordered_vertices)
+
+            while all_vertices:
+                v = all_vertices.popleft()
+
+                # the vertex may have been used before from a cycle
+                if v in used_vertices:
+                    continue
+
+                queue: Deque[int] = deque([v])
+
+                while queue:
+                    u = queue.popleft()
+
+                    if u in used_vertices:
+                        continue
+
+                    ordered_vertices.append(u)
+                    used_vertices.add(u)
+
+                    for cycle in vertex_cycles[u]:
+                        for u in cycle:
+                            if u in used_vertices:
+                                continue
+                            queue.append(u)
+            return ordered_vertices
+
+        def strategy_cycles_match_chunks(
+            rank_ordered_vertices: List[int],
+            vertex_cycles: List[List[Tuple[int, ...]]],
+        ) -> List[int]:
+            ordered_vertices: List[int] = []
+            used_vertices: Set[int] = set()
+            all_vertices = deque(rank_ordered_vertices)
+
+            while all_vertices:
+                v = all_vertices.popleft()
+
+                # the vertex may have been used before from a cycle
+                if v in used_vertices:
+                    continue
+
+                used_in_epoch = 0
+                queue: Deque[int] = deque([v])
+
+                # TODO this was sus and idk why
+                while queue and used_in_epoch < chunk_size:
+                    u = queue.popleft()
+
+                    if u in used_vertices:
+                        continue
+
+                    ordered_vertices.append(u)
+                    used_vertices.add(u)
+                    used_in_epoch += 1
+
+                    for cycle in vertex_cycles[u]:
+                        for u in cycle:
+                            if u in used_vertices:
+                                continue
+                            queue.append(u)
+
+                while used_in_epoch < chunk_size and len(used_vertices) != len(
+                    rank_ordered_vertices
+                ):
+                    print(f"{used_vertices=} vs. {rank_ordered_vertices}")
+                    v = all_vertices.pop()
+                    ordered_vertices.append(v)
+                    used_vertices.add(v)
+                    used_in_epoch += 1
+
+            return ordered_vertices
+
+        match order_strategy:
+            case "rank":
+                vertices = strategy_highes_rank_naive(vertices, vertex_cycles)
+            case "cycles":
+                vertices = strategy_cycles(vertices, vertex_cycles)
+            case "cycles_match_chunks":
+                vertices = strategy_cycles_match_chunks(vertices, vertex_cycles)
+            case _:
+                raise ValueError(
+                    f"Unknown strategy: {order_strategy}, supported: rank, cycles, cycles_match_chunks"
+                )
 
         print(Graph(t_graph))
         print(f"{component_to_edges}")
