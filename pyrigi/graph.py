@@ -994,7 +994,8 @@ class Graph(nx.Graph):
             if not graph.is_NAC_coloring(coloring):
                 continue
 
-            yield coloring
+            yield (coloring[0], coloring[1])
+            yield (coloring[1], coloring[0])
 
     @staticmethod
     def _find_cycles(graph: nx.Graph, all: bool = False) -> Set[Tuple[int, ...]]:
@@ -1194,7 +1195,8 @@ class Graph(nx.Graph):
             if not graph.is_NAC_coloring(coloring):
                 continue
 
-            yield coloring
+            yield (coloring[0], coloring[1])
+            yield (coloring[1], coloring[0])
 
     @doc_category("Generic rigidity")
     def NAC_colorings(self, algorithm: str = "cycles") -> Iterable[NACColoring]:
