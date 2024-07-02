@@ -6,10 +6,21 @@ from __future__ import annotations
 
 from collections import deque
 from copy import deepcopy
-from itertools import combinations
+from functools import reduce
+from itertools import combinations, product
 import itertools
-from typing import Deque, Iterable, List, Any, Union, Tuple, Optional, Dict, Set
-from enum import Enum
+from typing import (
+    Callable,
+    Deque,
+    Iterable,
+    List,
+    Any,
+    Union,
+    Tuple,
+    Optional,
+    Dict,
+    Set,
+)
 
 import networkx as nx
 from sympy import Matrix
@@ -20,6 +31,7 @@ from pyrigi.datastructures.union_find import UnionFind
 from pyrigi.data_type import NACColoring, Vertex, Edge, GraphType, FrameworkType
 from pyrigi.misc import doc_category, generate_category_tables
 from pyrigi.exception import LoopError
+from pyrigi.util.repetable_iterator import RepeatableIterator
 
 
 class Graph(nx.Graph):
@@ -876,7 +888,7 @@ class Graph(nx.Graph):
             # the NAC coloring exists <=> this component has NAC coloring
             return Graph.single_NAC_coloring(Graph(self.subgraph(component)))
 
-        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
+        if nx.algorithms.connectivity.node_connectivity(self) < 2:
             generator = nx.algorithms.biconnected_components(self)
             component: Set[Vertex] = next(generator)
             assert next(generator)  # make sure there are more components
@@ -887,7 +899,7 @@ class Graph(nx.Graph):
 
             return (red, blue)
 
-        return next(self.NAC_colorings(), None)
+        return next(self.NAC_colorings(use_bridges_decomposition=False), None)
 
     @staticmethod
     def _find_triangle_components(
@@ -1606,9 +1618,108 @@ class Graph(nx.Graph):
             yield (coloring[0], coloring[1])
             yield (coloring[1], coloring[0])
 
+    @staticmethod
+    def _NAC_colorings_with_bridges(
+        graph: nx.Graph,
+        processor: Callable[[nx.Graph], Iterable[NACColoring]],
+        copy: bool = True,
+    ) -> Iterable[NACColoring]:
+        """
+        Optimization for NAC coloring search that first finds bridges and
+        biconnected components. After that it find coloring for each component
+        separately and then combines all the possible found NAC colorings.
+
+        Parameters
+        ----------
+        processor:
+            A function that takes a graph (subgraph of the graph given)
+            and finds all the NAC colorings for it.
+        copy:
+            If the graph should be copied before making any destructive changes.
+        ----------
+
+        Returns:
+            All the NAC colorings of the graph.
+        """
+
+        bridges = list(nx.bridges(graph))
+        if len(bridges) == 0:
+            return processor(graph)
+
+        if copy:
+            graph = nx.Graph(graph)
+        graph.remove_edges_from(bridges)
+        components = [
+            nx.induced_subgraph(graph, comp)
+            for comp in nx.components.connected_components(graph)
+        ]
+        components = filter(lambda x: x.number_of_nodes() > 1, components)
+
+        def with_non_surjective(
+            comp: nx.Graph, colorings: Iterable[NACColoring]
+        ) -> Iterable[NACColoring]:
+            r, b = set(), set(comp.edges())
+            yield r, b
+            yield b, r
+            for c in colorings:
+                yield c
+
+        colorings = [with_non_surjective(comp, processor(comp)) for comp in components]
+
+        def bridge_colorings() -> Iterable[NACColoring]:
+            def binaryToGray(num: int) -> int:
+                return num ^ (num >> 1)
+
+            red: Set[Edge] = set()
+            blue: Set[Edge] = set(bridges)
+
+            # create immutable versions
+            r, b = set(red), set(blue)
+            yield r, b
+            yield b, r
+
+            prev_mask = 0
+            for mask in range(1, 2 ** len(bridges) // 2):
+                mask = binaryToGray(mask)
+                diff = prev_mask ^ mask
+                prev_mask = mask
+                is_new = (mask & diff) > 0
+                bridge = bridges[diff.bit_length()]
+                if is_new:
+                    red.add(bridge)
+                    blue.remove(bridge)
+                else:
+                    blue.add(bridge)
+                    red.remove(bridge)
+
+                # create immutable versions
+                r, b = set(red), set(blue)
+                yield r, b
+                yield b, r
+
+        colorings.append(bridge_colorings())
+
+        def cross_product(
+            first: Iterable[NACColoring], second: Iterable[NACColoring]
+        ) -> Iterable[NACColoring]:
+            cache = RepeatableIterator(first)
+            for s in second:
+                for f in cache:
+                    yield s[0].union(f[0]), s[1].union(f[1])
+            itertools.product
+
+        iterator = reduce(cross_product, colorings)
+
+        # Skip initial invalid coloring that are not surjective
+        iterator = filter(lambda x: len(x[0]) * len(x[1]) != 0, iterator)
+
+        return iterator
+
     @doc_category("Generic rigidity")
     def NAC_colorings(
-        self, algorithm: str | None = "subgraphs"
+        self,
+        algorithm: str | None = "subgraphs",
+        use_bridges_decomposition: bool = True,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -1622,6 +1733,11 @@ class Graph(nx.Graph):
             some options may provide better performance
             - naive - basic implementation, previous SOA
             - cycles - finds some small cycles and uses them to reduce state space
+        use_bridges_decomposition:
+            uses the fact that each bicomponent's NAC coloring is independent
+            of the others - the algorithm finds bridges and run the NP-complete
+            algorithm on each component. Can improve performance slightly,
+            disable only if you are sure you don't have a graph with bridges.
         ----------
 
         TODO example
@@ -1634,18 +1750,31 @@ class Graph(nx.Graph):
         if not self._check_NAC_constrains():
             return []
 
-        edge_to_component, component_to_edge = Graph._find_triangle_components(self)
-        t_graph = Graph._create_T_graph_from_components(self, edge_to_component)
+        def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
+            graph = Graph(graph_nx)
+            edge_to_component, component_to_edge = Graph._find_triangle_components(
+                graph
+            )
+            t_graph = Graph._create_T_graph_from_components(graph, edge_to_component)
 
-        match algorithm:
-            case "naive":
-                return Graph._NAC_colorings_naive(self, t_graph, component_to_edge)
-            case "cycles":
-                return Graph._NAC_colorings_cycles(self, t_graph, component_to_edge)
-            case "subgraphs":
-                return Graph._NAC_colorings_subgraphs(self, t_graph, component_to_edge)
-            case _:
-                raise ValueError(f"Unknown algorighm type: {algorithm}")
+            match algorithm:
+                case "naive":
+                    return Graph._NAC_colorings_naive(graph, t_graph, component_to_edge)
+                case "cycles":
+                    return Graph._NAC_colorings_cycles(
+                        graph, t_graph, component_to_edge
+                    )
+                case "subgraphs":
+                    return Graph._NAC_colorings_subgraphs(
+                        graph, t_graph, component_to_edge
+                    )
+                case _:
+                    raise ValueError(f"Unknown algorighm type: {algorithm}")
+
+        if use_bridges_decomposition:
+            return Graph._NAC_colorings_with_bridges(self, run)
+        else:
+            return run(self)
 
     @doc_category("Generic rigidity")
     def is_NAC_coloring(
