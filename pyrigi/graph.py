@@ -1172,13 +1172,14 @@ class Graph(nx.Graph):
         graph: Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
+        use_all_cycles: bool = False,
     ) -> Iterable[NACColoring]:
         vertices = list(t_graph.nodes())
         # so we start with 0
         vertices.sort()
 
         # find some small cycles for state filtering
-        cycles = Graph._find_cycles(t_graph, all=False)
+        cycles = Graph._find_cycles(t_graph, all=use_all_cycles)
         # the idea is that smaller cycles reduce the state space more
         cycles = sorted(cycles, key=lambda c: len(c))
 
@@ -1279,7 +1280,6 @@ class Graph(nx.Graph):
         graph: Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        # TODO test with True
         use_log_approach: bool = False,
         min_chunk_size: int = 4,
         order_strategy: str = "components_spredded",
@@ -1292,33 +1292,34 @@ class Graph(nx.Graph):
         """
         assert min_chunk_size > 1
 
-        # Finds all the shortest cycles in the graph
-        cycles = Graph._find_cycles(t_graph, all=True)
-
         # for each vertex we find all the cycles that contain it
-        vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
-        for cycle in cycles:
-            for v in cycle:
-                vertex_cycles[v].append(cycle)
+        def create_vertex_cycles() -> List[List[Tuple[int, ...]]]:
+            # Finds all the shortest cycles in the graph
+            cycles = Graph._find_cycles(t_graph, all=True)
+
+            vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
+            for cycle in cycles:
+                for v in cycle:
+                    vertex_cycles[v].append(cycle)
+            return vertex_cycles
 
         # We sort the vertices by degree
-        vertices = list(
-            map(
-                lambda x: x[0],
-                sorted(
-                    t_graph.degree(),
-                    key=lambda x: x[1],
-                    reverse=True,
-                ),
+        def rank_ordered_vertices() -> List[int]:
+            return list(
+                map(
+                    lambda x: x[0],
+                    sorted(
+                        t_graph.degree(),
+                        key=lambda x: x[1],
+                        reverse=True,
+                    ),
+                )
             )
-        )
-        vertices_no = len(vertices)
 
         # Represents size (no. of vertices of the t-graph) of a basic subgraph
-        chunk_size = max(
-            int(np.sqrt(len(vertices))), min(min_chunk_size, len(vertices))
-        )
-        chunk_no = (len(vertices) + chunk_size - 1) // chunk_size
+        vertices_no = t_graph.number_of_nodes()
+        chunk_size = max(int(np.sqrt(vertices_no)), min(min_chunk_size, vertices_no))
+        chunk_no = (vertices_no + chunk_size - 1) // chunk_size
 
         # TODO add BFS strategy
         def strategy_highes_rank_naive(
@@ -1416,6 +1417,11 @@ class Graph(nx.Graph):
                     used_vertices.add(v)
                     used_in_epoch += 1
 
+            for v in rank_ordered_vertices:
+                if v in used_vertices:
+                    continue
+                ordered_vertices.append(v)
+
             return ordered_vertices
 
         def strategy_components(
@@ -1455,7 +1461,6 @@ class Graph(nx.Graph):
                 if v in used_vertices:
                     continue
                 ordered_vertices.append(v)
-                used_vertices.add(v)
 
             return ordered_vertices
 
@@ -1464,13 +1469,13 @@ class Graph(nx.Graph):
             case "none":
                 vertices = list(t_graph.nodes())
             case "rank":
-                pass  # we just take the already ordered vertices
+                vertices = rank_ordered_vertices()
             case "rank_cycles":
-                vertices = strategy_highes_rank_naive(vertices, vertex_cycles)
+                vertices = strategy_highes_rank_naive(rank_ordered_vertices(), create_vertex_cycles())
             case "cycles":
-                vertices = strategy_cycles(vertices, vertex_cycles)
+                vertices = strategy_cycles(rank_ordered_vertices(), create_vertex_cycles())
             case "cycles_match_chunks":
-                vertices = strategy_cycles_match_chunks(vertices, vertex_cycles)
+                vertices = strategy_cycles_match_chunks(rank_ordered_vertices(), create_vertex_cycles())
             case "components_biggest":
                 vertices = strategy_components(
                     t_graph, start_from_biggest_component=True
@@ -1746,8 +1751,6 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        if algorithm not in ["naive", "cycles", "subgraphs", None]:
-            raise ValueError(f"Unknown algorighm type: {algorithm}")
         if algorithm is None:
             algorithm = "subgraphs"
 
@@ -1761,16 +1764,28 @@ class Graph(nx.Graph):
             )
             t_graph = Graph._create_T_graph_from_components(graph, edge_to_component)
 
-            match algorithm:
+            algorithm_parts = algorithm.split("-")
+            match algorithm_parts[0]:
                 case "naive":
                     return Graph._NAC_colorings_naive(graph, t_graph, component_to_edge)
                 case "cycles":
+                    if len(algorithm_parts) == 1:
+                        return Graph._NAC_colorings_cycles(
+                            graph, t_graph, component_to_edge
+                        )
                     return Graph._NAC_colorings_cycles(
-                        graph, t_graph, component_to_edge
+                        graph, t_graph, component_to_edge,
+                        use_all_cycles=bool(algorithm_parts[1]),
                     )
                 case "subgraphs":
+                    if len(algorithm_parts) == 1:
+                        return Graph._NAC_colorings_subgraphs(
+                            graph, t_graph, component_to_edge,
+                        )
                     return Graph._NAC_colorings_subgraphs(
-                        graph, t_graph, component_to_edge
+                        graph, t_graph, component_to_edge,
+                        use_log_approach=bool(algorithm_parts[1]),
+                        order_strategy=algorithm_parts[2],
                     )
                 case _:
                     raise ValueError(f"Unknown algorighm type: {algorithm}")

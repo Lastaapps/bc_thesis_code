@@ -1,33 +1,77 @@
 from typing import List
-from benchmarks.dataset import load_all_graphs
+from benchmarks.dataset import load_all_small_graphs, load_laman_graphs
 from pyrigi.graph import Graph
-import networkx as nx
 import pytest
 
 SMALL_GRAPH_FILE_LIMIT = 64
-SMALL_GRAPH_CNT = 128
 SMALL_GRAPH_FUZZY_LIMIT = 256
-small_graphs: List[Graph] = load_all_graphs(SMALL_GRAPH_FILE_LIMIT)
+small_graphs: List[Graph] = load_all_small_graphs(SMALL_GRAPH_FILE_LIMIT)
+laman_graphs: List[Graph] = load_laman_graphs()
 
 # can be used for debugging
 # small_graphs_from_smallest = sorted(small_graphs, key=lambda g: nx.number_of_nodes(g))
 
+NAC_ALGORITHMS = [
+    "naive",
+    "cycles-True",
+    "cycles-False",
+    "subgraphs-True-none",
+    "subgraphs-True-rank",
+    "subgraphs-True-rank_cycles",
+    "subgraphs-True-cycles",
+    "subgraphs-True-cycles_match_chunks",
+    "subgraphs-True-components_biggest",
+    "subgraphs-True-components_spredded",
+    "subgraphs-False-none",
+    "subgraphs-False-rank",
+    "subgraphs-False-rank_cycles",
+    "subgraphs-False-cycles",
+    "subgraphs-False-cycles_match_chunks",
+    "subgraphs-False-components_biggest",
+    "subgraphs-False-components_spredded",
+]
 
-@pytest.mark.parametrize("algorithm", ["naive", "cycles", "subgraphs"])
-def test_bench_single_NAC_colorings(benchmark, algorithm: str):
+
+@pytest.mark.nac_benchmark
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize(
+    "dataset", [small_graphs[:32], laman_graphs[:16]], ids=["small", "laman"]
+)
+def test_bench_single_NAC_colorings(
+    benchmark,
+    algorithm: str,
+    dataset: List[Graph],
+):
+    """
+    Measures the time till the first NAC coloring of the graph given is found.
+    (or it is decided there is no NAC coloring).
+    """
+
     def perform_test():
-        for graph in small_graphs[:256]:
+        for graph in dataset:
             graph.single_NAC_coloring(algorithm=algorithm)
 
     benchmark(perform_test)
 
 
-# TODO add subgraph order strategies
+@pytest.mark.nac_benchmark
 @pytest.mark.parametrize("bridges", [True, False])
-@pytest.mark.parametrize("algorithm", ["naive", "cycles", "subgraphs"])
-def test_bench_NAC_colorings(benchmark, algorithm: str, bridges: bool):
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize(
+    "dataset", [small_graphs[:32], laman_graphs[:16]], ids=["small", "laman"]
+)
+def test_bench_NAC_colorings(
+    benchmark,
+    algorithm: str,
+    bridges: bool,
+    dataset: List[Graph],
+):
+    """
+    Measures the time to find all the NAC colorings of the graph given if any
+    exists. This can also get slow really quickly for some algorithms.
+    """
     def perform_test():
-        for graph in small_graphs[:32]:
+        for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 use_bridges_decomposition=bridges,
@@ -37,10 +81,47 @@ def test_bench_NAC_colorings(benchmark, algorithm: str, bridges: bool):
     benchmark(perform_test)
 
 
-# TODO add subgraph order strategies
+@pytest.mark.nac_benchmark
+@pytest.mark.parametrize("bridges", [True, False])
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize(
+    "dataset", [small_graphs[:32], laman_graphs[:16]], ids=["small", "laman"]
+)
+def test_bench_NAC_colorings_first_32(
+    benchmark,
+    algorithm: str,
+    bridges: bool,
+    dataset: List[Graph],
+    first_n: int = 32,
+):
+    """
+    Measures the time to find first 32 NAC colorings of the graph given if they
+    exist. The reason for this test is that you don't usually need all the NAC
+    colorings of a graph and some algorithms may use it to their advantage.
+    """
+    def perform_test():
+        for graph in dataset[:32]:
+            for _ in zip(
+                range(first_n),
+                graph.NAC_colorings(
+                    algorithm=algorithm,
+                    use_bridges_decomposition=bridges,
+                ),
+            ):
+                pass
+
+    benchmark(perform_test)
+
+
 @pytest.mark.parametrize("algorithm", ["cycles", "subgraphs"])
 @pytest.mark.parametrize("graph", small_graphs[:SMALL_GRAPH_FUZZY_LIMIT])
 def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
+    """
+    Checks algorithm validity against the naive implementation
+    (that is hopefully correct) and checks that outputs are the same.
+    Large number of smaller graphs is used (naive implementation is really slow for larger ones).
+    """
+
     # print(graph)
     naive = list(graph.NAC_colorings(algorithm="naive"))
     tested = list(graph.NAC_colorings(algorithm=algorithm))

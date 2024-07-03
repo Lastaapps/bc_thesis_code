@@ -17,10 +17,11 @@ class GraphFamily(Enum):
     LAMAN = (1245517, "LamanGraphs")
 
 
-DOWNLOAD_DIR = "benchmarks/graphs_store"
+DOWNLOAD_DIR = "./benchmarks/graphs_store"
+LAMAN_DIR = "./benchmarks/graphs_store/nauty-laman"
 
 
-def download_graphs(family: GraphFamily, size: str) -> None:
+def download_small_graphs(family: GraphFamily, size: str) -> None:
     url = "https://zenodo.org/records/{}/files/{}{}.zip?download=1".format(
         family.value[0], family.value[1], size
     )
@@ -51,13 +52,13 @@ configurations = [
 ]
 
 
-def download_all_graphs():
+def download_small_all_graphs():
     for family, type in configurations:
-        download_graphs(family, type)
+        download_small_graphs(family, type)
 
 
-def load_graph(family: GraphFamily, size: str, limit: int | None):
-    download_graphs(family, size)
+def load_small_graph(family: GraphFamily, size: str, limit: int | None):
+    download_small_graphs(family, size)
 
     name = family.value[1] + " " + size
     dir = os.path.join(DOWNLOAD_DIR, name)
@@ -70,7 +71,6 @@ def load_graph(family: GraphFamily, size: str, limit: int | None):
         path = os.path.join(dir, file)
         # print(f"Loading file {path}")
 
-        nx.from_graph6_bytes
         if limit is None:
             graphs += [Graph(g) for g in nx.read_graph6(path)]
         else:
@@ -84,10 +84,27 @@ def load_graph(family: GraphFamily, size: str, limit: int | None):
     return graphs
 
 
-def load_all_graphs(limit: int | None, shuffle: bool = True) -> List[Graph]:
+def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph]:
     graphs: List[Graph] = []
     for family, type in configurations:
-        graphs += load_graph(family, type, limit)
+        graphs += load_small_graph(family, type, limit)
+
+    if shuffle:
+        random.Random(42).shuffle(graphs)
+
+    return graphs
+
+def load_laman_graphs(dir: str= LAMAN_DIR, shuffle: bool = True):
+
+    graphs: List[Graph] = []
+    for file in os.listdir(dir):
+        if not file.endswith(".g6"):
+            continue
+
+        path = os.path.join(dir, file)
+        # print(f"Loading file {path}")
+
+        graphs += [Graph(g) for g in nx.read_graph6(path)]
 
     if shuffle:
         random.Random(42).shuffle(graphs)

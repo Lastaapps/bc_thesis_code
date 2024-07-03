@@ -53,7 +53,7 @@ pythonpath = [
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "serial",
+    "nac_benchmark: runs NAC coloring benchmarks",
 ]
 
 [tool.jupytext]
