@@ -1023,9 +1023,6 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> Iterable[NACColoring]:
-        # number of the is_NAC_coloring calls
-        checks_cnt = 0
-
         vertices = list(t_graph.nodes())
 
         # iterate all the coloring variants
@@ -1033,7 +1030,6 @@ class Graph(nx.Graph):
         for mask in range(1, 2 ** len(vertices) // 2):
             coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
-            checks_cnt += 1
             if not graph.is_NAC_coloring(coloring):
                 continue
 
@@ -1090,10 +1086,16 @@ class Graph(nx.Graph):
             """
             Finds the shortest cycle(s) for the vertex given
             """
-            queue = deque([start])
-            parents = [-1 for _ in range(len(vertices))]
-            parents[start] = start
+            # Stores node and id of branch it's from
+            queue: deque[Tuple[int, int]] = deque()
+            parent_and_id = [(-1, -1) for _ in range(len(vertices))]
+            parent_and_id[start] = (start, -1)
             local_cycle_len = -1
+
+            for u in graph.neighbors(start):
+                # newly found item
+                parent_and_id[u] = (start, -u)
+                queue.append((u, -u))
 
             def backtrack(v: int, u: int) -> List[int]:
                 """
@@ -1103,26 +1105,26 @@ class Graph(nx.Graph):
 
                 # reconstructs one part of the cycle
                 cycles.append(u)
-                p = parents[u]
+                p = parent_and_id[u][0]
                 while p != start:
                     cycles.append(p)
-                    p = parents[p]
+                    p = parent_and_id[p][0]
                 cycles = list(reversed(cycles))
 
                 # and the other one
                 cycles.append(v)
-                p = parents[v]
+                p = parent_and_id[v][0]
                 while p != start:
                     cycles.append(p)
-                    p = parents[p]
+                    p = parent_and_id[p][0]
 
                 cycles.append(start)
                 return cycles
 
             # typical BFS
             while queue:
-                v = queue.popleft()
-                parent = parents[v]
+                v, id = queue.popleft()
+                parent = parent_and_id[v][0]
 
                 # TODO consider shuffling
                 for u in graph.neighbors(v):
@@ -1132,9 +1134,13 @@ class Graph(nx.Graph):
                         continue
 
                     # newly found item
-                    if parents[u] == -1:
-                        parents[u] = v
-                        queue.append(u)
+                    if parent_and_id[u][0] == -1:
+                        parent_and_id[u] = (v, id)
+                        queue.append((u, id))
+                        continue
+
+                    # cycle like this one does not contain the starting vertex
+                    if parent_and_id[u][1] == id:
                         continue
 
                     # a cycle was found
@@ -1167,9 +1173,6 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> Iterable[NACColoring]:
-        # number of the is_NAC_coloring calls
-        checks_cnt = 0
-
         vertices = list(t_graph.nodes())
         # so we start with 0
         vertices.sort()
@@ -1265,7 +1268,6 @@ class Graph(nx.Graph):
 
             coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
-            checks_cnt += 1
             if not graph.is_NAC_coloring(coloring):
                 continue
 
@@ -1290,9 +1292,6 @@ class Graph(nx.Graph):
         """
         assert min_chunk_size > 1
 
-        # number of the is_NAC_coloring calls
-        checks_cnt = 0
-
         # Finds all the shortest cycles in the graph
         cycles = Graph._find_cycles(t_graph, all=True)
 
@@ -1313,6 +1312,7 @@ class Graph(nx.Graph):
                 ),
             )
         )
+        vertices_no = len(vertices)
 
         # Represents size (no. of vertices of the t-graph) of a basic subgraph
         chunk_size = max(
@@ -1320,7 +1320,7 @@ class Graph(nx.Graph):
         )
         chunk_no = (len(vertices) + chunk_size - 1) // chunk_size
 
-        # TODO add BFS strategy and follow cycles strategy
+        # TODO add BFS strategy
         def strategy_highes_rank_naive(
             rank_ordered_vertices: List[int],
             vertex_cycles: List[List[Tuple[int, ...]]],
@@ -1418,8 +1418,9 @@ class Graph(nx.Graph):
 
             return ordered_vertices
 
-        def strategy_components_biggest(
+        def strategy_components(
             t_graph: nx.Graph,
+            start_from_biggest_component: bool,
         ) -> List[int]:
             # NetworkX crashes otherwise
             if t_graph.number_of_nodes() < 2:
@@ -1430,39 +1431,31 @@ class Graph(nx.Graph):
             if len(k_components) == 0:
                 return list(t_graph.nodes())
 
-            biggest = max(k_components.keys())
+            keys = sorted(k_components.keys(), reverse=True)
+
+            if not start_from_biggest_component:
+                for i, key in enumerate(keys):
+                    if len(k_components[key]) <= chunk_no:
+                        keys = keys[i:]
+                        break
 
             ordered_vertices: List[int] = []
+            used_vertices: Set[int] = set()
 
-            for component in k_components[biggest]:
-                ordered_vertices += component
+            for key in keys:
+                for component in k_components[key]:
+                    for v in component:
+                        if v in used_vertices:
+                            continue
+                        ordered_vertices.append(v)
+                        used_vertices.add(v)
 
-            return ordered_vertices
-
-        def strategy_components_spredded(
-            t_graph: nx.Graph,
-        ) -> List[int]:
-            # NetworkX crashes otherwise
-            if t_graph.number_of_nodes() < 2:
-                return list(t_graph.nodes())
-
-            k_components = nx.connectivity.k_components(t_graph)
-
-            if len(k_components) == 0:
-                return list(t_graph.nodes())
-
-            keyes = sorted(k_components.keys(), reverse=True)
-
-            k = keyes[-1]
-            for key in keyes:
-                if len(k_components[key]) <= chunk_no:
-                    k = key
-                    break
-
-            ordered_vertices: List[int] = []
-
-            for component in k_components[k]:
-                ordered_vertices += component
+            # make sure all the nodes were added
+            for v in t_graph.nodes():
+                if v in used_vertices:
+                    continue
+                ordered_vertices.append(v)
+                used_vertices.add(v)
 
             return ordered_vertices
 
@@ -1479,13 +1472,19 @@ class Graph(nx.Graph):
             case "cycles_match_chunks":
                 vertices = strategy_cycles_match_chunks(vertices, vertex_cycles)
             case "components_biggest":
-                vertices = strategy_components_biggest(t_graph)
+                vertices = strategy_components(
+                    t_graph, start_from_biggest_component=True
+                )
             case "components_spredded":
-                vertices = strategy_components_spredded(t_graph)
+                vertices = strategy_components(
+                    t_graph, start_from_biggest_component=False
+                )
             case _:
                 raise ValueError(
                     f"Unknown strategy: {order_strategy}, supported: none, rank, rank_cycles, cycles, cycles_match_chunks, components_biggest, components_spredded"
                 )
+
+        assert vertices_no == len(vertices)
 
         def join_epochs(
             epoch1: List[int], all_ones_1: int, epoch2: List[int], all_ones_2: int
@@ -1550,7 +1549,6 @@ class Graph(nx.Graph):
                     local_vertices, mask >> offset, component_to_edges
                 )
 
-                checks_cnt += 1
                 if not graph.is_NAC_coloring(
                     coloring, allow_non_surjective=True, runs_on_subgraph=True
                 ):
