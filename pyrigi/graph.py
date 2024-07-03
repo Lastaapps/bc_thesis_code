@@ -858,7 +858,10 @@ class Graph(nx.Graph):
             return True
         return self.single_NAC_coloring() is not None
 
-    def single_NAC_coloring(self) -> Optional[NACColoring]:
+    def single_NAC_coloring(
+        self,
+        algorithm: str | None = "subgraphs",
+    ) -> Optional[NACColoring]:
         """
         Finds only a single NAC coloring if it exists.
         Some other optimizations may be used
@@ -867,14 +870,11 @@ class Graph(nx.Graph):
         if not self._check_NAC_constrains():
             return None
 
-        print(self.nodes, self.edges)
         components = list(nx.algorithms.components.connected_components(self))
-        print(components)
         if len(components) > 1:
             # filter all the single nodes
             components = list(filter(lambda nodes: len(nodes) > 1, components))
             component: Set[Vertex] = components[0]
-            print(component)
 
             # there are more disconnected components with at least one edge,
             # we can color both of them with different color and be done.
@@ -899,7 +899,13 @@ class Graph(nx.Graph):
 
             return (red, blue)
 
-        return next(self.NAC_colorings(use_bridges_decomposition=False), None)
+        return next(
+            self.NAC_colorings(
+                algorithm=algorithm,
+                use_bridges_decomposition=False,
+            ),
+            None,
+        )
 
     @staticmethod
     def _find_triangle_components(
