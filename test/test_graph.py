@@ -501,7 +501,102 @@ def test_NAC_colorings(graph, colorings_no: int, algorithm, use_bridges: bool):
     ],
 )
 def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool):
-    assert graph.is_NAC_coloring(coloring) == result
+    red, blue = coloring
+    assert graph.is_NAC_coloring((red, blue)) == result
+    assert graph.is_NAC_coloring((blue, red)) == result
+
+
+@pytest.mark.parametrize(
+    ("graph", "coloring"),
+    [
+        (
+            graphs.SmallestMinimallyRigitGraph(),
+            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
+        ),
+        (
+            graphs.SmallestMinimallyRigitGraph(),
+            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
+        ),
+        (
+            graphs.SmallestMinimallyRigitGraph(),
+            (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
+        ),
+        # tests if everything works with non-integer vertices
+        (
+            Graph(
+                [
+                    ("0", "1"),
+                    ("1", "2"),
+                    ("2", "3"),
+                    ("3", "0"),
+                    ("0", "2"),
+                    ("1", "4"),
+                    ("3", "4"),
+                ]
+            ),
+            (
+                set([("0", "1"), ("1", "2"), ("3", "0"), ("0", "2")]),
+                set([("2", "3"), ("1", "4"), ("3", "4")]),
+            ),
+        ),
+    ],
+)
+def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
+    graph, coloring: Tuple[Set[Edge], Set[Edge]]
+):
+    """
+    Cartesian NAC coloring is also NAC coloring. So if we pass invalid coloring,
+    cartesian NAC coloring result should be also negative.
+    """
+    red, blue = coloring
+    assert graph.is_cartesian_NAC_coloring((red, blue)) == False
+    assert graph.is_cartesian_NAC_coloring((blue, red)) == False
+
+
+@pytest.mark.parametrize(
+    ("graph", "coloring", "result"),
+    [
+        (
+            graphs.ThreeSquares(),
+            (
+                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)]),
+                set([(0, 4), (1, 5), (2, 6), (3, 7)]),
+            ),
+            True,
+        ),
+        (
+            graphs.ThreeSquares(),
+            (
+                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6)]),
+                set([(0, 4), (1, 5), (2, 6), (3, 7), (6, 7)]),
+            ),
+            False,
+        ),
+        (
+            graphs.ThreeSquares(),
+            (
+                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (3, 7)]),
+                set([(0, 4), (1, 5), (2, 6)]),
+            ),
+            False,
+        ),
+        (
+            graphs.ThreeSquares(),
+            (
+                set([(0, 1), (1, 2), (4, 5), (5, 6), (0, 4), (1, 5)]),
+                set([(2, 6), (3, 7), (2, 3), (6, 7)]),
+            ),
+            False,
+        ),
+        # TODO more tests
+    ],
+)
+def test_is_cartesian_NAC_coloring(
+    graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool
+):
+    red, blue = coloring
+    assert graph.is_cartesian_NAC_coloring((red, blue)) == result
+    assert graph.is_cartesian_NAC_coloring((blue, red)) == result
 
 
 def test_str():

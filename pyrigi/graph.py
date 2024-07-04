@@ -4,7 +4,7 @@ Module for rigidity related graph properties.
 
 from __future__ import annotations
 
-from collections import deque
+from collections import defaultdict, deque
 from copy import deepcopy
 from functools import reduce
 from itertools import combinations, product
@@ -1471,11 +1471,17 @@ class Graph(nx.Graph):
             case "rank":
                 vertices = rank_ordered_vertices()
             case "rank_cycles":
-                vertices = strategy_highes_rank_naive(rank_ordered_vertices(), create_vertex_cycles())
+                vertices = strategy_highes_rank_naive(
+                    rank_ordered_vertices(), create_vertex_cycles()
+                )
             case "cycles":
-                vertices = strategy_cycles(rank_ordered_vertices(), create_vertex_cycles())
+                vertices = strategy_cycles(
+                    rank_ordered_vertices(), create_vertex_cycles()
+                )
             case "cycles_match_chunks":
-                vertices = strategy_cycles_match_chunks(rank_ordered_vertices(), create_vertex_cycles())
+                vertices = strategy_cycles_match_chunks(
+                    rank_ordered_vertices(), create_vertex_cycles()
+                )
             case "components_biggest":
                 vertices = strategy_components(
                     t_graph, start_from_biggest_component=True
@@ -1774,16 +1780,22 @@ class Graph(nx.Graph):
                             graph, t_graph, component_to_edge
                         )
                     return Graph._NAC_colorings_cycles(
-                        graph, t_graph, component_to_edge,
+                        graph,
+                        t_graph,
+                        component_to_edge,
                         use_all_cycles=bool(algorithm_parts[1]),
                     )
                 case "subgraphs":
                     if len(algorithm_parts) == 1:
                         return Graph._NAC_colorings_subgraphs(
-                            graph, t_graph, component_to_edge,
+                            graph,
+                            t_graph,
+                            component_to_edge,
                         )
                     return Graph._NAC_colorings_subgraphs(
-                        graph, t_graph, component_to_edge,
+                        graph,
+                        t_graph,
+                        component_to_edge,
                         use_log_approach=bool(algorithm_parts[1]),
                         order_strategy=algorithm_parts[2],
                     )
@@ -1855,6 +1867,92 @@ class Graph(nx.Graph):
         return check_coloring(coloring[0], coloring[1]) and check_coloring(
             coloring[1], coloring[0]
         )
+
+    @doc_category("Generic rigidity")
+    def is_cartesian_NAC_coloring(
+        self,
+        coloring: NACColoring,
+        allow_non_surjective: bool = False,
+        runs_on_subgraph: bool = False,
+    ) -> bool:
+        """
+        Check if the coloring given is a cartesian NAC coloring.
+
+        Parameters:
+        ----------
+            coloring: the coloring to check if it is a cartesian NAC coloring.
+            allow_non_surjective: if True, allows the coloring to be non-surjective.
+                This can be useful for checking subgraphs - the can use only one color.
+            runs_on_subgraph: if True, the check that all the graph edges are
+                colored is disabled.
+        ----------
+
+        Pseudocode:
+            find red and blue components
+            for each vertex get ids of it's components
+            iterate over all the vertices with 2+ components
+            mark neighboring components
+            if two components are already neighboring, return false
+            if no problem is found, return true
+        """
+
+        # Both colors have to be used
+        if len(coloring[0]) == 0 or len(coloring[1]) == 0:
+            return allow_non_surjective
+
+        if not self._check_NAC_constrains():
+            return False
+
+        # We should rather check if the edges match exactly,
+        # but that would be a little slower
+        if not runs_on_subgraph and len(coloring[0]) + len(coloring[1]) != len(
+            self.edges
+        ):
+            return False
+        if len(coloring[0].intersection(coloring[1])) != 0:
+            return False
+
+        G = Graph()
+        G.add_vertices(self.vertex_list())
+
+        red, blue = coloring
+
+        G.add_edges(red)
+
+        if type(list(G.nodes)[0]) in [int, np.int8, np.int16, np.int32, np.int64]:
+            comp_ids = np.full(nx.number_of_nodes(G), -1)
+        else:
+            comp_ids = defaultdict(lambda: -1)
+
+        id: int = -1
+        for id, red_comp in enumerate(nx.components.connected_components(G)):
+            for v in red_comp:
+                comp_ids[v] = id
+        id += 1
+
+        G.clear_edges()
+        G.add_edges(blue)
+
+        # TODO benchmark
+        # neighbors: Set[Tuple[int, int]] = set()
+        # neighbors: List[Set[int]] = [[] for _ in range(id)]
+        neighbors: List[List[int]] = [[] for _ in range(id)]
+
+        for blue_id, blue_comp in enumerate(nx.components.connected_components(G)):
+            for v in blue_comp:
+                red_id: int = comp_ids[v]
+                if red_id == -1:
+                    continue
+
+                # key: Tuple[int, int] = (blue_id, red_id)
+                # if key in neighbors:
+                #     return False
+                # neighbors.add(key)
+
+                if blue_id in neighbors[red_id]:
+                    return False
+                neighbors[red_id].append(blue_id)
+        return True
 
     @doc_category("General graph theoretical properties")
     def is_isomorphic(self, graph: GraphType) -> bool:
