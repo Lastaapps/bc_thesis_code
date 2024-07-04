@@ -846,30 +846,16 @@ class Graph(nx.Graph):
 
         return True
 
-    def has_NAC_coloring(self) -> bool:
-        """
-        Same as single_NAC_coloring, but the certificate may not be created,
-        so some additional tricks are used the performance may be improved.
-        """
-        if not self._check_NAC_constrains():
-            return False
+    # -------------------------------------------------------------------------
+    # --- NAC coloring --------------------------------------------------------
+    # -------------------------------------------------------------------------
 
-        if not nx.algorithms.connectivity.node_connectivity(self) >= 2:
-            return True
-        return self.single_NAC_coloring() is not None
-
-    def single_NAC_coloring(
-        self,
-        algorithm: str | None = "subgraphs",
-    ) -> Optional[NACColoring]:
+    def _single_general_NAC_coloring(self) -> Optional[NACColoring]:
         """
-        Finds only a single NAC coloring if it exists.
-        Some other optimizations may be used
-        to improve performance for some graph classes.
+        Tries to find a trivial NAC coloring based on connectivity of
+        the graph components. This coloring is trivially both NAC coloring
+        and cartesian NAC coloring.
         """
-        if not self._check_NAC_constrains():
-            return None
-
         components = list(nx.algorithms.components.connected_components(self))
         if len(components) > 1:
             # filter all the single nodes
@@ -899,6 +885,73 @@ class Graph(nx.Graph):
 
             return (red, blue)
 
+        return None
+
+    def has_NAC_coloring(self) -> bool:
+        """
+        Same as single_NAC_coloring, but the certificate may not be created,
+        so some additional tricks are used the performance may be improved.
+        """
+        if not self._check_NAC_constrains():
+            return False
+
+        if nx.algorithms.connectivity.node_connectivity(self) < 2:
+            return True
+        return self.single_NAC_coloring() is not None
+
+    def single_NAC_coloring(
+        self,
+        algorithm: str | None = "subgraphs",
+    ) -> Optional[NACColoring]:
+        """
+        Finds only a single NAC coloring if it exists.
+        Some other optimizations may be used
+        to improve performance for some graph classes.
+        """
+        if not self._check_NAC_constrains():
+            return None
+
+        common = self._single_general_NAC_coloring()
+        if common is not None:
+            return common
+
+        return next(
+            self.NAC_colorings(
+                algorithm=algorithm,
+                use_bridges_decomposition=False,
+            ),
+            None,
+        )
+
+    def has_cartesian_NAC_coloring(self) -> bool:
+        """
+        Same as single_castesian_NAC_coloring,
+        but the certificate may not be created,
+        so some additional tricks are used the performance may be improved.
+        """
+        if not self._check_NAC_constrains():
+            return False
+
+        if nx.algorithms.connectivity.node_connectivity(self) < 2:
+            return True
+        return self.single_cartesian_NAC_coloring() is not None
+
+    def single_cartesian_NAC_coloring(
+        self,
+        algorithm: str | None = "subgraphs",
+    ) -> Optional[NACColoring]:
+        """
+        Finds only a single NAC coloring if it exists.
+        Some other optimizations may be used
+        to improve performance for some graph classes.
+        """
+        if not self._check_NAC_constrains():
+            return None
+
+        common = self._single_general_NAC_coloring()
+        if common is not None:
+            return common
+
         return next(
             self.NAC_colorings(
                 algorithm=algorithm,
@@ -910,6 +963,7 @@ class Graph(nx.Graph):
     @staticmethod
     def _find_triangle_components(
         graph: Graph,
+        is_cartesian_NAC_coloring: bool = False,
     ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
         """
         Finds all the components of triangle equivalence.
@@ -917,28 +971,54 @@ class Graph(nx.Graph):
         Returns mapping from edges to their component id (int)
         and the other way around from component to set of edges
         Order of vertices in the edge pairs is arbitrary.
-        Components are indexed from 0
+
+        If the cartesian mode is switched on,
+        also all the cycles of four are found and merged.
+        Make sure you handle this correctly in your subsequent pipeline.
+
+        Components are indexed from 0.
         """
-        triangle_components = UnionFind[Edge]()
+
+        components = UnionFind[Edge]()
+
+        # Finds triangles
         for edge in graph.edges:
             v, u = edge
 
             # We cannot sort vertices and we cannot expect
             # any regularity or order of the vertices
-            triangle_components.join((u, v), (v, u))
+            components.join((u, v), (v, u))
 
-            vset = set([w for e in graph.edges(v) for w in e])
-            uset = set([w for e in graph.edges(u) for w in e])
-            intersection = vset.intersection(uset) - set([v, u])
+            v_neighbours = set(graph.neighbors(v))
+            u_neighbours = set(graph.neighbors(u))
+            intersection = v_neighbours.intersection(u_neighbours) - set([v, u])
             for w in intersection:
-                triangle_components.join((u, v), (w, v))
-                triangle_components.join((u, v), (w, u))
+                components.join((u, v), (w, v))
+                components.join((u, v), (w, u))
+
+        # Finds squares
+        for edge in graph.edges if is_cartesian_NAC_coloring else []:
+            v, u = edge
+
+            v_neighbours = set(graph.neighbors(v))
+            v_neighbours.remove(u)
+
+            for w in graph.neighbors(u):
+                if w == v:
+                    continue
+                for n in graph.neighbors(w):
+                    if n not in v_neighbours:
+                        continue
+
+                    # hooray, we have an intersection
+                    components.join((u, v), (w, n))
+                    components.join((u, w), (v, n))
 
         edge_to_component: Dict[Edge, int] = {}
         component_to_edge: List[List[Edge]] = []
 
         for edge in graph.edges:
-            root = triangle_components.find(edge)
+            root = components.find(edge)
 
             if root not in edge_to_component:
                 edge_to_component[root] = id = len(component_to_edge)
@@ -1022,6 +1102,7 @@ class Graph(nx.Graph):
         graph: Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
+        is_right_NAC_coloring: Callable[[Graph, NACColoring], bool],
     ) -> Iterable[NACColoring]:
         vertices = list(t_graph.nodes())
 
@@ -1030,7 +1111,7 @@ class Graph(nx.Graph):
         for mask in range(1, 2 ** len(vertices) // 2):
             coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
-            if not graph.is_NAC_coloring(coloring):
+            if not is_right_NAC_coloring(graph, coloring):
                 continue
 
             yield (coloring[0], coloring[1])
@@ -1280,6 +1361,9 @@ class Graph(nx.Graph):
         graph: Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
+        coloring_check_non_surjective_allow_subgraphs: Callable[
+            [Graph, NACColoring], bool
+        ],
         use_log_approach: bool = False,
         min_chunk_size: int = 4,
         order_strategy: str = "components_spredded",
@@ -1530,8 +1614,8 @@ class Graph(nx.Graph):
                         all_ones,
                     )
 
-                    if not graph.is_NAC_coloring(
-                        coloring, allow_non_surjective=True, runs_on_subgraph=True
+                    if not coloring_check_non_surjective_allow_subgraphs(
+                        graph, coloring
                     ):
                         continue
 
@@ -1560,9 +1644,7 @@ class Graph(nx.Graph):
                     local_vertices, mask >> offset, component_to_edges
                 )
 
-                if not graph.is_NAC_coloring(
-                    coloring, allow_non_surjective=True, runs_on_subgraph=True
-                ):
+                if not coloring_check_non_surjective_allow_subgraphs(graph, coloring):
                     continue
 
                 epoch_colorings.append(mask)
@@ -1731,10 +1813,12 @@ class Graph(nx.Graph):
         return iterator
 
     @doc_category("Generic rigidity")
-    def NAC_colorings(
+    def _NAC_colorings_base(
         self,
         algorithm: str | None = "subgraphs",
         use_bridges_decomposition: bool = True,
+        # TODO hide to private method
+        is_cartesian: bool = False,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -1766,15 +1850,31 @@ class Graph(nx.Graph):
         def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
             graph = Graph(graph_nx)
             edge_to_component, component_to_edge = Graph._find_triangle_components(
-                graph
+                graph,
+                is_cartesian_NAC_coloring=is_cartesian,
             )
             t_graph = Graph._create_T_graph_from_components(graph, edge_to_component)
 
             algorithm_parts = algorithm.split("-")
             match algorithm_parts[0]:
                 case "naive":
-                    return Graph._NAC_colorings_naive(graph, t_graph, component_to_edge)
+                    is_NAC_coloring = (
+                        Graph.is_cartesian_NAC_coloring
+                        if is_cartesian
+                        else Graph.is_NAC_coloring
+                    )
+                    return Graph._NAC_colorings_naive(
+                        graph,
+                        t_graph,
+                        component_to_edge,
+                        is_NAC_coloring,
+                    )
                 case "cycles":
+                    if is_cartesian:
+                        raise ValueError(
+                            "Cartesian NAC coloring does not work well with the cycle algorithm and therefore is not yet implemented."
+                        )
+
                     if len(algorithm_parts) == 1:
                         return Graph._NAC_colorings_cycles(
                             graph, t_graph, component_to_edge
@@ -1786,16 +1886,24 @@ class Graph(nx.Graph):
                         use_all_cycles=bool(algorithm_parts[1]),
                     )
                 case "subgraphs":
+                    is_NAC_coloring_non_surjective_allow_subgraphs = (
+                        (lambda g, c: Graph.is_cartesian_NAC_coloring(g, c, True, True))
+                        if is_cartesian
+                        else (lambda g, c: Graph.is_NAC_coloring(g, c, True, True))
+                    )
+
                     if len(algorithm_parts) == 1:
                         return Graph._NAC_colorings_subgraphs(
                             graph,
                             t_graph,
                             component_to_edge,
+                            is_NAC_coloring_non_surjective_allow_subgraphs,
                         )
                     return Graph._NAC_colorings_subgraphs(
                         graph,
                         t_graph,
                         component_to_edge,
+                        is_NAC_coloring_non_surjective_allow_subgraphs,
                         use_log_approach=bool(algorithm_parts[1]),
                         order_strategy=algorithm_parts[2],
                     )
@@ -1806,6 +1914,74 @@ class Graph(nx.Graph):
             return Graph._NAC_colorings_with_bridges(self, run)
         else:
             return run(self)
+
+    @doc_category("Generic rigidity")
+    def NAC_colorings(
+        self,
+        algorithm: str | None = "subgraphs",
+        use_bridges_decomposition: bool = True,
+    ) -> Iterable[NACColoring]:
+        """
+        Finds all NAC-colorings of a graph.
+        Returns a lazy iterator of NAC colorings found (certificates)
+        up to the limit given in an unspecified order.
+        If none NAC coloring exists, the iterator is empty.
+
+        Parameters
+        ----------
+        algorithm:
+            some options may provide better performance
+            - naive - basic implementation, previous SOA
+            - cycles - finds some small cycles and uses them to reduce state space
+        use_bridges_decomposition:
+            uses the fact that each bicomponent's NAC coloring is independent
+            of the others - the algorithm finds bridges and run the NP-complete
+            algorithm on each component. Can improve performance slightly,
+            disable only if you are sure you don't have a graph with bridges.
+        ----------
+
+        TODO example
+        """
+        return self._NAC_colorings_base(
+            algorithm=algorithm,
+            use_bridges_decomposition=use_bridges_decomposition,
+            is_cartesian=False,
+        )
+
+    @doc_category("Generic rigidity")
+    def cartesian_NAC_colorings(
+        self,
+        algorithm: str | None = "subgraphs",
+        use_bridges_decomposition: bool = True,
+    ) -> Iterable[NACColoring]:
+        """
+        TODO update to cartesian NAC coloring
+
+        Finds all NAC-colorings of a graph.
+        Returns a lazy iterator of NAC colorings found (certificates)
+        up to the limit given in an unspecified order.
+        If none NAC coloring exists, the iterator is empty.
+
+        Parameters
+        ----------
+        algorithm:
+            some options may provide better performance
+            - naive - basic implementation, previous SOA
+            - cycles - finds some small cycles and uses them to reduce state space
+        use_bridges_decomposition:
+            uses the fact that each bicomponent's NAC coloring is independent
+            of the others - the algorithm finds bridges and run the NP-complete
+            algorithm on each component. Can improve performance slightly,
+            disable only if you are sure you don't have a graph with bridges.
+        ----------
+
+        TODO example
+        """
+        return self._NAC_colorings_base(
+            algorithm=algorithm,
+            use_bridges_decomposition=use_bridges_decomposition,
+            is_cartesian=True,
+        )
 
     @doc_category("Generic rigidity")
     def is_NAC_coloring(
