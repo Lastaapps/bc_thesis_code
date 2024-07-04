@@ -17,7 +17,7 @@ if [[ ! -d "${OUTPUT_DIR}" ]]; then
     mkdir -p "${OUTPUT_DIR}"
 fi
 
-for n in 10 12 15 17 20 22 25 28 # 32 40 64 # my computer cannot generate more in reasonable time
+for n in 5 6 7 8 9 10 12 15 17 20 22 25 28 # 32 40 64 # my computer cannot generate more in reasonable time
 do
     "$EXECUTABLE" $n -K2 | head -n 32 > "${OUTPUT_DIR}/laman_${n}.g6"
 done

@@ -1273,8 +1273,12 @@ class Graph(nx.Graph):
 
             template = 0
             valid = 0
+            # template = np.zeros(len(vertices), dtype=np.bool)
+            # valid = np.zeros(len(vertices), dtype=np.bool)
+
             for v in cycle:
                 template |= 1 << v
+                # template[v] = True
 
             def check_for_connecting_edge(prev: int, curr: int, next: int) -> bool:
                 """
@@ -1310,20 +1314,43 @@ class Graph(nx.Graph):
             ):
                 if check_for_connecting_edge(prev, curr, next):
                     valid |= 1 << curr
+                    # valid[curr] = True
 
             # print(cycle, bin(template), bin(valid))
             return template, valid
 
         templates = [create_bitmask(c) for c in cycles]
+        # if len(cycles) != 0:
+        #     templates_and_validities = [create_bitmask(c) for c in cycles]
+        #     templates, validities = zip(*templates_and_validities)
+        #     templates = np.stack(templates)
+        #     validities = np.stack(validities)
+        # else:
+        #     templates = np.empty((0, len(vertices)), dtype=np.bool)
+        #     validities = np.empty((0, len(vertices)), dtype=np.bool)
 
         # this is used for mask inversion, because how ~ works on python
         # numbers, if we used some kind of bit arrays,
         # this would not be needed.
         all_ones = 2 ** len(vertices) - 1
+        # all_ones = np.ones(len(vertices), dtype=np.bool)
+        # demasking = 2**np.arange(len(vertices))
 
         # iterate all the coloring variants
         # division by 2 is used as the problem is symmetrical
         for mask in range(1, 2 ** len(vertices) // 2):
+
+            # This is part of a slower implementation using numpy
+            # TODO remove before the final merge
+            # my_mask = (demasking & mask).astype(np.bool)
+            # def check_cycles(my_mask: np.ndarray) -> bool:
+            #     # we mask the cycles
+            #     masked = templates & my_mask
+            #     usable_rows = np.sum(masked, axis=-1) == 1
+            #     valid = masked & validities
+            #     return bool(np.any(valid[usable_rows]))
+            # if check_cycles(my_mask) or check_cycles(my_mask ^ all_ones):
+            #     continue
 
             # Cycles checking
             # in this section we check trivial cycles if they are correct
@@ -1497,6 +1524,8 @@ class Graph(nx.Graph):
                     rank_ordered_vertices
                 ):
                     v = all_vertices.pop()
+                    if v in used_vertices:
+                        continue
                     ordered_vertices.append(v)
                     used_vertices.add(v)
                     used_in_epoch += 1

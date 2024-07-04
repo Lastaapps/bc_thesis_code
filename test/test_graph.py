@@ -364,6 +364,27 @@ def test__find_cycles(graph, result: Set[Tuple]):
     assert result == res
 
 
+NAC_ALGORITHMS = [
+    "naive",
+    "cycles-True",
+    "cycles-False",
+    "subgraphs-True-none",
+    "subgraphs-True-rank",
+    "subgraphs-True-rank_cycles",
+    "subgraphs-True-cycles",
+    "subgraphs-True-cycles_match_chunks",
+    "subgraphs-True-components_biggest",
+    "subgraphs-True-components_spredded",
+    "subgraphs-False-none",
+    "subgraphs-False-rank",
+    "subgraphs-False-rank_cycles",
+    "subgraphs-False-cycles",
+    "subgraphs-False-cycles_match_chunks",
+    "subgraphs-False-components_biggest",
+    "subgraphs-False-components_spredded",
+]
+
+
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
     [
@@ -445,7 +466,7 @@ def test__find_cycles(graph, result: Set[Tuple]):
         "large_problemist",
     ],
 )
-@pytest.mark.parametrize("algorithm", ["naive", "cycles", "subgraphs"])
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("use_bridges", [True, False])
 def test_NAC_colorings(graph, colorings_no: int, algorithm, use_bridges: bool):
     print(f"{graph=}")
