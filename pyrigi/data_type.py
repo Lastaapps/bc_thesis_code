@@ -4,7 +4,7 @@ Module for defining data type used for type hinting.
 
 """
 
-from typing import Set, TypeVar, List, Tuple, Hashable
+from typing import Collection, Set, TypeVar, List, Tuple, Hashable
 
 
 Vertex = Hashable
@@ -26,4 +26,4 @@ GraphType = TypeVar("Graph")
 FrameworkType = TypeVar("Framework")
 MatroidType = TypeVar("Matroid")
 
-NACColoring = Tuple[Set[Edge], Set[Edge]]
+NACColoring = Tuple[Collection[Edge], Collection[Edge]]

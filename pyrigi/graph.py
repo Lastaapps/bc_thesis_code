@@ -11,6 +11,7 @@ from itertools import combinations, product
 import itertools
 from typing import (
     Callable,
+    Collection,
     Deque,
     Iterable,
     List,
@@ -99,6 +100,12 @@ class Graph(nx.Graph):
     - :doc:`Reading and Writing Graphs <networkx:reference/readwrite/index>`
     - :doc:`Converting to and from other Data Formats <networkx:reference/convert>`
     """
+
+    def __init__(self, *args, **kwargs):
+        # used for NAC coloring check caching/speedup
+        # must be invalidated before every NAC coloring search
+        self._graph_is_NAC_coloring: nx.Graph | None = None
+        super().__init__(*args, **kwargs)
 
     def __str__(self) -> str:
         """
@@ -1041,8 +1048,8 @@ class Graph(nx.Graph):
         Creates a T graph from the components given.
         Each edge must belong to a component.
         Ids of these components are then used
-        as vertexes of the new graph.
-        Id's start from 0
+        as vertices of the new graph.
+        Component id's start from 0.
         """
 
         # graph used to find NAC coloring easily
@@ -1087,7 +1094,7 @@ class Graph(nx.Graph):
         if allow_mask is None:
             allow_mask = 2 ** len(vertices) - 1
 
-        red, blue = set(), set()
+        red, blue = [], []  # set(), set()
         for i, e in enumerate(vertices):
             address = 1 << i
 
@@ -1095,8 +1102,22 @@ class Graph(nx.Graph):
                 continue
 
             edges = component_to_edges[e]
-            (red if mask & address else blue).update(edges)
+            # (red if mask & address else blue).update(edges)
+            (red if mask & address else blue).extend(edges)
         return (red, blue)
+
+        # numpy impl, ~10% slower
+        # if allow_mask is not None:
+        #     vertices = vertices[allow_mask]
+        #     mask = mask[allow_mask]
+
+        # red_vert = vertices[mask]
+        # blue_vert = vertices[~mask]
+
+        # red = [edge for edges in red_vert for edge in component_to_edges[edges]]
+        # blue = [edge for edges in blue_vert for edge in component_to_edges[edges]]
+
+        # return (red, blue)
 
     @staticmethod
     def _NAC_colorings_naive(
@@ -1424,7 +1445,7 @@ class Graph(nx.Graph):
 
             coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
-            if not graph.is_NAC_coloring(coloring):
+            if not graph._is_NAC_coloring(coloring):
                 continue
 
             yield (coloring[0], coloring[1])
@@ -1588,6 +1609,7 @@ class Graph(nx.Graph):
         coloring_check_non_surjective_allow_subgraphs: Callable[
             [Graph, NACColoring], bool
         ],
+        allow_cycles: bool,
         use_log_approach: bool = False,
         min_chunk_size: int = 4,
         order_strategy: str = "components_spredded",
@@ -1687,35 +1709,42 @@ class Graph(nx.Graph):
 
             subgraph_mask = subgraph_mask_1 | subgraph_mask_2
 
-            local_vertices: List[int] = []
+            if allow_cycles:
+                local_vertices: List[int] = []
 
-            # local vertex -> global index
-            mapping: Dict[int, int] = {}
+                # local vertex -> global index
+                mapping: Dict[int, int] = {}
 
-            # TODO numpy
-            for i, v in enumerate(vertices):
-                if (1 << i) & subgraph_mask:
-                    mapping[v] = i
-                    local_vertices.append(v)
+                # TODO numpy
+                for i, v in enumerate(vertices):
+                    if (1 << i) & subgraph_mask:
+                        mapping[v] = i
+                        local_vertices.append(v)
 
-            local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-            local_cycles = Graph._find_cycles(local_t_graph)
+                local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
+                local_cycles = Graph._find_cycles(local_t_graph)
 
-            mapped_components_to_edges = lambda ind: component_to_edges[vertices[ind]]
-            # cycles with indices of the vertices in the global order
-            local_cycles = [tuple(mapping[c] for c in cycle) for cycle in local_cycles]
-            templates = [
-                Graph._create_bitmask_for_t_graph_cycle(
-                    graph, mapped_components_to_edges, cycle
-                )
-                for cycle in local_cycles
-            ]
+                mapped_components_to_edges = lambda ind: component_to_edges[
+                    vertices[ind]
+                ]
+                # cycles with indices of the vertices in the global order
+                local_cycles = [
+                    tuple(mapping[c] for c in cycle) for cycle in local_cycles
+                ]
+                templates = [
+                    Graph._create_bitmask_for_t_graph_cycle(
+                        graph, mapped_components_to_edges, cycle
+                    )
+                    for cycle in local_cycles
+                ]
 
             for mask1 in epoch1:
                 for mask2 in epoch2:
                     mask = mask1 | mask2
 
-                    if Graph._mask_matches_templates(templates, mask, subgraph_mask):
+                    if allow_cycles and Graph._mask_matches_templates(
+                        templates, mask, subgraph_mask
+                    ):
                         continue
 
                     coloring = Graph._coloring_from_mask(
@@ -1745,29 +1774,34 @@ class Graph(nx.Graph):
             local_vertex_no = min(chunk_size, len(vertices) - offset)
             local_vertices: List[int] = vertices[offset : offset + local_vertex_no]
 
-            local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-            local_cycles = Graph._find_cycles(local_t_graph)
+            if allow_cycles:
+                local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
+                local_cycles = Graph._find_cycles(local_t_graph)
 
-            # local -> first chunk_size vertices
-            mapping = {x: i for i, x in enumerate(local_vertices)}
+                # local -> first chunk_size vertices
+                mapping = {x: i for i, x in enumerate(local_vertices)}
 
-            mapped_components_to_edges = lambda ind: component_to_edges[
-                local_vertices[ind]
-            ]
-            local_cycles = [tuple(mapping[c] for c in cycle) for cycle in local_cycles]
-            templates = [
-                Graph._create_bitmask_for_t_graph_cycle(
-                    graph, mapped_components_to_edges, cycle
-                )
-                for cycle in local_cycles
-            ]
+                mapped_components_to_edges = lambda ind: component_to_edges[
+                    local_vertices[ind]
+                ]
+                local_cycles = [
+                    tuple(mapping[c] for c in cycle) for cycle in local_cycles
+                ]
+                templates = [
+                    Graph._create_bitmask_for_t_graph_cycle(
+                        graph, mapped_components_to_edges, cycle
+                    )
+                    for cycle in local_cycles
+                ]
 
             subgraph_mask = 2 ** len(local_vertices) - 1
 
             # iterate all the coloring variants
             # division by 2 is used as the problem is symmetrical
             for mask in range(0, 2**local_vertex_no // 2):
-                if Graph._mask_matches_templates(templates, mask, subgraph_mask):
+                if allow_cycles and Graph._mask_matches_templates(
+                    templates, mask, subgraph_mask
+                ):
                     continue
 
                 coloring = Graph._coloring_from_mask(
@@ -1842,11 +1876,7 @@ class Graph(nx.Graph):
             if mask == 0 or mask.bit_count() == len(vertices):
                 continue
 
-            coloring: NACColoring = (set(), set())
-            for i, e in enumerate(vertices):
-                (coloring[0] if mask & (1 << i) else coloring[1]).update(
-                    component_to_edges[e]
-                )
+            coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
 
             yield (coloring[0], coloring[1])
             yield (coloring[1], coloring[0])
@@ -1981,6 +2011,7 @@ class Graph(nx.Graph):
 
         def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
             graph = Graph(graph_nx)
+
             edge_to_component, component_to_edge = Graph._find_triangle_components(
                 graph,
                 is_cartesian_NAC_coloring=is_cartesian,
@@ -1993,7 +2024,7 @@ class Graph(nx.Graph):
                     is_NAC_coloring = (
                         Graph.is_cartesian_NAC_coloring
                         if is_cartesian
-                        else Graph.is_NAC_coloring
+                        else Graph._is_NAC_coloring
                     )
                     return Graph._NAC_colorings_naive(
                         graph,
@@ -2021,7 +2052,7 @@ class Graph(nx.Graph):
                     is_NAC_coloring_non_surjective_allow_subgraphs = (
                         (lambda g, c: Graph.is_cartesian_NAC_coloring(g, c, True, True))
                         if is_cartesian
-                        else (lambda g, c: Graph.is_NAC_coloring(g, c, True, True))
+                        else (lambda g, c: Graph._is_NAC_coloring(g, c, True))
                     )
 
                     if len(algorithm_parts) == 1:
@@ -2030,12 +2061,14 @@ class Graph(nx.Graph):
                             t_graph,
                             component_to_edge,
                             is_NAC_coloring_non_surjective_allow_subgraphs,
+                            allow_cycles=not is_cartesian,
                         )
                     return Graph._NAC_colorings_subgraphs(
                         graph,
                         t_graph,
                         component_to_edge,
                         is_NAC_coloring_non_surjective_allow_subgraphs,
+                        allow_cycles=not is_cartesian,
                         use_log_approach=bool(algorithm_parts[1]),
                         order_strategy=algorithm_parts[2],
                     )
@@ -2050,7 +2083,7 @@ class Graph(nx.Graph):
     @doc_category("Generic rigidity")
     def NAC_colorings(
         self,
-        algorithm: str | None = "subgraphs",
+        algorithm: str = "subgraphs",
         use_bridges_decomposition: bool = True,
     ) -> Iterable[NACColoring]:
         """
@@ -2083,7 +2116,7 @@ class Graph(nx.Graph):
     @doc_category("Generic rigidity")
     def cartesian_NAC_colorings(
         self,
-        algorithm: str | None = "subgraphs",
+        algorithm: str = "subgraphs",
         use_bridges_decomposition: bool = True,
     ) -> Iterable[NACColoring]:
         """
@@ -2115,12 +2148,76 @@ class Graph(nx.Graph):
             is_cartesian=True,
         )
 
+    @staticmethod
+    def _check_for_almost_red_cycles(
+        G: nx.Graph,
+        red_edges: Iterable[Edge],
+        blue_edges: Iterable[Edge],
+    ) -> bool:
+        G.clear_edges()
+        G.add_edges_from(red_edges)
+
+        component_mapping: Dict[Vertex, int] = {}
+        vertices: Iterable[Vertex]
+        for i, vertices in enumerate(nx.components.connected_components(G)):
+            for v in vertices:
+                component_mapping[v] = i
+
+        for e1, e2 in blue_edges:
+            if component_mapping[e1] == component_mapping[e2]:
+                return False
+        return True
+
     @doc_category("Generic rigidity")
-    def is_NAC_coloring(
+    def _is_NAC_coloring(
         self,
         coloring: NACColoring,
         allow_non_surjective: bool = False,
-        runs_on_subgraph: bool = False,
+    ) -> bool:
+        """
+        Check if the coloring given is a NAC coloring.
+        The algorithm checks if all the edges are in the same component.
+
+        This is an internal implementation, so some properties like injectivity
+        are not checked for performance reasons - we only search for the cycles.
+
+        Parameters:
+        ----------
+            coloring: the coloring to check if it is a NAC coloring.
+            allow_non_surjective: if True, allows the coloring to be non-surjective.
+                This can be useful for checking subgraphs - the can use only one color.
+        ----------
+
+
+        (TODO format)
+        """
+        red, blue = coloring
+        # Both colors have to be used
+        if len(red) == 0 or len(blue) == 0:  # this is faster than *
+            return allow_non_surjective
+
+        # 43% speedup
+        # !!! make sure !!! this graph is cleared before every run
+        # this also make the whole NAC coloring search thread insecure
+        # things will break if you add vertices while another search
+        # is still running
+
+        G = self._graph_is_NAC_coloring
+
+        # somehow this if is faster than setting things outside once
+        if G is None:
+            G = nx.Graph()
+            G.add_nodes_from(self.nodes)
+            self._graph_is_NAC_coloring = G
+
+        return Graph._check_for_almost_red_cycles(
+            G, red, blue
+        ) and Graph._check_for_almost_red_cycles(G, blue, red)
+
+    @doc_category("Generic rigidity")
+    def is_NAC_coloring(
+        self,
+        coloring: NACColoring | Dict[str, Collection[Edge]],
     ) -> bool:
         """
         Check if the coloring given is a NAC coloring.
@@ -2129,52 +2226,37 @@ class Graph(nx.Graph):
         Parameters:
         ----------
             coloring: the coloring to check if it is a NAC coloring.
-            allow_non_surjective: if True, allows the coloring to be non-surjective.
-                This can be useful for checking subgraphs - the can use only one color.
-            runs_on_subgraph: if True, the check that all the graph edges are
-                colored is disabled.
         ----------
 
 
         (TODO format)
         """
-        # Both colors have to be used
-        if len(coloring[0]) == 0 or len(coloring[1]) == 0:
-            return allow_non_surjective
+        red: Collection[Edge]
+        blue: Collection[Edge]
+
+        if type(coloring) == dict:
+            red, blue = coloring["red"], coloring["blue"]
+        else:
+            red, blue = coloring
+        assert type(red) == type(blue)
 
         if not self._check_NAC_constrains():
             return False
 
-        # We should rather check if the edges match exactly,
-        # but that would be a little slower
-        if not runs_on_subgraph and len(coloring[0]) + len(coloring[1]) != len(
-            self.edges
-        ):
-            return False
-        if len(coloring[0].intersection(coloring[1])) != 0:
+        if len(red) + len(blue) != len(self.edges):
             return False
 
-        G = Graph()
-        G.add_vertices(self.vertex_list())
-
-        def check_coloring(red: Set[Edge], blue: Set[Edge]) -> bool:
-            G.clear_edges()
-            G.add_edges(red)
-
-            component_mapping: Dict[Vertex, int] = {}
-            vertices: Set[Vertex]
-            for i, vertices in enumerate(nx.components.connected_components(G)):
-                for v in vertices:
-                    component_mapping[v] = i
-
-            for e1, e2 in blue:
-                if component_mapping[e1] == component_mapping[e2]:
+        if type(red) == set and len(red.intersection(blue)) != 0:
+            return False
+        else:
+            # Yes, this is slower - in case you care, use sets
+            for e in red:
+                if e in blue:
                     return False
-            return True
 
-        return check_coloring(coloring[0], coloring[1]) and check_coloring(
-            coloring[1], coloring[0]
-        )
+        self._graph_is_NAC_coloring = None
+
+        return self._is_NAC_coloring((red, blue))
 
     @doc_category("Generic rigidity")
     def is_cartesian_NAC_coloring(
