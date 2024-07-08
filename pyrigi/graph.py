@@ -15,6 +15,7 @@ from typing import (
     Iterable,
     List,
     Any,
+    Protocol,
     Union,
     Tuple,
     Optional,
@@ -1169,7 +1170,9 @@ class Graph(nx.Graph):
             """
             # Stores node and id of branch it's from
             queue: deque[Tuple[int, int]] = deque()
-            parent_and_id = [(-1, -1) for _ in range(len(vertices))]
+            # TODO handle better
+            # parent_and_id = [(-1, -1) for _ in range(len(vertices))]
+            parent_and_id = [(-1, -1) for _ in range(max(vertices) + 1)]
             parent_and_id[start] = (start, -1)
             local_cycle_len = -1
 
@@ -1249,6 +1252,77 @@ class Graph(nx.Graph):
         return found_cycles
 
     @staticmethod
+    def _create_bitmask_for_t_graph_cycle(
+        graph: nx.Graph,
+        component_to_edges: Callable[[int], List[Edge]],
+        cycle: Tuple[int, ...],
+        local_verticies: Set[int] | None = None,
+    ) -> Tuple[int, int]:
+        """
+        Creates a bit mask (template) to match vertices in the cycle
+        and a mask matching vertices of the cycle that make NAC coloring
+        impossible if they are the only ones with different color
+
+        Parameters
+        ----------
+        component_to_edges
+            Mapping from component to it's edges. Can be list.__getitem__.
+        ----------
+        """
+
+        template = 0
+        valid = 0
+        # template = np.zeros(len(vertices), dtype=np.bool)
+        # valid = np.zeros(len(vertices), dtype=np.bool)
+
+        for v in cycle:
+            template |= 1 << v
+            # template[v] = True
+
+        def check_for_connecting_edge(prev: int, curr: int, next: int) -> bool:
+            """
+            Checks if for the component given (curr) exists path trough the
+            component using single edge only - in that case color change of
+            the triangle component can ruin NAC coloring.
+            """
+            # print(f"{prev=} {curr=} {next=}")
+            vertices_curr = {v for e in component_to_edges(curr) for v in e}
+
+            # You may think that if the component is a single edge,
+            # it must connect the circle. Because we are using a t-graph,
+            # which is based on the line graph idea, the edge can share
+            # a vertex with both the neighboring components.
+            # An example for this is a star with 3 edges.
+
+            vertices_prev = {v for e in component_to_edges(prev) for v in e}
+            vertices_next = {v for e in component_to_edges(next) for v in e}
+            # print(f"{vertices_prev=} {vertices_curr=} {vertices_next=}")
+            intersections_prev = vertices_prev.intersection(vertices_curr)
+            intersections_next = vertices_next.intersection(vertices_curr)
+            # print(f"{intersections_prev=} {intersections_next=}")
+
+            if local_verticies is not None:
+                intersections_prev = intersections_prev.intersection(local_verticies)
+                intersections_next = intersections_next.intersection(local_verticies)
+
+            for p in intersections_prev:
+                neighbors = set(graph.neighbors(p))
+                for n in intersections_next:
+                    if n in neighbors:
+                        return True
+            return False
+
+        for prev, curr, next in zip(
+            cycle[-1:] + cycle[:-1], cycle, cycle[1:] + cycle[:1]
+        ):
+            if check_for_connecting_edge(prev, curr, next):
+                valid |= 1 << curr
+                # valid[curr] = True
+
+        # print(cycle, bin(template), bin(valid))
+        return template, valid
+
+    @staticmethod
     def _NAC_colorings_cycles(
         graph: Graph,
         t_graph: nx.Graph,
@@ -1264,62 +1338,12 @@ class Graph(nx.Graph):
         # the idea is that smaller cycles reduce the state space more
         cycles = sorted(cycles, key=lambda c: len(c))
 
-        def create_bitmask(cycle: Tuple[int, ...]) -> Tuple[int, int]:
-            """
-            Creates a bit mask (template) to match vertices in the cycle
-            and a mask matching vertices of the cycle that make NAC coloring
-            impossible if they are the only ones with different color
-            """
-
-            template = 0
-            valid = 0
-            # template = np.zeros(len(vertices), dtype=np.bool)
-            # valid = np.zeros(len(vertices), dtype=np.bool)
-
-            for v in cycle:
-                template |= 1 << v
-                # template[v] = True
-
-            def check_for_connecting_edge(prev: int, curr: int, next: int) -> bool:
-                """
-                Checks if for the component given (curr) exists path trough the
-                component using single edge only - in that case color change of
-                the triangle component can ruin NAC coloring.
-                """
-                # print(f"{prev=} {curr=} {next=}")
-                vertices_curr = {v for e in component_to_edges[curr] for v in e}
-
-                # You may think that if the component is a single edge,
-                # it must connect the circle. Because we are using a t-graph,
-                # which is based on the line graph idea, the edge can share
-                # a vertex with both the neighboring components.
-                # An example for this is a star with 3 edges.
-
-                vertices_prev = {v for e in component_to_edges[prev] for v in e}
-                vertices_next = {v for e in component_to_edges[next] for v in e}
-                # print(f"{vertices_prev=} {vertices_curr=} {vertices_next=}")
-                intersections_prev = vertices_prev.intersection(vertices_curr)
-                intersections_next = vertices_next.intersection(vertices_curr)
-                # print(f"{intersections_prev=} {intersections_next=}")
-
-                for p in intersections_prev:
-                    neighbors = set(graph.neighbors(p))
-                    for n in intersections_next:
-                        if n in neighbors:
-                            return True
-                return False
-
-            for prev, curr, next in zip(
-                cycle[-1:] + cycle[:-1], cycle, cycle[1:] + cycle[:1]
-            ):
-                if check_for_connecting_edge(prev, curr, next):
-                    valid |= 1 << curr
-                    # valid[curr] = True
-
-            # print(cycle, bin(template), bin(valid))
-            return template, valid
-
-        templates = [create_bitmask(c) for c in cycles]
+        templates = [
+            Graph._create_bitmask_for_t_graph_cycle(
+                graph, component_to_edges.__getitem__, c
+            )
+            for c in cycles
+        ]
         # if len(cycles) != 0:
         #     templates_and_validities = [create_bitmask(c) for c in cycles]
         #     templates, validities = zip(*templates_and_validities)
@@ -1332,7 +1356,9 @@ class Graph(nx.Graph):
         # this is used for mask inversion, because how ~ works on python
         # numbers, if we used some kind of bit arrays,
         # this would not be needed.
-        all_ones = 2 ** len(vertices) - 1
+        all_ones = 0  # 2 ** len(vertices) - 1
+        for v in vertices:
+            all_ones |= 1 << v
         # all_ones = np.ones(len(vertices), dtype=np.bool)
         # demasking = 2**np.arange(len(vertices))
 
@@ -1661,24 +1687,63 @@ class Graph(nx.Graph):
 
             # The last chunk can be smaller
             local_vertex_no = min(chunk_size, len(vertices) - offset)
-            local_vertices = vertices[offset : offset + local_vertex_no]
-            # Mask current vertex region
-            all_ones = (2**local_vertex_no - 1) << offset
+            local_vertices: List[int] = vertices[offset : offset + local_vertex_no]
+
+            local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
+            local_cycles = Graph._find_cycles(local_t_graph)
+
+            mapping = {x: i for i, x in enumerate(local_vertices)}
+
+            mapped_components_to_edges = lambda ind: component_to_edges[
+                local_vertices[ind]
+            ]
+            local_cycles = [tuple(mapping[c] for c in cycle) for cycle in local_cycles]
+            templates = [
+                Graph._create_bitmask_for_t_graph_cycle(
+                    graph, mapped_components_to_edges, cycle
+                )
+                for cycle in local_cycles
+            ]
+
+            all_ones = 2 ** len(local_vertices) - 1
 
             # iterate all the coloring variants
             # division by 2 is used as the problem is symmetrical
             for mask in range(0, 2**local_vertex_no // 2):
-                mask <<= offset
                 coloring = Graph._coloring_from_mask(
-                    local_vertices, mask >> offset, component_to_edges
+                    local_vertices, mask, component_to_edges
                 )
+
+                wrong_mask_found = False
+
+                for template, validity in templates:
+                    stamp1, stamp2 = mask & template, (mask ^ all_ones) & template
+                    cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
+                    stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
+
+                    if cnt != 1:
+                        continue
+
+                    # now we know there is one node that has a wrong color
+                    # we check if the node is a triangle component
+                    # if so, we need to know it if also ruins the coloring
+                    if stamp & validity:
+                        wrong_mask_found = True
+                        break
+
+                if wrong_mask_found:
+                    coloring = Graph._coloring_from_mask(
+                        vertices, mask, component_to_edges
+                    )
+                    continue
 
                 if not coloring_check_non_surjective_allow_subgraphs(graph, coloring):
                     continue
 
-                epoch_colorings.append(mask)
+                # print(coloring)
+                epoch_colorings.append(mask << offset)
 
-            all_epochs.append((epoch_colorings, all_ones))
+            all_epochs.append((epoch_colorings, all_ones << offset))
 
             # Resolves crossproduct with the previous epoch (linear approach)
             if use_log_approach:

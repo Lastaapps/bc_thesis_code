@@ -15,7 +15,7 @@ laman_medium_graphs = list(
 laman_large_graphs = list(filter(lambda g: nx.number_of_nodes(g) > 15, laman_graphs))
 
 # can be used for debugging
-# small_graphs_from_smallest = sorted(small_graphs, key=lambda g: nx.number_of_nodes(g))
+# small_graphs = sorted(small_graphs, key=lambda g: nx.number_of_nodes(g))
 
 NAC_ALGORITHMS = [
     "naive",
