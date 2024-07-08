@@ -853,7 +853,7 @@ class Graph(nx.Graph):
 
     def _single_general_NAC_coloring(self) -> Optional[NACColoring]:
         """
-        Tries to find a trivial NAC coloring based on connectivity of
+        Tries to find some trivial NAC coloring based on connectivity of
         the graph components. This coloring is trivially both NAC coloring
         and cartesian NAC coloring.
         """
@@ -1323,6 +1323,44 @@ class Graph(nx.Graph):
         return template, valid
 
     @staticmethod
+    def _mask_matches_templates(
+        templates: List[Tuple[int, int]],
+        mask: int,
+        subgraph_mask: int,
+    ) -> bool:
+        """
+        Checks if mask given matches any of the cycles given.
+
+        Parameters
+        ----------
+            templates:
+                list of outputs of the _create_bitmask_for_t_graph_cycle
+                graph method - mask representing vertices presence in a cycle
+                and validity mask noting which of them exclude NAC coloring
+                if present.
+            mask:
+                bit mask of vertices in the same order that
+                are currently red (or blue).
+            subgraph_mask:
+                bit mask representing all the vertices of the current subgraph.
+        ----------
+        """
+        for template, validity in templates:
+            stamp1, stamp2 = mask & template, (mask ^ subgraph_mask) & template
+            cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
+            stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
+
+            if cnt != 1:
+                continue
+
+            # now we know there is one node that has a wrong color
+            # we check if the node is a triangle component
+            # if so, we need to know it if also ruins the coloring
+            if stamp & validity:
+                return True
+        return False
+
+    @staticmethod
     def _NAC_colorings_cycles(
         graph: Graph,
         t_graph: nx.Graph,
@@ -1356,10 +1394,10 @@ class Graph(nx.Graph):
         # this is used for mask inversion, because how ~ works on python
         # numbers, if we used some kind of bit arrays,
         # this would not be needed.
-        all_ones = 0  # 2 ** len(vertices) - 1
+        subgraph_mask = 0  # 2 ** len(vertices) - 1
         for v in vertices:
-            all_ones |= 1 << v
-        # all_ones = np.ones(len(vertices), dtype=np.bool)
+            subgraph_mask |= 1 << v
+        # subgraph_mask = np.ones(len(vertices), dtype=np.bool)
         # demasking = 2**np.arange(len(vertices))
 
         # iterate all the coloring variants
@@ -1375,30 +1413,10 @@ class Graph(nx.Graph):
             #     usable_rows = np.sum(masked, axis=-1) == 1
             #     valid = masked & validities
             #     return bool(np.any(valid[usable_rows]))
-            # if check_cycles(my_mask) or check_cycles(my_mask ^ all_ones):
+            # if check_cycles(my_mask) or check_cycles(my_mask ^ subgraph_mask):
             #     continue
 
-            # Cycles checking
-            # in this section we check trivial cycles if they are correct
-            # before checking the whole graph
-            wrong_mask_found = False
-
-            for template, validity in templates:
-                stamp1, stamp2 = mask & template, (mask ^ all_ones) & template
-                cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
-                stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
-
-                if cnt != 1:
-                    continue
-
-                # now we know there is one node that has a wrong color
-                # we check if the node is a triangle component
-                # if so, we need to know it if also ruins the coloring
-                if stamp & validity:
-                    wrong_mask_found = True
-                    break
-
-            if wrong_mask_found:
+            if Graph._mask_matches_templates(templates, mask, subgraph_mask):
                 continue
 
             coloring = Graph._coloring_from_mask(vertices, mask, component_to_edges)
@@ -1637,7 +1655,10 @@ class Graph(nx.Graph):
         assert vertices_no == len(vertices)
 
         def join_epochs(
-            epoch1: List[int], all_ones_1: int, epoch2: List[int], all_ones_2: int
+            epoch1: List[int],
+            subgraph_mask_1: int,
+            epoch2: List[int],
+            subgraph_mask_2: int,
         ) -> Tuple[List[int], int]:
             """
             Joins almost NAC colorings of two disjoined subgraphs of a t-graph.
@@ -1651,22 +1672,49 @@ class Graph(nx.Graph):
             """
             epoch_colorings: List[int] = []
 
-            # print(f"Joining {epoch1} {bin(all_ones_1)} & {epoch2} {bin(all_ones_2)}")
+            # print(f"Joining {epoch1} {bin(subgraph_mask_1)} & {epoch2} {bin(subgraph_mask_2)}")
 
-            if all_ones_1 & all_ones_2:
+            if subgraph_mask_1 & subgraph_mask_2:
                 raise ValueError("Cannot join two subgraphs with common nodes")
 
-            all_ones = all_ones_1 | all_ones_2
+            subgraph_mask = subgraph_mask_1 | subgraph_mask_2
+
+            local_vertices: List[int] = []
+
+            # local vertex -> global index
+            mapping: Dict[int, int] = {}
+
+            # TODO numpy
+            for i, v in enumerate(vertices):
+                if (1 << i) & subgraph_mask:
+                    mapping[v] = i
+                    local_vertices.append(v)
+
+            local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
+            local_cycles = Graph._find_cycles(local_t_graph)
+
+            mapped_components_to_edges = lambda ind: component_to_edges[vertices[ind]]
+            # cycles with indices of the vertices in the global order
+            local_cycles = [tuple(mapping[c] for c in cycle) for cycle in local_cycles]
+            templates = [
+                Graph._create_bitmask_for_t_graph_cycle(
+                    graph, mapped_components_to_edges, cycle
+                )
+                for cycle in local_cycles
+            ]
 
             for mask1 in epoch1:
                 for mask2 in epoch2:
                     mask = mask1 | mask2
 
+                    if Graph._mask_matches_templates(templates, mask, subgraph_mask):
+                        continue
+
                     coloring = Graph._coloring_from_mask(
                         vertices,
                         mask,
                         component_to_edges,
-                        all_ones,
+                        subgraph_mask,
                     )
 
                     if not coloring_check_non_surjective_allow_subgraphs(
@@ -1675,7 +1723,7 @@ class Graph(nx.Graph):
                         continue
 
                     epoch_colorings.append(mask)
-            return epoch_colorings, all_ones
+            return epoch_colorings, subgraph_mask
 
         # Holds all the NAC colorings for a subgraph represented by the second bitmask
         all_epochs: List[Tuple[List[int], int]] = []
@@ -1692,6 +1740,7 @@ class Graph(nx.Graph):
             local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
             local_cycles = Graph._find_cycles(local_t_graph)
 
+            # local -> first chunk_size vertices
             mapping = {x: i for i, x in enumerate(local_vertices)}
 
             mapped_components_to_edges = lambda ind: component_to_edges[
@@ -1705,37 +1754,17 @@ class Graph(nx.Graph):
                 for cycle in local_cycles
             ]
 
-            all_ones = 2 ** len(local_vertices) - 1
+            subgraph_mask = 2 ** len(local_vertices) - 1
 
             # iterate all the coloring variants
             # division by 2 is used as the problem is symmetrical
             for mask in range(0, 2**local_vertex_no // 2):
+                if Graph._mask_matches_templates(templates, mask, subgraph_mask):
+                    continue
+
                 coloring = Graph._coloring_from_mask(
                     local_vertices, mask, component_to_edges
                 )
-
-                wrong_mask_found = False
-
-                for template, validity in templates:
-                    stamp1, stamp2 = mask & template, (mask ^ all_ones) & template
-                    cnt1, cnt2 = stamp1.bit_count(), stamp2.bit_count()
-                    stamp, cnt = (stamp1, cnt1) if cnt1 == 1 else (stamp2, cnt2)
-
-                    if cnt != 1:
-                        continue
-
-                    # now we know there is one node that has a wrong color
-                    # we check if the node is a triangle component
-                    # if so, we need to know it if also ruins the coloring
-                    if stamp & validity:
-                        wrong_mask_found = True
-                        break
-
-                if wrong_mask_found:
-                    coloring = Graph._coloring_from_mask(
-                        vertices, mask, component_to_edges
-                    )
-                    continue
 
                 if not coloring_check_non_surjective_allow_subgraphs(graph, coloring):
                     continue
@@ -1743,7 +1772,7 @@ class Graph(nx.Graph):
                 # print(coloring)
                 epoch_colorings.append(mask << offset)
 
-            all_epochs.append((epoch_colorings, all_ones << offset))
+            all_epochs.append((epoch_colorings, subgraph_mask << offset))
 
             # Resolves crossproduct with the previous epoch (linear approach)
             if use_log_approach:
@@ -1753,7 +1782,7 @@ class Graph(nx.Graph):
                 # Nothing to join
                 continue
 
-            (epoch1, all_ones_1), (epoch2, all_ones_2) = (
+            (epoch1, subgraph_mask_1), (epoch2, subgraph_mask_2) = (
                 all_epochs.pop(),
                 all_epochs.pop(),
             )
@@ -1761,12 +1790,14 @@ class Graph(nx.Graph):
             # that are symmetric to each other (same if we switch red and blue),
             # we also need to mirror one side of the join to get really all
             # the NAC colorings.
-            epoch1_switched = [coloring ^ all_ones_1 for coloring in epoch1]
+            epoch1_switched = [coloring ^ subgraph_mask_1 for coloring in epoch1]
             all_epochs.append(
                 (
-                    join_epochs(epoch1, all_ones_1, epoch2, all_ones_2)[0]
-                    + join_epochs(epoch1_switched, all_ones_1, epoch2, all_ones_2)[0],
-                    all_ones_1 | all_ones_2,
+                    join_epochs(epoch1, subgraph_mask_1, epoch2, subgraph_mask_2)[0]
+                    + join_epochs(
+                        epoch1_switched, subgraph_mask_1, epoch2, subgraph_mask_2
+                    )[0],
+                    subgraph_mask_1 | subgraph_mask_2,
                 )
             )
 
@@ -1779,22 +1810,25 @@ class Graph(nx.Graph):
                 if len(batch) == 1:
                     next_all_epochs.append(batch[0])
                     continue
-                (epoch1, all_ones_1), (epoch2, all_ones_2) = batch[0], batch[1]
-                epoch1_switched = [coloring ^ all_ones_1 for coloring in epoch1]
+                (epoch1, subgraph_mask_1), (epoch2, subgraph_mask_2) = (
+                    batch[0],
+                    batch[1],
+                )
+                epoch1_switched = [coloring ^ subgraph_mask_1 for coloring in epoch1]
                 next_all_epochs.append(
                     (
-                        join_epochs(epoch1, all_ones_1, epoch2, all_ones_2)[0]
-                        + join_epochs(epoch1_switched, all_ones_1, epoch2, all_ones_2)[
-                            0
-                        ],
-                        all_ones_1 | all_ones_2,
+                        join_epochs(epoch1, subgraph_mask_1, epoch2, subgraph_mask_2)[0]
+                        + join_epochs(
+                            epoch1_switched, subgraph_mask_1, epoch2, subgraph_mask_2
+                        )[0],
+                        subgraph_mask_1 | subgraph_mask_2,
                     )
                 )
                 all_epochs = next_all_epochs
 
         assert len(all_epochs) == 1
-        expected_all_ones = 2 ** len(vertices) - 1
-        assert expected_all_ones == all_epochs[0][1]
+        expected_subgraph_mask = 2 ** len(vertices) - 1
+        assert expected_subgraph_mask == all_epochs[0][1]
 
         for mask in all_epochs[0][0]:
             if mask == 0 or mask.bit_count() == len(vertices):
@@ -1909,9 +1943,8 @@ class Graph(nx.Graph):
     @doc_category("Generic rigidity")
     def _NAC_colorings_base(
         self,
-        algorithm: str | None = "subgraphs",
+        algorithm: str = "subgraphs",
         use_bridges_decomposition: bool = True,
-        # TODO hide to private method
         is_cartesian: bool = False,
     ) -> Iterable[NACColoring]:
         """
@@ -1935,9 +1968,6 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        if algorithm is None:
-            algorithm = "subgraphs"
-
         if not self._check_NAC_constrains():
             return []
 
