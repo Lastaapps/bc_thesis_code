@@ -1265,8 +1265,11 @@ class Graph(nx.Graph):
 
         Parameters
         ----------
-        component_to_edges
+        component_to_edges:
             Mapping from component to it's edges. Can be list.__getitem__.
+        local_verticies:
+            can be used if the graph given is subgraph of the original graph
+            and component_to_edges also represent the original graph.
         ----------
         """
 
@@ -1428,6 +1431,156 @@ class Graph(nx.Graph):
             yield (coloring[1], coloring[0])
 
     @staticmethod
+    def _subgraphs_strategy_highes_rank_naive(
+        rank_ordered_vertices: List[int],
+        vertex_cycles: List[List[Tuple[int, ...]]],
+    ) -> List[int]:
+        ordered_vertices: List[int] = []
+        used_vertices: Set[int] = set()
+        for v in rank_ordered_vertices:
+            # Handle vertices with no cycles
+            if v not in used_vertices:
+                ordered_vertices.append(v)
+                used_vertices.add(v)
+
+            for cycle in vertex_cycles[v]:
+                for u in cycle:
+                    if u in used_vertices:
+                        continue
+                    ordered_vertices.append(u)
+                    used_vertices.add(u)
+        return ordered_vertices
+
+    @staticmethod
+    def _subgraphs_strategy_cycles(
+        rank_ordered_vertices: List[int],
+        vertex_cycles: List[List[Tuple[int, ...]]],
+    ) -> List[int]:
+        ordered_vertices: List[int] = []
+        used_vertices: Set[int] = set()
+        all_vertices = deque(rank_ordered_vertices)
+
+        while all_vertices:
+            v = all_vertices.popleft()
+
+            # the vertex may have been used before from a cycle
+            if v in used_vertices:
+                continue
+
+            queue: Deque[int] = deque([v])
+
+            while queue:
+                u = queue.popleft()
+
+                if u in used_vertices:
+                    continue
+
+                ordered_vertices.append(u)
+                used_vertices.add(u)
+
+                for cycle in vertex_cycles[u]:
+                    for u in cycle:
+                        if u in used_vertices:
+                            continue
+                        queue.append(u)
+        return ordered_vertices
+
+    @staticmethod
+    def _subgraphs_strategy_cycles_match_chunks(
+        chunk_size: int,
+        rank_ordered_vertices: List[int],
+        vertex_cycles: List[List[Tuple[int, ...]]],
+    ) -> List[int]:
+        ordered_vertices: List[int] = []
+        used_vertices: Set[int] = set()
+        all_vertices = deque(rank_ordered_vertices)
+
+        while all_vertices:
+            v = all_vertices.popleft()
+
+            # the vertex may have been used before from a cycle
+            if v in used_vertices:
+                continue
+
+            used_in_epoch = 0
+            queue: Deque[int] = deque([v])
+
+            while queue and used_in_epoch < chunk_size:
+                u = queue.popleft()
+
+                if u in used_vertices:
+                    continue
+
+                ordered_vertices.append(u)
+                used_vertices.add(u)
+                used_in_epoch += 1
+
+                for cycle in vertex_cycles[u]:
+                    for u in cycle:
+                        if u in used_vertices:
+                            continue
+                        queue.append(u)
+
+            while used_in_epoch < chunk_size and len(used_vertices) != len(
+                rank_ordered_vertices
+            ):
+                v = all_vertices.pop()
+                if v in used_vertices:
+                    continue
+                ordered_vertices.append(v)
+                used_vertices.add(v)
+                used_in_epoch += 1
+
+        for v in rank_ordered_vertices:
+            if v in used_vertices:
+                continue
+            ordered_vertices.append(v)
+
+        return ordered_vertices
+
+    @staticmethod
+    def _subgraphs_strategy_components(
+        chunk_no: int,
+        t_graph: nx.Graph,
+        start_from_biggest_component: bool,
+    ) -> List[int]:
+        # NetworkX crashes otherwise
+        if t_graph.number_of_nodes() < 2:
+            return list(t_graph.nodes())
+
+        k_components = nx.connectivity.k_components(t_graph)
+
+        if len(k_components) == 0:
+            return list(t_graph.nodes())
+
+        keys = sorted(k_components.keys(), reverse=True)
+
+        if not start_from_biggest_component:
+            for i, key in enumerate(keys):
+                if len(k_components[key]) <= chunk_no:
+                    keys = keys[i:]
+                    break
+
+        ordered_vertices: List[int] = []
+        used_vertices: Set[int] = set()
+
+        for key in keys:
+            for component in k_components[key]:
+                for v in component:
+                    if v in used_vertices:
+                        continue
+                    ordered_vertices.append(v)
+                    used_vertices.add(v)
+
+        # make sure all the nodes were added
+        for v in t_graph.nodes():
+            if v in used_vertices:
+                continue
+            ordered_vertices.append(v)
+
+        return ordered_vertices
+
+    @staticmethod
     def _NAC_colorings_subgraphs(
         graph: Graph,
         t_graph: nx.Graph,
@@ -1476,151 +1629,6 @@ class Graph(nx.Graph):
         chunk_size = max(int(np.sqrt(vertices_no)), min(min_chunk_size, vertices_no))
         chunk_no = (vertices_no + chunk_size - 1) // chunk_size
 
-        # TODO add BFS strategy
-        def strategy_highes_rank_naive(
-            rank_ordered_vertices: List[int],
-            vertex_cycles: List[List[Tuple[int, ...]]],
-        ) -> List[int]:
-            ordered_vertices: List[int] = []
-            used_vertices: Set[int] = set()
-            for v in rank_ordered_vertices:
-                # Handle vertices with no cycles
-                if v not in used_vertices:
-                    ordered_vertices.append(v)
-                    used_vertices.add(v)
-
-                for cycle in vertex_cycles[v]:
-                    for u in cycle:
-                        if u in used_vertices:
-                            continue
-                        ordered_vertices.append(u)
-                        used_vertices.add(u)
-            return ordered_vertices
-
-        def strategy_cycles(
-            rank_ordered_vertices: List[int],
-            vertex_cycles: List[List[Tuple[int, ...]]],
-        ) -> List[int]:
-            ordered_vertices: List[int] = []
-            used_vertices: Set[int] = set()
-            all_vertices = deque(rank_ordered_vertices)
-
-            while all_vertices:
-                v = all_vertices.popleft()
-
-                # the vertex may have been used before from a cycle
-                if v in used_vertices:
-                    continue
-
-                queue: Deque[int] = deque([v])
-
-                while queue:
-                    u = queue.popleft()
-
-                    if u in used_vertices:
-                        continue
-
-                    ordered_vertices.append(u)
-                    used_vertices.add(u)
-
-                    for cycle in vertex_cycles[u]:
-                        for u in cycle:
-                            if u in used_vertices:
-                                continue
-                            queue.append(u)
-            return ordered_vertices
-
-        def strategy_cycles_match_chunks(
-            rank_ordered_vertices: List[int],
-            vertex_cycles: List[List[Tuple[int, ...]]],
-        ) -> List[int]:
-            ordered_vertices: List[int] = []
-            used_vertices: Set[int] = set()
-            all_vertices = deque(rank_ordered_vertices)
-
-            while all_vertices:
-                v = all_vertices.popleft()
-
-                # the vertex may have been used before from a cycle
-                if v in used_vertices:
-                    continue
-
-                used_in_epoch = 0
-                queue: Deque[int] = deque([v])
-
-                while queue and used_in_epoch < chunk_size:
-                    u = queue.popleft()
-
-                    if u in used_vertices:
-                        continue
-
-                    ordered_vertices.append(u)
-                    used_vertices.add(u)
-                    used_in_epoch += 1
-
-                    for cycle in vertex_cycles[u]:
-                        for u in cycle:
-                            if u in used_vertices:
-                                continue
-                            queue.append(u)
-
-                while used_in_epoch < chunk_size and len(used_vertices) != len(
-                    rank_ordered_vertices
-                ):
-                    v = all_vertices.pop()
-                    if v in used_vertices:
-                        continue
-                    ordered_vertices.append(v)
-                    used_vertices.add(v)
-                    used_in_epoch += 1
-
-            for v in rank_ordered_vertices:
-                if v in used_vertices:
-                    continue
-                ordered_vertices.append(v)
-
-            return ordered_vertices
-
-        def strategy_components(
-            t_graph: nx.Graph,
-            start_from_biggest_component: bool,
-        ) -> List[int]:
-            # NetworkX crashes otherwise
-            if t_graph.number_of_nodes() < 2:
-                return list(t_graph.nodes())
-
-            k_components = nx.connectivity.k_components(t_graph)
-
-            if len(k_components) == 0:
-                return list(t_graph.nodes())
-
-            keys = sorted(k_components.keys(), reverse=True)
-
-            if not start_from_biggest_component:
-                for i, key in enumerate(keys):
-                    if len(k_components[key]) <= chunk_no:
-                        keys = keys[i:]
-                        break
-
-            ordered_vertices: List[int] = []
-            used_vertices: Set[int] = set()
-
-            for key in keys:
-                for component in k_components[key]:
-                    for v in component:
-                        if v in used_vertices:
-                            continue
-                        ordered_vertices.append(v)
-                        used_vertices.add(v)
-
-            # make sure all the nodes were added
-            for v in t_graph.nodes():
-                if v in used_vertices:
-                    continue
-                ordered_vertices.append(v)
-
-            return ordered_vertices
-
         # TODO turn into enum
         match order_strategy:
             case "none":
@@ -1628,24 +1636,24 @@ class Graph(nx.Graph):
             case "rank":
                 vertices = rank_ordered_vertices()
             case "rank_cycles":
-                vertices = strategy_highes_rank_naive(
+                vertices = Graph._subgraphs_strategy_highes_rank_naive(
                     rank_ordered_vertices(), create_vertex_cycles()
                 )
             case "cycles":
-                vertices = strategy_cycles(
+                vertices = Graph._subgraphs_strategy_cycles(
                     rank_ordered_vertices(), create_vertex_cycles()
                 )
             case "cycles_match_chunks":
-                vertices = strategy_cycles_match_chunks(
-                    rank_ordered_vertices(), create_vertex_cycles()
+                vertices = Graph._subgraphs_strategy_cycles_match_chunks(
+                    chunk_size, rank_ordered_vertices(), create_vertex_cycles()
                 )
             case "components_biggest":
-                vertices = strategy_components(
-                    t_graph, start_from_biggest_component=True
+                vertices = Graph._subgraphs_strategy_components(
+                    chunk_no, t_graph, start_from_biggest_component=True
                 )
             case "components_spredded":
-                vertices = strategy_components(
-                    t_graph, start_from_biggest_component=False
+                vertices = Graph._subgraphs_strategy_components(
+                    chunk_no, t_graph, start_from_biggest_component=False
                 )
             case _:
                 raise ValueError(
