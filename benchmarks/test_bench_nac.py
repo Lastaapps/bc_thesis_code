@@ -40,11 +40,14 @@ NAC_ALGORITHMS = [
 ]
 NAC_ALGORITHMS_FAST = [
     "subgraphs-True-none",
-    # "subgraphs-True-random",
-    # "subgraphs-True-degree",
-    # "subgraphs-True-degree_cycles",
-    # "subgraphs-True-cycles",
-    # "subgraphs-True-cycles_match_chunks",
+    "subgraphs-True-random",
+    "subgraphs-True-degree",
+    "subgraphs-True-degree_cycles",
+    "subgraphs-True-cycles",
+    "subgraphs-True-cycles_match_chunks",
+]
+NAC_ALGORITHMS_I_AM_SPEED = [
+    "subgraphs-True-none",
 ]
 
 
@@ -130,25 +133,25 @@ def test_bench_NAC_colorings_fast(
 
 @pytest.mark.nac_benchmark
 @pytest.mark.parametrize("bridges", [True])
-@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_FAST)
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_I_AM_SPEED)
 @pytest.mark.parametrize(
     ("vertices_no", "graph_cnt", "first_n"),
     [
-        (16, 64, 1024),
-        (17, 64, 1024),
-        (18, 32, 256),
-        (19, 32, 256),
-        (20, 32, 128),
-        (21, 32, 128),
-        (22, 32, 128),
-        (23, 32, 128),
-        (24, 32, 128),
-        (25, 32, 128),
-        (26, 32, 128),
-        (27, 16, 64),
-        (28, 16, 64),
-        (29, 8, 64),
-        (30, 8, 64),
+        (16, 128, 1024),
+        (17, 128, 1024),
+        (18, 128, 1024),
+        (19, 128, 1024),
+        (20, 128, 1024),
+        (21, 128, 512),
+        (22, 128, 512),
+        (23, 128, 512),
+        (24, 64, 512),
+        (25, 64, 512),
+        (26, 64, 256),
+        (27, 64, 256),
+        (28, 64, 128),
+        (29, 64, 128),
+        (30, 64, 128),
     ],
 )
 def test_bench_NAC_colorings_laman_large_first_n(
