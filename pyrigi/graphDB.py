@@ -52,10 +52,10 @@ def ThreePrismPlusEdge():
     )
 
 
-def SmallestMinimallyRigitGraph():
+def DiamondWithZeroExtension():
     """
-    Return the smallest flexible minimally rigid graph
-    (the diamond with 2 connected extra edges from the opposite spikes).
+    Return the diamond graph with zero extension
+    (the diamond with 2 extra connected edges from the opposite spikes).
     """
     return Graph(
         [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)],

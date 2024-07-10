@@ -9,6 +9,11 @@ class RepeatableIterator[T](Iterator[T]):
     """
 
     def __init__(self, iterable: Iterable[T]):
+        if isinstance(iterable, list):
+            self._is_first = False
+            self._cache: List[T] = iterable
+            return
+
         self._iterable = iter(iterable)
         self._is_first = True
         self._cache: List[T] = []

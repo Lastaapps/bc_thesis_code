@@ -1,4 +1,5 @@
-from typing import Set, Tuple
+from dataclasses import dataclass
+from typing import List, Set, Tuple
 from pyrigi.data_type import Edge
 from pyrigi.graph import Graph
 import pyrigi.graphDB as graphs
@@ -234,7 +235,7 @@ def test_min_max_rigid_subgraphs():
         (graphs.Diamond(), False),
         (graphs.ThreePrism(), True),
         (graphs.ThreePrismPlusEdge(), False),
-        (graphs.SmallestMinimallyRigitGraph(), True),
+        (graphs.DiamondWithZeroExtension(), True),
     ],
     ids=[
         "path",
@@ -286,7 +287,7 @@ def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
             set([(0, 1, 2), (3, 4, 5), (0, 2, 5), (0, 3, 5)]),
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             set([(0, 1, 2), (0, 2, 3), (0, 1, 4, 3), (1, 2, 3, 4)]),
         ),
         (
@@ -369,15 +370,15 @@ NAC_ALGORITHMS = [
     "cycles-True",
     "cycles-False",
     "subgraphs-True-none",
-    "subgraphs-True-rank",
-    "subgraphs-True-rank_cycles",
+    "subgraphs-True-degree",
+    "subgraphs-True-degree_cycles",
     "subgraphs-True-cycles",
     "subgraphs-True-cycles_match_chunks",
     "subgraphs-True-components_biggest",
     "subgraphs-True-components_spredded",
     "subgraphs-False-none",
-    "subgraphs-False-rank",
-    "subgraphs-False-rank_cycles",
+    "subgraphs-False-degree",
+    "subgraphs-False-degree_cycles",
     "subgraphs-False-cycles",
     "subgraphs-False-cycles_match_chunks",
     "subgraphs-False-components_biggest",
@@ -385,105 +386,186 @@ NAC_ALGORITHMS = [
 ]
 
 
+@dataclass
+class NACTestCase:
+    """
+    Used for NAC coloring and cartesian NAC coloring testing.
+    """
+    name: str
+    graph: Graph
+    no_normal: int | None
+    no_cartesian: int | None
+
+NAC_TEST_CASES: List[NACTestCase] = [
+    NACTestCase("path", graphs.Path(3), 2, 2),
+    NACTestCase(
+        "path_and_single_vertex",
+        Graph.from_vertices_and_edges([0, 1, 2, 3], [(0, 1), (1, 2)]),
+        2,
+        2,
+    ),
+    NACTestCase("cycle3", graphs.Cycle(3), 0, 0),
+    NACTestCase("cycle4", graphs.Cycle(4), 6, 2),
+    NACTestCase("cycle5", graphs.Cycle(5), 20, 10),
+    NACTestCase("complete5", graphs.Complete(5), 0, 0),
+    NACTestCase("bipartite1x3", graphs.CompleteBipartite(1, 3), 6, 6),
+    NACTestCase(
+        "bipartite1x3-improved",
+        Graph.from_vertices_and_edges([0, 1, 2, 3], [(0, 1), (0, 2), (0, 3), (2, 3)]),
+        2,
+        2,
+    ),
+    NACTestCase("bipartite1x4", graphs.CompleteBipartite(1, 4), 14, 14),
+    NACTestCase(
+        "bipartite1x4-improved",
+        Graph.from_vertices_and_edges(
+            [0, 1, 2, 3, 4], [(0, 1), (0, 2), (0, 3), (0, 4), (3, 4)]
+        ),
+        6,
+        6,
+    ),
+    NACTestCase("bipartite2x3", graphs.CompleteBipartite(2, 3), 14, 0),
+    NACTestCase("bipartite2x4", graphs.CompleteBipartite(2, 4), 30, 0),
+    NACTestCase("bipartite3x3", graphs.CompleteBipartite(3, 3), 30, 0),
+    NACTestCase("bipartite3x4", graphs.CompleteBipartite(3, 4), 62, 0),
+    NACTestCase("diamond", graphs.Diamond(), 0, 0),
+    NACTestCase("prism", graphs.ThreePrism(), 2, 2),
+    NACTestCase("prismPlus", graphs.ThreePrismPlusEdge(), 0, 0),
+    NACTestCase("minimallyRigid", graphs.DiamondWithZeroExtension(), 2, 0),
+    NACTestCase(
+        "smaller_problemist",
+        Graph.from_vertices_and_edges(
+            [0, 1, 2, 3, 4, 5, 6],
+            [(0, 3), (0, 6), (1, 2), (1, 6), (2, 5), (3, 5), (4, 5), (4, 6)],
+        ),
+        108,
+        30,
+    ),
+    NACTestCase(
+        "large_problemist",
+        Graph.from_vertices_and_edges(
+            [0, 1, 2, 3, 4, 5, 6, 7, 8],
+            [
+                (0, 3),
+                (0, 4),
+                (1, 2),
+                (1, 8),
+                (2, 7),
+                (3, 8),
+                (4, 7),
+                (5, 7),
+                (5, 8),
+                (6, 7),
+                (6, 8),
+            ],
+        ),
+        472,
+        54,
+    ),
+    NACTestCase(
+        "3-squares-and-connectig-edge",
+        Graph.from_vertices_and_edges(
+            list(range(10)),
+            [
+                (0, 1),
+                (1, 2),
+                (2, 3),
+                (3, 0),
+                (4, 5),
+                (5, 6),
+                (6, 7),
+                (7, 4),
+                (0, 8),
+                (4, 8),
+                (0, 9),
+                (4, 9),
+                (1, 5),
+            ],
+        ),
+        606,
+        30,
+    ),
+    NACTestCase(
+        "square-2-pendagons-and-connectig-edge",
+        Graph.from_vertices_and_edges(
+            list(range(12)),
+            [
+                (0, 1),
+                (1, 2),
+                (2, 3),
+                (3, 4),
+                (4, 0),
+                (5, 6),
+                (6, 7),
+                (7, 8),
+                (8, 9),
+                (9, 5),
+                (0, 10),
+                (5, 10),
+                (0, 11),
+                (5, 11),
+                (1, 6),
+            ],
+        ),
+        None, # 4596,
+        286,
+    ),
+    NACTestCase(
+        "diconnected-problemist",
+        Graph.from_vertices_and_edges(
+            list(range(15)),
+            [
+                (0, 1),
+                (1, 2),
+                (2, 3),
+                (3, 4),
+                (5, 6),
+                (7, 8),
+                (9, 10),
+                (0, 13),
+                (5, 13),
+                (0, 14),
+                (5, 14),
+                (1, 6),
+            ],
+        ),
+        1214,
+        254,
+    ),
+]
+
+
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
-    [
-        (graphs.Path(3), 2),
-        (Graph.from_vertices_and_edges([0, 1, 2, 3], [(0, 1), (1, 2)]), 2),
-        (graphs.Cycle(3), 0),
-        (graphs.Cycle(4), 6),
-        (graphs.Cycle(5), 20),
-        (graphs.Complete(5), 0),
-        (graphs.CompleteBipartite(1, 3), 6),
-        (
-            Graph.from_vertices_and_edges(
-                [0, 1, 2, 3], [(0, 1), (0, 2), (0, 3), (2, 3)]
-            ),
-            2,
-        ),
-        (graphs.CompleteBipartite(1, 4), 14),
-        (
-            Graph.from_vertices_and_edges(
-                [0, 1, 2, 3, 4], [(0, 1), (0, 2), (0, 3), (0, 4), (3, 4)]
-            ),
-            6,
-        ),
-        (graphs.CompleteBipartite(2, 3), 14),
-        (graphs.CompleteBipartite(2, 4), 30),
-        (graphs.CompleteBipartite(3, 3), 30),
-        (graphs.CompleteBipartite(3, 4), 62),
-        (graphs.Diamond(), 0),
-        (graphs.ThreePrism(), 2),
-        (graphs.ThreePrismPlusEdge(), 0),
-        (graphs.SmallestMinimallyRigitGraph(), 2),
-        (
-            Graph.from_vertices_and_edges(
-                [0, 1, 2, 3, 4, 5, 6],
-                [(0, 3), (0, 6), (1, 2), (1, 6), (2, 5), (3, 5), (4, 5), (4, 6)],
-            ),
-            108,
-        ),
-        (
-            Graph.from_vertices_and_edges(
-                [0, 1, 2, 3, 4, 5, 6, 7, 8],
-                [
-                    (0, 3),
-                    (0, 4),
-                    (1, 2),
-                    (1, 8),
-                    (2, 7),
-                    (3, 8),
-                    (4, 7),
-                    (5, 7),
-                    (5, 8),
-                    (6, 7),
-                    (6, 8),
-                ],
-            ),
-            472,
-        ),
-    ],
-    ids=[
-        "path",
-        "path_and_single_vertex",
-        "cycle3",
-        "cycle4",
-        "cycle5",
-        "complete5",
-        "bipartite1x3",
-        "bipartite1x3-improved",
-        "bipartite1x4",
-        "bipartite1x4-improved",
-        "bipartite2x3",
-        "bipartite2x4",
-        "bipartite3x3",
-        "bipartite3x4",
-        "diamond",
-        "prism",
-        "prismPlus",
-        "minimallyRigid",
-        "smaller_problemist",
-        "large_problemist",
-    ],
+    [(case.graph, case.no_normal) for case in NAC_TEST_CASES if case.no_normal is not None],
+    ids=[case.name for case in NAC_TEST_CASES if case.no_normal is not None],
 )
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("use_bridges", [True, False])
-def test_NAC_colorings(graph, colorings_no: int, algorithm, use_bridges: bool):
-    print(f"{graph=}")
-    coloringList = list(
+def test_all_NAC_colorings(graph, colorings_no: int, algorithm: str, use_bridges: bool):
+    # print(f"\nTested graph: {graph=}")
+    coloring_list = list(
         graph.NAC_colorings(
             algorithm=algorithm,
             use_bridges_decomposition=use_bridges,
         )
     )
-    print(f"{coloringList=}")
+
+    # print(f"{coloring_list=}")
+
+    no_duplicates = {
+        (tuple(sorted(coloring[0])), tuple(sorted(coloring[1])))
+        for coloring in coloring_list
+    }
+    assert len(coloring_list) == len(no_duplicates)
+
 
     # for coloring in sorted([str(x) for x in coloringList]):
     #     print(coloring)
 
-    assert colorings_no == len(coloringList)
+    assert colorings_no == len(coloring_list)
 
-    for coloring in coloringList:
+    for coloring in coloring_list:
         assert graph.is_NAC_coloring(coloring)
 
 
@@ -491,22 +573,22 @@ def test_NAC_colorings(graph, colorings_no: int, algorithm, use_bridges: bool):
     ("graph", "coloring", "result"),
     [
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]), set([(1, 4), (3, 4)])),
             True,
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
             False,
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
             False,
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
             False,
         ),
@@ -528,18 +610,54 @@ def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: b
 
 
 @pytest.mark.parametrize(
+    ("graph", "colorings_no"),
+    [(case.graph, case.no_cartesian) for case in NAC_TEST_CASES if case.no_cartesian is not None],
+    ids=[case.name for case in NAC_TEST_CASES if case.no_cartesian is not None],
+)
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize("use_bridges", [True, False])
+def test_all_cartesian_NAC_colorings(
+    graph, colorings_no: int, algorithm: str, use_bridges: bool
+):
+    # print(f"\nTested graph: {graph=}")
+    coloring_list = list(
+        graph.cartesian_NAC_colorings(
+            algorithm=algorithm,
+            use_bridges_decomposition=use_bridges,
+        )
+    )
+
+    # print(f"{coloring_list=}")
+
+    no_duplicates = {
+        (tuple(sorted(coloring[0])), tuple(sorted(coloring[1])))
+        for coloring in coloring_list
+    }
+    assert len(coloring_list) == len(no_duplicates)
+
+    # for coloring in sorted([str(x) for x in coloringList]):
+    #     print(coloring)
+
+    assert colorings_no == len(coloring_list)
+
+    for coloring in coloring_list:
+        assert graph.is_NAC_coloring(coloring)
+        assert graph.is_cartesian_NAC_coloring(coloring)
+
+
+@pytest.mark.parametrize(
     ("graph", "coloring"),
     [
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
         ),
         (
-            graphs.SmallestMinimallyRigitGraph(),
+            graphs.DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
         ),
         # tests if everything works with non-integer vertices

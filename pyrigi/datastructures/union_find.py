@@ -1,4 +1,4 @@
-from typing import Hashable
+from typing import Dict, Hashable
 
 
 class UnionFind[T: Hashable]:
@@ -38,7 +38,7 @@ class UnionFind[T: Hashable]:
         ca, cb = self.find(a), self.find(b)
         if ca == cb:
             return
-        self._data[b] = ca
+        self._data[cb] = ca
 
     def root_cnt(self, total: int) -> int:
         """

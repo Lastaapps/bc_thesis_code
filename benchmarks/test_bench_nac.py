@@ -14,6 +14,7 @@ laman_medium_graphs = list(
 )
 laman_large_graphs = list(filter(lambda g: nx.number_of_nodes(g) > 15, laman_graphs))
 
+
 # can be used for debugging
 # small_graphs = sorted(small_graphs, key=lambda g: nx.number_of_nodes(g))
 
@@ -22,15 +23,16 @@ NAC_ALGORITHMS = [
     "cycles-True",
     "cycles-False",
     "subgraphs-True-none",
-    "subgraphs-True-rank",
-    "subgraphs-True-rank_cycles",
+    "subgraphs-False-random",
+    "subgraphs-True-degree",
+    "subgraphs-True-degree_cycles",
     "subgraphs-True-cycles",
     "subgraphs-True-cycles_match_chunks",
     "subgraphs-True-components_biggest",
     "subgraphs-True-components_spredded",
     "subgraphs-False-none",
-    "subgraphs-False-rank",
-    "subgraphs-False-rank_cycles",
+    "subgraphs-False-degree",
+    "subgraphs-False-degree_cycles",
     "subgraphs-False-cycles",
     "subgraphs-False-cycles_match_chunks",
     "subgraphs-False-components_biggest",
@@ -38,10 +40,11 @@ NAC_ALGORITHMS = [
 ]
 NAC_ALGORITHMS_FAST = [
     "subgraphs-True-none",
-    "subgraphs-True-rank",
-    "subgraphs-True-rank_cycles",
-    "subgraphs-True-cycles",
-    "subgraphs-True-cycles_match_chunks",
+    # "subgraphs-True-random",
+    # "subgraphs-True-degree",
+    # "subgraphs-True-degree_cycles",
+    # "subgraphs-True-cycles",
+    # "subgraphs-True-cycles_match_chunks",
 ]
 
 
@@ -102,11 +105,7 @@ def test_bench_NAC_colorings(
 @pytest.mark.nac_benchmark
 @pytest.mark.parametrize("bridges", [True, False])
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_FAST)
-@pytest.mark.parametrize(
-    "dataset",
-    [laman_medium_graphs[:32], laman_large_graphs[:8]],
-    ids=["laman_medium", "laman_large"],
-)
+@pytest.mark.parametrize("dataset", [laman_medium_graphs[:32]], ids=["laman_medium"])
 def test_bench_NAC_colorings_fast(
     benchmark,
     algorithm: str,
@@ -130,19 +129,35 @@ def test_bench_NAC_colorings_fast(
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.parametrize("bridges", [True, False])
-@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize("bridges", [True])
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_FAST)
 @pytest.mark.parametrize(
-    "dataset",
-    [small_graphs[:32], laman_small_graphs[:32]],
-    ids=["small", "laman_small"],
+    ("vertices_no", "graph_cnt", "first_n"),
+    [
+        (16, 64, 1024),
+        (17, 64, 1024),
+        (18, 32, 256),
+        (19, 32, 256),
+        (20, 32, 128),
+        (21, 32, 128),
+        (22, 32, 128),
+        (23, 32, 128),
+        (24, 32, 128),
+        (25, 32, 128),
+        (26, 32, 128),
+        (27, 16, 64),
+        (28, 16, 64),
+        (29, 8, 64),
+        (30, 8, 64),
+    ],
 )
-def test_bench_NAC_colorings_first_32(
+def test_bench_NAC_colorings_laman_large_first_n(
     benchmark,
     algorithm: str,
     bridges: bool,
-    dataset: List[Graph],
-    first_n: int = 32,
+    vertices_no: int,
+    graph_cnt: int,
+    first_n: int,
 ):
     """
     Measures the time to find first 32 NAC colorings of the graph given if they
@@ -150,9 +165,15 @@ def test_bench_NAC_colorings_first_32(
     colorings of a graph and some algorithms may use it to their advantage.
     """
 
+    dataset = list(
+        filter(lambda g: nx.number_of_nodes(g) == vertices_no, laman_large_graphs)
+    )[:graph_cnt]
+
     def perform_test():
-        for graph in dataset:
-            for _ in zip(
+        for i, graph in enumerate(dataset):
+            # print("Graph:   ", i, graph_cnt)
+            j = -1
+            for j, _ in zip(
                 range(first_n),
                 graph.NAC_colorings(
                     algorithm=algorithm,
@@ -160,6 +181,9 @@ def test_bench_NAC_colorings_first_32(
                 ),
             ):
                 pass
+                # if j == 0:
+                #     print("Coloring:", j, graph_cnt)
+            # print("Coloring:", j, graph_cnt)
 
     benchmark(perform_test)
 
