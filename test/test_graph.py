@@ -696,7 +696,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
     ("graph", "coloring", "result"),
     [
         (
-            graphs.ThreeSquares(),
+            graphs.SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7)]),
@@ -704,7 +704,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             True,
         ),
         (
-            graphs.ThreeSquares(),
+            graphs.SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7), (6, 7)]),
@@ -712,7 +712,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            graphs.ThreeSquares(),
+            graphs.SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (3, 7)]),
                 set([(0, 4), (1, 5), (2, 6)]),
@@ -720,7 +720,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            graphs.ThreeSquares(),
+            graphs.SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (4, 5), (5, 6), (0, 4), (1, 5)]),
                 set([(2, 6), (3, 7), (2, 3), (6, 7)]),

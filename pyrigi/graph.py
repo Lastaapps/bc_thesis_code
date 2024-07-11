@@ -126,7 +126,7 @@ class Graph(nx.Graph):
     @classmethod
     @doc_category("Class methods")
     def from_vertices_and_edges(
-        cls, vertices: List[Vertex], edges: List[Edge]
+        cls, vertices: Iterable[Vertex], edges: Iterable[Edge]
     ) -> GraphType:
         """
         Create a graph from a list of vertices and edges.
@@ -155,7 +155,7 @@ class Graph(nx.Graph):
 
     @classmethod
     @doc_category("Class methods")
-    def from_vertices(cls, vertices: List[Vertex]) -> GraphType:
+    def from_vertices(cls, vertices: Iterable[Vertex]) -> GraphType:
         """
         Create a graph with no edges from a list of vertices.
 
@@ -170,7 +170,7 @@ class Graph(nx.Graph):
 
     @classmethod
     @doc_category("Class methods")
-    def CompleteOnVertices(cls, vertices: List[Vertex]) -> GraphType:
+    def CompleteOnVertices(cls, vertices: Iterable[Vertex]) -> GraphType:
         """
         Generate a complete graph on ``vertices``.
 

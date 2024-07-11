@@ -62,26 +62,38 @@ def DiamondWithZeroExtension():
     )
 
 
-def ThreeSquares():
+def SquareGrid2D(w: int, h: int):
     """
-    3 squares in a row, used for cartesian NAC coloring testing
+    Creates a square grid with width and height given.
+
+    Parameters
+    ----------
+    w:
+        width - no. of nodes in each column
+    h:
+        height - no. of nodes in each row
+    ----------
+
+    Example
+    ----------
+    For input w: 4, h: 2 you get this graph:
 
     0-1-2-3
     | | | |
     4-5-6-7
+    ----------
     """
-    return Graph.from_vertices_and_edges(
-        [0, 1, 2, 3, 4, 5, 6, 7],
-        [
-            (0, 1),
-            (1, 2),
-            (2, 3),
-            (4, 5),
-            (5, 6),
-            (6, 7),
-            (0, 4),
-            (1, 5),
-            (2, 6),
-            (3, 7),
-        ],
-    )
+    G = Graph.from_vertices(range(w*h))
+    for r in range(h):
+        offset = r * w
+        for c in range(offset, offset + w - 1):
+            G.add_edge(c, c+1)
+
+        if r == 0:
+            continue
+
+        for c in range(offset, offset + w):
+            G.add_edge(c-w, c)
+
+    return G
+
