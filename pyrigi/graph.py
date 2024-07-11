@@ -18,6 +18,7 @@ from typing import (
     List,
     Any,
     Protocol,
+    Sequence,
     Union,
     Tuple,
     Optional,
@@ -971,7 +972,7 @@ class Graph(nx.Graph):
 
     @staticmethod
     def _find_triangle_components(
-        graph: Graph,
+        graph: nx.Graph,
         is_cartesian_NAC_coloring: bool = False,
     ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
         """
@@ -2121,65 +2122,77 @@ class Graph(nx.Graph):
         ]
         components = filter(lambda x: x.number_of_nodes() > 1, components)
 
-        def with_non_surjective(
-            comp: nx.Graph, colorings: Iterable[NACColoring]
-        ) -> Iterable[NACColoring]:
-            r, b = [], list(comp.edges())
-            yield r, b
-            yield b, r
-            for c in colorings:
-                yield c
+        colorings = [
+            Graph._NAC_colorings_with_non_surjective(comp, processor(comp))
+            for comp in components
+        ]
+        colorings.append(
+            Graph._NAC_colorings_for_single_edges(bridges, include_non_surjective=True),
+        )
 
-        colorings = [with_non_surjective(comp, processor(comp)) for comp in components]
-
-        def bridge_colorings() -> Iterable[NACColoring]:
-            def binaryToGray(num: int) -> int:
-                return num ^ (num >> 1)
-
-            red: Set[Edge] = set()
-            blue: Set[Edge] = set(bridges)
-
-            # create immutable versions
-            r, b = list(red), list(blue)
-            yield r, b
-            yield b, r
-
-            prev_mask = 0
-            for mask in range(1, 2 ** len(bridges) // 2):
-                mask = binaryToGray(mask)
-                diff = prev_mask ^ mask
-                prev_mask = mask
-                is_new = (mask & diff) > 0
-                bridge = bridges[diff.bit_length()]
-                if is_new:
-                    red.add(bridge)
-                    blue.remove(bridge)
-                else:
-                    blue.add(bridge)
-                    red.remove(bridge)
-
-                # create immutable versions
-                r, b = list(red), list(blue)
-                yield r, b
-                yield b, r
-
-        colorings.append(bridge_colorings())
-
-        def cross_product(
-            first: Iterable[NACColoring], second: Iterable[NACColoring]
-        ) -> Iterable[NACColoring]:
-            cache = RepeatableIterator(first)
-            for s in second:
-                for f in cache:
-                    # yield s[0].extend(f[0]), s[1].extend(f[1])
-                    yield s[0] + f[0], s[1] + f[1]
-
-        iterator = reduce(cross_product, colorings)
+        iterator = reduce(Graph._NAC_colorings_cross_product, colorings)
 
         # Skip initial invalid coloring that are not surjective
         iterator = filter(lambda x: len(x[0]) * len(x[1]) != 0, iterator)
 
         return iterator
+
+    @staticmethod
+    def _NAC_colorings_with_trivial_stable_cuts(
+        graph: nx.Graph,
+        processor: Callable[[nx.Graph], Iterable[NACColoring]],
+        copy: bool = True,
+    ) -> Iterable[NACColoring]:
+        # TODO don't waste resources
+        _, component_to_edge = Graph._find_triangle_components(
+            graph,
+            is_cartesian_NAC_coloring=False,
+        )
+
+        verticies_in_triangle_components: Set[Vertex] = set()
+        for component_edges in component_to_edge:
+            # component is not part of a triangle edge
+            if len(component_edges) == 1:
+                continue
+
+            verticies_in_triangle_components.update(
+                v for edge in component_to_edge for v in edge
+            )
+
+        # All nodes are members of a triangle component
+        if len(verticies_in_triangle_components) == graph.number_of_nodes():
+            return processor(graph)
+
+        if copy:
+            graph = nx.Graph(graph)
+
+        removed_edges: List[Edge] = []
+        # vertices outside of triangle components
+        for v in verticies_in_triangle_components - set(graph.nodes):
+            for u in graph.neighbors(v):
+                removed_edges.append((u, v))
+            graph.remove_node(v)
+
+        coloring = processor(graph)
+        coloring = Graph._NAC_colorings_with_non_surjective(graph, coloring)
+
+        def handle_vertex(
+            graph: nx.Graph,
+            v: Vertex,
+            get_coloring: Callable[[nx.Graph], Iterable[NACColoring]],
+        ) -> Iterable[NACColoring]:
+            graph = nx.Graph(graph)
+            edges: List[Edge] = []
+            for u in graph.neighbors(v):
+                edges.append((u, v))
+
+            for coloring in get_coloring(graph):
+                # create red/blue components
+                pass
+
+            pass
+
+        pass
 
     @doc_category("Generic rigidity")
     def _NAC_colorings_base(

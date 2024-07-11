@@ -360,7 +360,13 @@ def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
     ],
 )
 def test__find_cycles(graph, result: Set[Tuple]):
-    res = Graph._find_cycles(graph, all=True)
+    res = Graph._find_cycles(
+        Graph(),
+        graph,
+        [],
+        from_angle_preserving_components=False,
+        all=True,
+    )
     print(f"{res=}")
     assert result == res
 
