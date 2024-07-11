@@ -1151,14 +1151,21 @@ class Graph(nx.Graph):
             yield (coloring[1], coloring[0])
 
     @staticmethod
-    def _find_cycles(graph: nx.Graph, all: bool = False) -> Set[Tuple[int, ...]]:
+    def _find_cycles(
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        from_angle_preserving_components: bool,
+        all: bool = False,
+    ) -> Set[Tuple[int, ...]]:
         """
         For each vertex finds one/all of the shortest cycles it lays on
 
         Parameters
         ----------
         graph:
-            The graph to work with, vertices should be integers indexed from 0
+            The graph to work with, vertices should be integers indexed from 0.
+            Usually a graphs with triangle and angle preserving components.
         all:
             if set to True, all the shortest cycles are returned
             Notice that for dense graphs the number of cycles can be quite huge
@@ -1168,7 +1175,20 @@ class Graph(nx.Graph):
         """
         found_cycles: Set[Tuple[int, ...]] = set()
 
-        vertices = list(graph.nodes)
+        vertices = list(t_graph.nodes)
+
+        # disables vertices that represent a disconnected angle preserving
+        # component. Search using these components is then disabled.
+        # This prevents some smallest cycles to be found.
+        # On the other hand cartesian NAC coloring is not purpose of this
+        # work, so I don't care about peek performance yet.
+        disabled_vertices: Set[int] = set()
+
+        if from_angle_preserving_components:
+            for v in vertices:
+                g = graph.edge_subgraph(component_to_edges[v])
+                if not nx.connected.is_connected(g):
+                    disabled_vertices.add(v)
 
         def insert_found_cycle(cycle: List[int]) -> None:
             """
@@ -1177,7 +1197,6 @@ class Graph(nx.Graph):
             and the second one is greater than the last one.
             This is required for equality checks in set later.
             """
-            # TODO use np.argmin
 
             # find the smallest element index
             smallest = 0
@@ -1202,13 +1221,15 @@ class Graph(nx.Graph):
             """
             # Stores node and id of branch it's from
             queue: deque[Tuple[int, int]] = deque()
-            # TODO handle better
-            # parent_and_id = [(-1, -1) for _ in range(len(vertices))]
+            # this wastes a little, but whatever
             parent_and_id = [(-1, -1) for _ in range(max(vertices) + 1)]
             parent_and_id[start] = (start, -1)
             local_cycle_len = -1
 
-            for u in graph.neighbors(start):
+            for u in t_graph.neighbors(start):
+                if u in disabled_vertices:
+                    continue
+
                 # newly found item
                 parent_and_id[u] = (start, -u)
                 queue.append((u, -u))
@@ -1242,11 +1263,13 @@ class Graph(nx.Graph):
                 v, id = queue.popleft()
                 parent = parent_and_id[v][0]
 
-                # TODO consider shuffling
-                for u in graph.neighbors(v):
+                for u in t_graph.neighbors(v):
                     # so I don't create cycle on 1 edge
                     # this could be done sooner, I know...
                     if u == parent:
+                        continue
+
+                    if u in disabled_vertices:
                         continue
 
                     # newly found item
@@ -1279,6 +1302,8 @@ class Graph(nx.Graph):
 
         for start in vertices:
             # bfs is a separate function so I can use return in it
+            if start in disabled_vertices:
+                continue
             bfs(start)
 
         return found_cycles
@@ -1401,6 +1426,7 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        from_angle_preserving_components: bool,
         use_all_cycles: bool = False,
     ) -> Iterable[NACColoring]:
         vertices = list(t_graph.nodes())
@@ -1408,7 +1434,13 @@ class Graph(nx.Graph):
         vertices.sort()
 
         # find some small cycles for state filtering
-        cycles = Graph._find_cycles(t_graph, all=use_all_cycles)
+        cycles = Graph._find_cycles(
+            graph,
+            t_graph,
+            component_to_edges,
+            from_angle_preserving_components=from_angle_preserving_components,
+            all=use_all_cycles,
+        )
         # the idea is that smaller cycles reduce the state space more
         cycles = sorted(cycles, key=lambda c: len(c))
 
@@ -1418,13 +1450,7 @@ class Graph(nx.Graph):
             )
             for c in cycles
         ]
-
-        # print(f"{graph=}")
-        # print(f"{Graph(t_graph)=}")
-        # print(f"{component_to_edges=}")
-        # print(f"{cycles}")
-        # print(f"{[(bin(a), bin(b)) for a, b in templates]}")
-        # print(nx.nx_agraph.to_agraph(graph))
+        templates = [t for t in templates if t[1] > 0]
 
         # if len(cycles) != 0:
         #     templates_and_validities = [create_bitmask(c) for c in cycles]
@@ -1627,6 +1653,7 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        from_angle_preserving_components: bool,
         vertices: List[int],
         epoch1: Iterable[int],
         subgraph_mask_1: int,
@@ -1660,7 +1687,12 @@ class Graph(nx.Graph):
                 local_vertices.append(v)
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_cycles(local_t_graph)
+        local_cycles = Graph._find_cycles(
+            graph,
+            local_t_graph,
+            component_to_edges,
+            from_angle_preserving_components=from_angle_preserving_components,
+        )
 
         mapped_components_to_edges = lambda ind: component_to_edges[vertices[ind]]
         # cycles with indices of the vertices in the global order
@@ -1671,6 +1703,7 @@ class Graph(nx.Graph):
             )
             for cycle in local_cycles
         ]
+        templates = [t for t in templates if t[1] > 0]
 
         for mask1 in epoch1:
             for mask2 in epoch2:
@@ -1697,6 +1730,7 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        from_angle_preserving_components: bool,
         vertices: List[int],
         chunk_size: int,
         offset: int,
@@ -1709,7 +1743,12 @@ class Graph(nx.Graph):
         local_vertices: List[int] = vertices[offset : offset + chunk_size]
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_cycles(local_t_graph)
+        local_cycles = Graph._find_cycles(
+            graph,
+            local_t_graph,
+            component_to_edges,
+            from_angle_preserving_components=from_angle_preserving_components,
+        )
 
         # local -> first chunk_size vertices
         mapping = {x: i for i, x in enumerate(local_vertices)}
@@ -1722,6 +1761,7 @@ class Graph(nx.Graph):
             )
             for cycle in local_cycles
         ]
+        templates = [t for t in templates if t[1] > 0]
 
         subgraph_mask = 2 ** len(local_vertices) - 1
         for mask in range(0, 2**chunk_size // 2):
@@ -1743,6 +1783,7 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        from_angle_preserving_components: bool,
         use_log_approach: bool = False,
         min_chunk_size: int = 3,
         order_strategy: str = "components_spredded",
@@ -1758,7 +1799,13 @@ class Graph(nx.Graph):
         # for each vertex we find all the cycles that contain it
         def create_vertex_cycles() -> List[List[Tuple[int, ...]]]:
             # Finds all the shortest cycles in the graph
-            cycles = Graph._find_cycles(t_graph, all=True)
+            cycles = Graph._find_cycles(
+                graph,
+                t_graph,
+                component_to_edges,
+                from_angle_preserving_components=from_angle_preserving_components,
+                all=True,
+            )
 
             vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
             for cycle in cycles:
@@ -1880,6 +1927,7 @@ class Graph(nx.Graph):
                         t_graph,
                         component_to_edges,
                         check_selected_NAC_coloring,
+                        from_angle_preserving_components,
                         vertices,
                         epoch1,
                         subgraph_mask_1,
@@ -1891,6 +1939,7 @@ class Graph(nx.Graph):
                         t_graph,
                         component_to_edges,
                         check_selected_NAC_coloring,
+                        from_angle_preserving_components,
                         vertices,
                         epoch1,
                         subgraph_mask_1,
@@ -1915,6 +1964,7 @@ class Graph(nx.Graph):
                         t_graph,
                         component_to_edges,
                         check_selected_NAC_coloring,
+                        from_angle_preserving_components,
                         vertices,
                         chunk_size,
                         offset,
@@ -1964,6 +2014,75 @@ class Graph(nx.Graph):
 
             yield (coloring[0], coloring[1])
             yield (coloring[1], coloring[0])
+
+    @staticmethod
+    def _NAC_colorings_with_non_surjective(
+        comp: nx.Graph, colorings: Iterable[NACColoring]
+    ) -> Iterable[NACColoring]:
+        """
+        This takes an iterator of NAC colorings and yields from it.
+        Before it it sends non-surjective "NAC colorings"
+        - all red and all blue coloring.
+        """
+        r, b = [], list(comp.edges())
+        yield r, b
+        yield b, r
+        yield from colorings
+
+    @staticmethod
+    def _NAC_colorings_cross_product(
+        first: Iterable[NACColoring], second: Iterable[NACColoring]
+    ) -> Iterable[NACColoring]:
+        """
+        This makes a cartesian cross product of two NAC coloring iterators.
+        Unlike the python crossproduct, this adds the colorings inside the tuples.
+        """
+        cache = RepeatableIterator(first)
+        for s in second:
+            for f in cache:
+                # yield s[0].extend(f[0]), s[1].extend(f[1])
+                yield s[0] + f[0], s[1] + f[1]
+
+    @staticmethod
+    def _NAC_colorings_for_single_edges(
+        edges: Sequence[Edge], include_non_surjective: bool
+    ) -> Iterable[NACColoring]:
+        """
+        Creates all the NAC colorings for the edges given.
+        The colorings are not check for validity.
+        Make sure the edges given cannot form a red/blue almost cycle.
+        """
+
+        def binaryToGray(num: int) -> int:
+            return num ^ (num >> 1)
+
+        red: Set[Edge] = set()
+        blue: Set[Edge] = set(edges)
+
+        if include_non_surjective:
+            # create immutable versions
+            r, b = list(red), list(blue)
+            yield r, b
+            yield b, r
+
+        prev_mask = 0
+        for mask in range(1, 2 ** len(edges) // 2):
+            mask = binaryToGray(mask)
+            diff = prev_mask ^ mask
+            prev_mask = mask
+            is_new = (mask & diff) > 0
+            edge = edges[diff.bit_length()]
+            if is_new:
+                red.add(edge)
+                blue.remove(edge)
+            else:
+                blue.add(edge)
+                red.remove(edge)
+
+            # create immutable versions
+            r, b = list(red), list(blue)
+            yield r, b
+            yield b, r
 
     @staticmethod
     def _NAC_colorings_with_bridges(
@@ -2125,17 +2244,22 @@ class Graph(nx.Graph):
 
                     if len(algorithm_parts) == 1:
                         return Graph._NAC_colorings_cycles(
-                            graph, t_graph, component_to_edge, is_NAC_coloring
+                            graph,
+                            t_graph,
+                            component_to_edge,
+                            is_NAC_coloring,
+                            is_cartesian,
                         )
                     return Graph._NAC_colorings_cycles(
                         graph,
                         t_graph,
                         component_to_edge,
                         is_NAC_coloring,
+                        from_angle_preserving_components=is_cartesian,
                         use_all_cycles=bool(algorithm_parts[1]),
                     )
                 case "subgraphs":
-                    is_NAC_coloring_non_surjective_allow_subgraphs = (
+                    is_NAC_coloring = (
                         Graph._is_cartesian_NAC_coloring_impl
                         if is_cartesian
                         else Graph._is_NAC_coloring_impl
@@ -2146,13 +2270,15 @@ class Graph(nx.Graph):
                             graph,
                             t_graph,
                             component_to_edge,
-                            is_NAC_coloring_non_surjective_allow_subgraphs,
+                            is_NAC_coloring,
+                            from_angle_preserving_components=is_cartesian,
                         )
                     return Graph._NAC_colorings_subgraphs(
                         graph,
                         t_graph,
                         component_to_edge,
-                        is_NAC_coloring_non_surjective_allow_subgraphs,
+                        is_NAC_coloring,
+                        from_angle_preserving_components=is_cartesian,
                         use_log_approach=bool(algorithm_parts[1]),
                         order_strategy=algorithm_parts[2],
                     )
