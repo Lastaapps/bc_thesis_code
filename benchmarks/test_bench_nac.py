@@ -12,6 +12,9 @@ laman_small_graphs = list(filter(lambda g: nx.number_of_nodes(g) < 10, laman_gra
 laman_medium_graphs = list(
     filter(lambda g: nx.number_of_nodes(g) in range(10, 15 + 1), laman_graphs)
 )
+laman_larger_graphs = list(
+    filter(lambda g: nx.number_of_nodes(g) in range(16, 17 + 1), laman_graphs)
+)
 laman_large_graphs = list(filter(lambda g: nx.number_of_nodes(g) > 15, laman_graphs))
 
 
@@ -22,32 +25,44 @@ NAC_ALGORITHMS = [
     "naive",
     "cycles-True",
     "cycles-False",
-    "subgraphs-True-none",
-    "subgraphs-False-random",
-    "subgraphs-True-degree",
-    "subgraphs-True-degree_cycles",
-    "subgraphs-True-cycles",
-    "subgraphs-True-cycles_match_chunks",
-    "subgraphs-True-components_biggest",
-    "subgraphs-True-components_spredded",
-    "subgraphs-False-none",
-    "subgraphs-False-degree",
-    "subgraphs-False-degree_cycles",
-    "subgraphs-False-cycles",
-    "subgraphs-False-cycles_match_chunks",
-    "subgraphs-False-components_biggest",
-    "subgraphs-False-components_spredded",
+    "subgraphs-True-none-auto",
+    "subgraphs-False-random-auto",
+    "subgraphs-True-degree-auto",
+    "subgraphs-True-degree_cycles-auto",
+    "subgraphs-True-cycles-auto",
+    "subgraphs-True-cycles_match_chunks-auto",
+    "subgraphs-True-components_biggest-auto",
+    "subgraphs-True-components_spredded-auto",
+    "subgraphs-False-none-auto",
+    "subgraphs-False-degree-auto",
+    "subgraphs-False-degree_cycles-auto",
+    "subgraphs-False-cycles-auto",
+    "subgraphs-False-cycles_match_chunks-auto",
+    "subgraphs-False-components_biggest-auto",
+    "subgraphs-False-components_spredded-auto",
 ]
 NAC_ALGORITHMS_FAST = [
-    "subgraphs-True-none",
-    "subgraphs-True-random",
-    "subgraphs-True-degree",
-    "subgraphs-True-degree_cycles",
-    "subgraphs-True-cycles",
-    "subgraphs-True-cycles_match_chunks",
+    "subgraphs-True-none-auto",
+    "subgraphs-True-random-auto",
+    "subgraphs-True-degree-auto",
+    "subgraphs-True-degree_cycles-auto",
+    "subgraphs-True-cycles-auto",
+    "subgraphs-True-cycles_match_chunks-auto",
 ]
 NAC_ALGORITHMS_I_AM_SPEED = [
-    "subgraphs-True-none",
+    # "subgraphs-True-none-auto",
+    "subgraphs-True-beam_neighbors-4",
+    "subgraphs-True-beam_neighbors-5",
+    "subgraphs-True-beam_neighbors-6",
+]
+NAC_RELABEL_STRATEGIES = [
+    "none",
+    "random",
+    "bfs",
+    "beam-degree",
+]
+NAC_RELABEL_STRATEGIES_USABLE = [
+    "random",
 ]
 
 
@@ -106,12 +121,18 @@ def test_bench_NAC_colorings(
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.parametrize("bridges", [True, False])
+@pytest.mark.parametrize("bridges", [True])
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_FAST)
-@pytest.mark.parametrize("dataset", [laman_medium_graphs[:32]], ids=["laman_medium"])
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+@pytest.mark.parametrize(
+    "dataset",
+    [laman_medium_graphs[:32], laman_larger_graphs[:16]],
+    ids=["laman_medium", "laman_larger"],
+)
 def test_bench_NAC_colorings_fast(
     benchmark,
     algorithm: str,
+    relabel_strategy: str,
     bridges: bool,
     dataset: List[Graph],
 ):
@@ -124,6 +145,7 @@ def test_bench_NAC_colorings_fast(
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
+                relabel_strategy=relabel_strategy,
                 use_bridges_decomposition=bridges,
             ):
                 pass
@@ -134,6 +156,7 @@ def test_bench_NAC_colorings_fast(
 @pytest.mark.nac_benchmark
 @pytest.mark.parametrize("bridges", [True])
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_I_AM_SPEED)
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_USABLE)
 @pytest.mark.parametrize(
     ("vertices_no", "graph_cnt", "first_n"),
     [
@@ -157,6 +180,7 @@ def test_bench_NAC_colorings_fast(
 def test_bench_NAC_colorings_laman_large_first_n(
     benchmark,
     algorithm: str,
+    relabel_strategy: str,
     bridges: bool,
     vertices_no: int,
     graph_cnt: int,
@@ -180,6 +204,7 @@ def test_bench_NAC_colorings_laman_large_first_n(
                 range(first_n),
                 graph.NAC_colorings(
                     algorithm=algorithm,
+                    relabel_strategy=relabel_strategy,
                     use_bridges_decomposition=bridges,
                 ),
             ):
@@ -224,3 +249,83 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
     assert l1 == s1
     assert l2 == s2
     assert naive == tested
+
+
+def test_wtf_is_going_on():
+    dataset: List[Graph] = list(
+        filter(lambda g: nx.number_of_nodes(g) == 15, laman_medium_graphs)
+    )[:30][
+        15:16
+    ]  # [7:8]
+
+    import time
+
+    for graph in dataset:
+        results = []
+
+        def test(
+            algorithm: str = "subgraphs",
+            relabel_strategy: str = "none",
+            use_bridges_decomposition: bool = True,
+        ):
+            # print(f"Test {algorithm} {relabel_strategy}")
+            start = time.time()
+            # print(f"Start {start}")
+            data = list(
+                graph.NAC_colorings(
+                    algorithm=algorithm,
+                    relabel_strategy=relabel_strategy,
+                    use_bridges_decomposition=use_bridges_decomposition,
+                )
+            )
+            # print(len(data))
+            # print(f"End  {time.time()}")
+            # print(f"Diff {time.time() - start}")
+            results.append(time.time() - start)
+
+        test(
+            algorithm="subgraphs-True-none-auto",
+            relabel_strategy="none",
+        )
+
+        test(
+            algorithm="subgraphs-True-beam_neighbors-4",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-4",
+            relabel_strategy="random",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-4",
+            relabel_strategy="bfs",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-4",
+            relabel_strategy="beam_degree",
+        )
+
+        test(
+            algorithm="subgraphs-True-beam_neighbors-5",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-5",
+            relabel_strategy="random",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-5",
+            relabel_strategy="bfs",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-5",
+            relabel_strategy="beam_degree",
+        )
+
+        print(results)
+        # print()
+        # print()
+        # print()
+        # print()
+        # print()
+        # print()
