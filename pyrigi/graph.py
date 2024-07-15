@@ -897,6 +897,99 @@ class Graph(nx.Graph):
 
         return None
 
+    @staticmethod
+    def canonical_NAC_coloring(
+        coloring: NACColoring,
+        including_red_blue_order: bool = True,
+    ) -> NACColoring:
+        """
+        Expects graph vertices to be comparable.
+
+        Converts coloring into a canonical form by sorting edges,
+        vertices in the edges and red/blue part.
+        Useful for (equivalence) testing.
+
+        The returned type is guaranteed to be Hashable and Comparable.
+        """
+
+        def process(data: Collection[Edge]) -> Tuple[Edge, ...]:
+            return tuple(sorted([tuple(sorted(edge)) for edge in data]))
+
+        red, blue = process(coloring[0]), process(coloring[1])
+
+        if including_red_blue_order and red > blue:
+            red, blue = blue, red
+
+        return red, blue
+
+    @staticmethod
+    def _check_for_simple_stable_cut(
+        graph: nx.Graph,
+        certificate: bool,
+    ) -> Optional[NACColoring | Any]:
+        """
+        Paper: Graphs with flexible labelings - Theorem 4.4, Corollary 4.5.
+
+        If there is a single vertex outside of any triangle component,
+        we can trivially find NAC coloring for the graph.
+        Also handles nodes with degree <= 2.
+
+        Parameters
+        ----------
+        graph:
+            The graph to work with, basic NAC coloring constrains
+            should be already checked.
+        certificate:
+            whether or not to return some NAC coloring
+            obtainable by this method. See returns.
+        ----------
+
+        Returns
+            If no NAC coloring can be found using this method, None is
+            returned. If some NAC coloring can be found, return something
+            (not None) if certificate is not needed (False)
+            or the found coloring if it is requested (True).
+        """
+        _, component_to_edge = Graph._find_triangle_components(graph)
+        verticies_outside_triangle_components: Set[Vertex] = set(
+            # make sure we filter out isolated vertices
+            u
+            for u, d in graph.degree()
+            if d > 0
+        )
+        for component_edges in component_to_edge:
+            # component is not part of a triangle edge
+            if len(component_edges) == 1:
+                continue
+
+            verticies_outside_triangle_components.difference_update(
+                v for edge in component_edges for v in edge
+            )
+
+        if len(verticies_outside_triangle_components) == 0:
+            return None
+
+        if not certificate:
+            return "NAC_coloring_exists"
+
+        for v in verticies_outside_triangle_components:
+            red = set((v, u) for u in graph.neighbors(v))
+            if len(red) == graph.number_of_edges():
+                # we found a wrong vertex
+                # this may happen if the red part is the whole graph
+                continue
+            blue = set(graph.edges)
+
+            # remove shared edges
+            blue.difference_update(red)
+            blue.difference_update((u, v) for v, u in red)
+
+            assert len(red) > 0
+            assert len(blue) > 0
+
+            return (red, blue)
+        assert False
+
     def has_NAC_coloring(self) -> bool:
         """
         Same as single_NAC_coloring, but the certificate may not be created,
@@ -905,13 +998,23 @@ class Graph(nx.Graph):
         if not self._check_NAC_constrains():
             return False
 
+        if Graph._check_for_simple_stable_cut(self, False) is not None:
+            return True
+
         if nx.algorithms.connectivity.node_connectivity(self) < 2:
             return True
-        return self.single_NAC_coloring() is not None
+        return (
+            self.single_NAC_coloring(
+                # we already checked
+                do_check_for_simple_stable_cut=False,
+            )
+            is not None
+        )
 
     def single_NAC_coloring(
         self,
         algorithm: str | None = "subgraphs",
+        do_check_for_simple_stable_cut: bool = True,
     ) -> Optional[NACColoring]:
         """
         Finds only a single NAC coloring if it exists.
@@ -921,9 +1024,14 @@ class Graph(nx.Graph):
         if not self._check_NAC_constrains():
             return None
 
-        common = self._single_general_NAC_coloring()
-        if common is not None:
-            return common
+        if do_check_for_simple_stable_cut:
+            res = Graph._check_for_simple_stable_cut(self, True)
+            if res is not None:
+                return res
+
+        res = self._single_general_NAC_coloring()
+        if res is not None:
+            return res
 
         return next(
             self.NAC_colorings(
@@ -2288,7 +2396,7 @@ class Graph(nx.Graph):
                 continue
 
             verticies_in_triangle_components.update(
-                v for edge in component_to_edge for v in edge
+                v for edge in component_edges for v in edge
             )
 
         # All nodes are members of a triangle component

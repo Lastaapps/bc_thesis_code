@@ -52,6 +52,13 @@ def ThreePrismPlusEdge():
     )
 
 
+def ThreePrismPlusTriangleOnSide():
+    """Return the 3-prism graph where there is extra triangle on one of the connecting edges."""
+    return Graph(
+        [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5), (0, 3), (1, 4), (2, 5), (0, 6), (3, 6)]
+    )
+
+
 def DiamondWithZeroExtension():
     """
     Return the diamond graph with zero extension

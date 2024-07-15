@@ -237,12 +237,8 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
     # for coloring in tested:
     #     graph.is_NAC_coloring(coloring)
 
-    naive = {
-        (tuple(sorted(coloring[0])), tuple(sorted(coloring[1]))) for coloring in naive
-    }
-    tested = {
-        (tuple(sorted(coloring[0])), tuple(sorted(coloring[1]))) for coloring in tested
-    }
+    naive = {Graph.canonical_NAC_coloring(coloring) for coloring in naive}
+    tested = {Graph.canonical_NAC_coloring(coloring) for coloring in tested}
 
     s1, s2 = len(naive), len(tested)
     assert s1 == s2

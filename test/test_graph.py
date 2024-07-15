@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import List, Set, Tuple
-from pyrigi.data_type import Edge
+from typing import List, Optional, Set, Tuple
+from pyrigi.data_type import Edge, NACColoring
 from pyrigi.graph import Graph
 import pyrigi.graphDB as graphs
 from pyrigi.exception import LoopError
@@ -405,10 +405,12 @@ class NACTestCase:
     """
     Used for NAC coloring and cartesian NAC coloring testing.
     """
+
     name: str
     graph: Graph
     no_normal: int | None
     no_cartesian: int | None
+
 
 NAC_TEST_CASES: List[NACTestCase] = [
     NACTestCase("path", graphs.Path(3), 2, 2),
@@ -521,7 +523,7 @@ NAC_TEST_CASES: List[NACTestCase] = [
                 (1, 6),
             ],
         ),
-        None, # 4596,
+        None,  # 4596,
         286,
     ),
     NACTestCase(
@@ -551,13 +553,19 @@ NAC_TEST_CASES: List[NACTestCase] = [
 
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
-    [(case.graph, case.no_normal) for case in NAC_TEST_CASES if case.no_normal is not None],
+    [
+        (case.graph, case.no_normal)
+        for case in NAC_TEST_CASES
+        if case.no_normal is not None
+    ],
     ids=[case.name for case in NAC_TEST_CASES if case.no_normal is not None],
 )
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_bridges", [True, False])
-def test_all_NAC_colorings(graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool):
+def test_all_NAC_colorings(
+    graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool
+):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
         graph.NAC_colorings(
@@ -574,7 +582,6 @@ def test_all_NAC_colorings(graph, colorings_no: int, algorithm: str, relabel_str
         for coloring in coloring_list
     }
     assert len(coloring_list) == len(no_duplicates)
-
 
     # for coloring in sorted([str(x) for x in coloringList]):
     #     print(coloring)
@@ -626,8 +633,55 @@ def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: b
 
 
 @pytest.mark.parametrize(
+    ("graph", "coloring"),
+    [
+        (
+            graphs.ThreePrismPlusTriangleOnSide(),
+            None,
+        ),
+        (
+            graphs.Path(3),
+            (set([(0, 1)]), set([(1, 2)])),
+        ),
+        (
+            Graph.from_vertices_and_edges(range(4), [(0, 1), (1, 2), (0, 2), (0, 3)]),
+            (set([(0, 3)]), set([(0, 1), (1, 2), (0, 2)])),
+        ),
+        (
+            Graph.from_vertices_and_edges(
+                range(5), [(0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4)]
+            ),
+            (
+                set([(0, 2), (0, 3), (0, 4)]),
+                set([(1, 2), (1, 3), (1, 4)]),
+            ),
+        ),
+    ],
+    ids=["NAC_but_not_now", "path-2", "triangle_with_dangling", "nice_stable_cut"],
+)
+def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColoring]):
+    res1 = Graph._check_for_simple_stable_cut(graph, certificate=False)
+    res2 = Graph._check_for_simple_stable_cut(graph, certificate=True)
+
+    if coloring is None:
+        assert res1 is None
+        assert res2 is None
+        return
+
+    assert res1 is not None
+
+    coloring = Graph.canonical_NAC_coloring(coloring)
+    res2 = Graph.canonical_NAC_coloring(res2)
+    assert coloring == res2
+
+
+@pytest.mark.parametrize(
     ("graph", "colorings_no"),
-    [(case.graph, case.no_cartesian) for case in NAC_TEST_CASES if case.no_cartesian is not None],
+    [
+        (case.graph, case.no_cartesian)
+        for case in NAC_TEST_CASES
+        if case.no_cartesian is not None
+    ],
     ids=[case.name for case in NAC_TEST_CASES if case.no_cartesian is not None],
 )
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
@@ -648,7 +702,7 @@ def test_all_cartesian_NAC_colorings(
     # print(f"{coloring_list=}")
 
     no_duplicates = {
-        (tuple(sorted(coloring[0])), tuple(sorted(coloring[1])))
+        Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False)
         for coloring in coloring_list
     }
     assert len(coloring_list) == len(no_duplicates)
