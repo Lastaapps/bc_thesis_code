@@ -922,6 +922,35 @@ class Graph(nx.Graph):
 
         return red, blue
 
+    # TODO check if already implemented
+    @staticmethod
+    def _can_have_flexible_labeling(
+        graph: nx.Graph,
+    ) -> bool:
+        """
+        Paper: Graphs with flexible labelings - Theorem 3.1, 4.7.
+
+        Uses equivalence that graph (more below) has NAC coloring iff.
+        it has a flexible labeling. But for flexible labeling we know upper bound
+        for number of edges in the graph.
+
+        Parameters
+        ----------
+        graph:
+            A connected graph with at leas one edge.
+        ----------
+
+        Return
+            True if the graph can have NAC coloring,
+            False if we are sure there is none.
+        """
+        assert graph.number_of_edges() >= 1
+        assert nx.node_connectivity(graph) > 0
+        n = graph.number_of_nodes()
+        m = graph.number_of_edges()
+
+        return m <= n * (n - 1) // 2 - (n - 2)
+
     @staticmethod
     def _check_for_simple_stable_cut(
         graph: nx.Graph,
@@ -1003,40 +1032,63 @@ class Graph(nx.Graph):
 
         if nx.algorithms.connectivity.node_connectivity(self) < 2:
             return True
+
+        # Needs to be run after connectivity checks
+        if not Graph._can_have_flexible_labeling(self):
+            return False
+
         return (
             self.single_NAC_coloring(
-                # we already checked
-                do_check_for_simple_stable_cut=False,
+                # we already checked some things
+                _is_first_check=False,
             )
             is not None
         )
 
     def single_NAC_coloring(
         self,
-        algorithm: str | None = "subgraphs",
-        do_check_for_simple_stable_cut: bool = True,
+        algorithm: str = "subgraphs",
+        _is_first_check: bool = True,
     ) -> Optional[NACColoring]:
         """
         Finds only a single NAC coloring if it exists.
         Some other optimizations may be used
         to improve performance for some graph classes.
-        """
-        if not self._check_NAC_constrains():
-            return None
 
-        if do_check_for_simple_stable_cut:
+        Parameters
+        ----------
+        algorithm:
+            The algorithm used in case we need to fall back
+            to exhaustive search.
+        _is_first_check:
+            Internal parameter, do not change!
+            Skips some useless checks as those things were already checked
+            before in has_NAC_coloring.
+        ----------
+        """
+        if _is_first_check:
+            if not self._check_NAC_constrains():
+                return None
+
             res = Graph._check_for_simple_stable_cut(self, True)
             if res is not None:
                 return res
 
-        res = self._single_general_NAC_coloring()
-        if res is not None:
-            return res
+            res = self._single_general_NAC_coloring()
+            if res is not None:
+                return res
+
+            # Need to be run after connectivity checks
+            if not Graph._can_have_flexible_labeling(self):
+                return None
 
         return next(
-            self.NAC_colorings(
-                algorithm=algorithm,
-                use_bridges_decomposition=False,
+            iter(
+                self.NAC_colorings(
+                    algorithm=algorithm,
+                    # we already checked for bridges
+                    use_bridges_decomposition=False,
+                )
             ),
             None,
         )
