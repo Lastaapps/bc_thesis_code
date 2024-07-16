@@ -6,7 +6,7 @@ import urllib.request
 from enum import Enum
 import networkx as nx
 import zipfile
-from typing import List
+from typing import Dict, List
 
 from pyrigi.graph import Graph
 
@@ -19,6 +19,7 @@ class GraphFamily(Enum):
 
 DOWNLOAD_DIR = "./benchmarks/graphs_store"
 LAMAN_DIR = "./benchmarks/graphs_store/nauty-laman"
+GENERAL_DIR = "./benchmarks/graphs_store/general-graphs"
 
 
 def download_small_graphs(family: GraphFamily, size: str) -> None:
@@ -94,7 +95,8 @@ def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph
 
     return graphs
 
-def load_laman_graphs(dir: str= LAMAN_DIR, shuffle: bool = True):
+
+def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True):
 
     graphs: List[Graph] = []
     for file in os.listdir(dir):
@@ -110,3 +112,49 @@ def load_laman_graphs(dir: str= LAMAN_DIR, shuffle: bool = True):
         random.Random(42).shuffle(graphs)
 
     return graphs
+
+
+def load_general_graphs(
+    dir: str = GENERAL_DIR,
+    shuffle: bool = True,
+) -> List[Graph]:
+    limit: int | None = 64
+
+    graphs: List[Graph] = []
+    for file in os.listdir(dir):
+        if not file.endswith(".g6"):
+            continue
+
+        path = os.path.join(dir, file)
+        # print(f"Loading file {path}")
+
+        if limit is None:
+            graphs += [Graph(g) for g in nx.read_graph6(path)]
+        else:
+            with open(path, mode="rb") as input_file:
+                for _, line in zip(range(limit), input_file):
+                    line = line.strip()
+                    if not len(line):
+                        continue
+                    graphs.append(Graph(nx.from_graph6_bytes(line)))
+
+    if shuffle:
+        random.Random(42).shuffle(graphs)
+
+    return graphs
+
+def load_generated_graphs() -> List[Graph]:
+    graphs: List[Graph] = []
+
+    rand = random.Random(42)
+    randint = rand.randint
+
+    # print(f"Generating graphs")
+    graphs += [nx.complete_multipartite_graph([randint(1, 10) for _ in range(randint(2, 8))]) for _ in range(64)]
+    graphs += [nx.kneser_graph(randint(6, 8), randint(2, 6)) for _ in range(64)]
+    graphs += [nx.gnm_random_graph(randint(10, 48), randint(16, 128), randint(0, 1234)) for _ in range(64)]
+    graphs += [nx.random_regular_graph(randint(4, 10)//2*2, randint(16, 48), randint(0, 1234)) for _ in range(64)]
+
+    rand.shuffle(graphs)
+
+    return [Graph(g) for g in graphs]

@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from copy import deepcopy
 from functools import reduce
-from itertools import combinations, product
+from itertools import chain, combinations, product
 import itertools
 import random
 from typing import (
@@ -1207,21 +1207,16 @@ class Graph(nx.Graph):
         for edge in graph.edges if is_cartesian_NAC_coloring else []:
             v, u = edge
 
-            # print(edge)
             v_neighbours = set(graph.neighbors(v))
             v_neighbours.remove(u)
-            # print(v_neighbours)
-            # print(list(graph.neighbors(u)))
 
             for w in graph.neighbors(u):
                 if w == v:
                     continue
-                # print(w, "->", list(graph.neighbors(w)))
                 for n in graph.neighbors(w):
                     if n not in v_neighbours:
                         continue
 
-                    # print("Join", (u, v), (w, n))
                     # hooray, we have an intersection
                     components.join((u, v), (w, n))
                     components.join((u, w), (v, n))
@@ -1838,11 +1833,12 @@ class Graph(nx.Graph):
         return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
-    def _subgraphs_strategy_beam_neighbors(
-        chunk_sizes: List[int],
-        t_graph: nx.Graph,
-    ) -> List[int]:
-        graph = nx.Graph(t_graph)
+    def _subgraphs_strategy_beam_neighbors_impl(
+        graph: nx.Graph,
+        start_with_triangles: bool,
+        chunk_sizes: Sequence[int],
+    ) -> List[List[int]]:
+        graph = nx.Graph(graph)
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
         beam_size: int = chunk_sizes[0]
 
@@ -1861,7 +1857,17 @@ class Graph(nx.Graph):
 
             bfs_visited: Set[int] = set([start])
             added_vertices: Set[int] = set()
-            distances: Dict[int, int] = {start: 0}
+
+            # it's quite beneficial to start with a triangle
+            # in fact we just apply the same strategy as later
+            # just for the first vertex added as it has no context yet
+            if start_with_triangles:
+                start_neighbors = set(graph.neighbors(start))
+                for neighbor in start_neighbors:
+                    if len(start_neighbors.intersection(graph.neighbors(neighbor))) > 0:
+                        queue.append(neighbor)
+                        bfs_visited.add(neighbor)
+                        break
 
             while queue and len(target) < chunk_sizes[index_min]:
                 # more neighbors are already part of the graph -> more better
@@ -1884,11 +1890,65 @@ class Graph(nx.Graph):
                         continue
                     bfs_visited.add(u)
                     queue.append(u)
-                    distances[u] = distances[v] + 1
 
             graph.remove_nodes_from(added_vertices)
+        return ordered_vertices_groups
 
-        return [v for group in ordered_vertices_groups for v in group]
+    @staticmethod
+    def _subgraphs_strategy_beam_neighbors(
+        chunk_sizes: List[int],
+        t_graph: nx.Graph,
+        be_smart: bool,
+        start_with_triangles: bool,
+    ) -> List[int]:
+        graph = t_graph
+
+        if not be_smart:
+            return [
+                v
+                for group in Graph._subgraphs_strategy_beam_neighbors_impl(
+                    chunk_sizes=chunk_sizes,
+                    graph=graph,
+                    start_with_triangles=start_with_triangles,
+                )
+                for v in group
+            ]
+
+        # ensures components that are later joined are next to each other
+        # increasing the chance of NAC colorings being dismissed sooner
+        def split_and_find(
+            local_graph: nx.Graph,
+            local_chunk_sizes: List[int],
+        ) -> Iterable[List[int]]:
+            print(Graph(local_graph))
+            print(local_chunk_sizes)
+            if len(local_chunk_sizes) <= 2:
+                return Graph._subgraphs_strategy_beam_neighbors_impl(
+                    chunk_sizes=local_chunk_sizes,
+                    graph=local_graph,
+                    start_with_triangles=start_with_triangles,
+                )
+
+            length = len(local_chunk_sizes)
+            sizes = (
+                sum(local_chunk_sizes[: length // 2]),
+                sum(local_chunk_sizes[length // 2 :]),
+            )
+            print(sizes)
+            groups = Graph._subgraphs_strategy_beam_neighbors_impl(
+                chunk_sizes=sizes,
+                graph=local_graph,
+                start_with_triangles=start_with_triangles,
+            )
+            print(groups)
+            graphs = tuple(nx.induced_subgraph(local_graph, g) for g in groups)
+            assert len(graphs) == 2
+            return chain(
+                split_and_find(graphs[0], local_chunk_sizes[: length // 2]),
+                split_and_find(graphs[1], local_chunk_sizes[length // 2:]),
+            )
+
+        return [v for group in split_and_find(graph, chunk_sizes) for v in group]
 
     @staticmethod
     def _subgraphs_strategy_components(
@@ -1992,6 +2052,10 @@ class Graph(nx.Graph):
 
         counter = 0
         c1 = 0
+        print(
+            f"Join started ({2**subgraph_mask_1.bit_count()}+{2**subgraph_mask_2.bit_count()}->{2**subgraph_mask.bit_count()})"
+        )
+
         for mask1 in epoch1:
             c1 += 1
             for mask2 in epoch2:
@@ -2012,7 +2076,9 @@ class Graph(nx.Graph):
 
                 counter += 1
                 yield mask
-        # print(f"Join yielded: {counter} ({c1}x{len(epoch2._cache)}->{c1*len(epoch2._cache)})")
+        print(
+            f"Join yielded: {counter} ({c1}x{len(epoch2._cache)}->{c1*len(epoch2._cache)})"
+        )
 
     @staticmethod
     def _subgraph_colorings_generator(
@@ -2031,7 +2097,7 @@ class Graph(nx.Graph):
         """
         # The last chunk can be smaller
         local_vertices: List[int] = vertices[offset : offset + chunk_size]
-        # print(f"Local vertices: {local_vertices}")
+        print(f"Local vertices: {local_vertices}")
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
         local_cycles = Graph._find_cycles(
@@ -2069,7 +2135,7 @@ class Graph(nx.Graph):
 
             counter += 1
             yield mask << offset
-        # print(f"Base yielded: {counter}")
+        print(f"Base yielded: {counter}")
 
     @staticmethod
     def _NAC_colorings_subgraphs(
@@ -2190,7 +2256,31 @@ class Graph(nx.Graph):
                 )
             case "beam_neighbors":
                 vertices = Graph._subgraphs_strategy_beam_neighbors(
-                    chunk_sizes, t_graph
+                    chunk_sizes,
+                    t_graph,
+                    be_smart=False,
+                    start_with_triangles=False,
+                )
+            case "beam_neighbors_smart":
+                vertices = Graph._subgraphs_strategy_beam_neighbors(
+                    chunk_sizes,
+                    t_graph,
+                    be_smart=True,
+                    start_with_triangles=False,
+                )
+            case "beam_neighbors_triangles":
+                vertices = Graph._subgraphs_strategy_beam_neighbors(
+                    chunk_sizes,
+                    t_graph,
+                    be_smart=False,
+                    start_with_triangles=True,
+                )
+            case "beam_neighbors_smart_triangles":
+                vertices = Graph._subgraphs_strategy_beam_neighbors(
+                    chunk_sizes,
+                    t_graph,
+                    be_smart=True,
+                    start_with_triangles=True,
                 )
             case "components_biggest":
                 vertices = Graph._subgraphs_strategy_components(
@@ -2209,27 +2299,45 @@ class Graph(nx.Graph):
 
         # print("-"*80)
         # print(nx.nx_agraph.to_agraph(graph))
-        # print("-"*80)
-        # my_t_graph = nx.Graph()
-        # my_t_graph.name = order_strategy
-        # offset = 0
-        # colors = ["red", "blue", "green", "yellow", "purple", "orange"]
-        # for i, chunk_size in enumerate(chunk_sizes):
-        #     local_vertices = vertices[offset:offset+chunk_size]
-        #     offset += chunk_size
-        #     for v in local_vertices:
-        #         my_t_graph.add_nodes_from([(v, {"color": colors[i], "style":"filled"})])
-        # my_t_graph.add_edges_from(t_graph.edges)
-        # print(nx.nx_agraph.to_agraph(my_t_graph))
-        # print("-"*80)
+        print("-" * 80)
+        my_t_graph = nx.Graph()
+        my_t_graph.name = order_strategy
+        offset = 0
+        colors = [
+            "red",
+            "green",
+            "blue",
+            "purple",
+            "yellow",
+            "orange",
+            "pink",
+            "teal",
+            "turquoise",
+            "navy",
+            "maroon",
+            "gray",
+            "silver",
+            "gold",
+        ]
 
-        # print(f"Vertices no:  {nx.number_of_nodes(graph)}")
-        # print(f"Edges no:     {nx.number_of_edges(graph)}")
-        # print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
-        # print(f"Comp. to ed.: {component_to_edges}")
-        # print(f"Chunk no.:    {len(chunk_sizes)}")
-        # print(f"Chunk sizes:  {chunk_sizes}")
-        # print("-"*80)
+        for i, chunk_size in enumerate(chunk_sizes):
+            local_vertices = vertices[offset : offset + chunk_size]
+            offset += chunk_size
+            for v in local_vertices:
+                my_t_graph.add_nodes_from(
+                    [(v, {"color": colors[i % len(colors)], "style": "filled"})]
+                )
+        my_t_graph.add_edges_from(t_graph.edges)
+        print(nx.nx_agraph.to_agraph(my_t_graph))
+        print("-" * 80)
+
+        print(f"Vertices no:  {nx.number_of_nodes(graph)}")
+        print(f"Edges no:     {nx.number_of_edges(graph)}")
+        print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
+        print(f"Comp. to ed.: {component_to_edges}")
+        print(f"Chunk no.:    {len(chunk_sizes)}")
+        print(f"Chunk sizes:  {chunk_sizes}")
+        print("-" * 80)
 
         def colorings_merge_wrapper(
             colorings_1: Tuple[Iterable[int], int],
