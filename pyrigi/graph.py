@@ -922,7 +922,6 @@ class Graph(nx.Graph):
 
         return red, blue
 
-    # TODO check if already implemented
     @staticmethod
     def _can_have_flexible_labeling(
         graph: nx.Graph,
@@ -950,6 +949,28 @@ class Graph(nx.Graph):
         m = graph.number_of_edges()
 
         return m <= n * (n - 1) // 2 - (n - 2)
+
+    @staticmethod
+    def _check_is_min_rigid_and_NAC_coloring_exists(
+        graph: Graph,
+    ) -> Optional[bool]:
+        """
+        Paper: Graphs with flexible labelings - Conjecture 5.1.
+        # TODO find where this became theorem
+
+        For minimally rigid graphs it holds that
+        there exists NAC coloring iff graph is not triangle connected.
+
+        Return
+            True if the graph has a NAC coloring,
+            False if we are sure there is none.
+            None if we cannot decide (the graph is not min_rigid)
+        """
+        if not graph.is_min_rigid(dim=2):
+            return None
+
+        _, components_to_edges = Graph._find_triangle_components(graph)
+        return len(components_to_edges) != 1
 
     @staticmethod
     def _check_for_simple_stable_cut(
@@ -1019,14 +1040,12 @@ class Graph(nx.Graph):
             return (red, blue)
         assert False
 
-    def has_NAC_coloring(self) -> bool:
+    def _has_NAC_coloring_checks(self) -> Optional[bool]:
         """
-        Same as single_NAC_coloring, but the certificate may not be created,
-        so some additional tricks are used the performance may be improved.
+        Implementation for has_NAC_coloring, but without fallback to
+        single_NAC_coloring. May be used before an exhaustive search that
+        wouldn't find anything anyway.
         """
-        if not self._check_NAC_constrains():
-            return False
-
         if Graph._check_for_simple_stable_cut(self, False) is not None:
             return True
 
@@ -1036,6 +1055,24 @@ class Graph(nx.Graph):
         # Needs to be run after connectivity checks
         if not Graph._can_have_flexible_labeling(self):
             return False
+
+        res = Graph._check_is_min_rigid_and_NAC_coloring_exists(self)
+        if res is not None:
+            return res
+
+        return None
+
+    def has_NAC_coloring(self) -> bool:
+        """
+        Same as single_NAC_coloring, but the certificate may not be created,
+        so some additional tricks are used the performance may be improved.
+        """
+        if not self._check_NAC_constrains():
+            return False
+
+        res = self._has_NAC_coloring_checks()
+        if res is not None:
+            return res
 
         return (
             self.single_NAC_coloring(
@@ -1192,8 +1229,6 @@ class Graph(nx.Graph):
         edge_to_component: Dict[Edge, int] = {}
         component_to_edge: List[List[Edge]] = []
 
-        # print(f"{components._data=}")
-
         for edge in graph.edges:
             root = components.find(edge)
 
@@ -1205,9 +1240,6 @@ class Graph(nx.Graph):
 
             edge_to_component[edge] = id
             component_to_edge[id].append(edge)
-
-        # print(f"{edge_to_component=}")
-        # print(f"{component_to_edge=}")
 
         return edge_to_component, component_to_edge
 
@@ -2557,6 +2589,7 @@ class Graph(nx.Graph):
         relabel_strategy: str = "random",
         use_bridges_decomposition: bool = True,
         is_cartesian: bool = False,
+        use_has_coloring_check: bool = True,  # I disable the check in tests
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -2580,6 +2613,10 @@ class Graph(nx.Graph):
         TODO example
         """
         if not self._check_NAC_constrains():
+            return []
+
+        # Checks if it even makes sense to do the search
+        if use_has_coloring_check and self._has_NAC_coloring_checks() == False:
             return []
 
         def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
@@ -2692,6 +2729,7 @@ class Graph(nx.Graph):
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
         use_bridges_decomposition: bool = True,
+        use_has_coloring_check: bool = True,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -2719,6 +2757,7 @@ class Graph(nx.Graph):
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=False,
+            use_has_coloring_check=use_has_coloring_check,
         )
 
     @doc_category("Generic rigidity")
@@ -2727,6 +2766,7 @@ class Graph(nx.Graph):
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
         use_bridges_decomposition: bool = True,
+        use_has_coloring_check: bool = True,
     ) -> Iterable[NACColoring]:
         """
         TODO update to cartesian NAC coloring
@@ -2756,6 +2796,7 @@ class Graph(nx.Graph):
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=True,
+            use_has_coloring_check=use_has_coloring_check,
         )
 
     @staticmethod

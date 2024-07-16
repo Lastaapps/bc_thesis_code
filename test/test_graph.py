@@ -572,6 +572,7 @@ def test_all_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges,
+            use_has_coloring_check = False,
         )
     )
 
@@ -696,6 +697,7 @@ def test_all_cartesian_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges,
+            use_has_coloring_check = False,
         )
     )
 
