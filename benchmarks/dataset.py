@@ -1,3 +1,4 @@
+from collections import defaultdict
 import itertools
 import os
 import random
@@ -116,45 +117,62 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True):
 
 def load_general_graphs(
     dir: str = GENERAL_DIR,
-    shuffle: bool = True,
-) -> List[Graph]:
+) -> Dict[str, List[Graph]]:
     limit: int | None = 64
 
-    graphs: List[Graph] = []
+    prefix_to_name = {
+        "cubhypo": "hypohamiltonian_cubic",
+        "highlyirregular": "highly_irregular",
+        "hypo": "hypohamiltonian",
+        "selfcomp": "self_complementary",
+    }
+
+    graphs: Dict[str, List[Graph]] = defaultdict(list)
     for file in os.listdir(dir):
         if not file.endswith(".g6"):
             continue
+
+        name = None
+        for prefix in prefix_to_name:
+            if file.startswith(prefix):
+                name = prefix_to_name[prefix]
+                break
+        assert name
 
         path = os.path.join(dir, file)
         # print(f"Loading file {path}")
 
         if limit is None:
-            graphs += [Graph(g) for g in nx.read_graph6(path)]
+            graphs[name] += [Graph(g) for g in nx.read_graph6(path)]
         else:
             with open(path, mode="rb") as input_file:
                 for _, line in zip(range(limit), input_file):
                     line = line.strip()
                     if not len(line):
                         continue
-                    graphs.append(Graph(nx.from_graph6_bytes(line)))
+                    graphs[name] += [Graph(nx.from_graph6_bytes(line))]
 
-    if shuffle:
-        random.Random(42).shuffle(graphs)
+    for key in graphs.keys():
+        graphs[key] = [Graph(g) for g in graphs[key]]
 
     return graphs
 
-def load_generated_graphs() -> List[Graph]:
-    graphs: List[Graph] = []
+def load_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
+    graphs: Dict[str, List[Graph]] = {}
 
     rand = random.Random(42)
     randint = rand.randint
 
     # print(f"Generating graphs")
-    graphs += [nx.complete_multipartite_graph([randint(1, 10) for _ in range(randint(2, 8))]) for _ in range(64)]
-    graphs += [nx.kneser_graph(randint(6, 8), randint(2, 6)) for _ in range(64)]
-    graphs += [nx.gnm_random_graph(randint(10, 48), randint(16, 128), randint(0, 1234)) for _ in range(64)]
-    graphs += [nx.random_regular_graph(randint(4, 10)//2*2, randint(16, 48), randint(0, 1234)) for _ in range(64)]
+    graphs["complete_multipartite"] = [nx.complete_multipartite_graph([randint(1, 10) for _ in range(randint(2, 8))]) for _ in range(limit)]
+    # graphs["kneser"]= [nx.kneser_graph(randint(6, 8), randint(2, 6)) for _ in range(limit)]
+    graphs["kneser"]= [nx.kneser_graph(randint(3, 5), randint(2, 3)) for _ in range(limit)]
+    # graphs["gnm_random"]= [nx.gnm_random_graph(randint(10, 48), randint(16, 128), randint(0, 1234)) for _ in range(limit)]
+    graphs["gnm_random"]= [nx.gnm_random_graph(randint(10, 30), randint(16, 28), randint(0, 1234)) for _ in range(limit)]
+    #graphs["random_regular"]= [nx.random_regular_graph(randint(4, 10)//2*2, randint(16, 48), randint(0, 1234)) for _ in range(limit)]
+    graphs["random_regular"]= [nx.random_regular_graph(randint(4, 6)//2*2, randint(12, 18), randint(0, 1234)) for _ in range(limit)]
 
-    rand.shuffle(graphs)
+    for key in graphs.keys():
+        graphs[key] = [Graph(g) for g in graphs[key]]
 
-    return [Graph(g) for g in graphs]
+    return graphs

@@ -375,28 +375,36 @@ NAC_ALGORITHMS = [
     "naive",
     "cycles-True",
     "cycles-False",
-    "subgraphs-True-none-4",
-    "subgraphs-True-random-4",
-    "subgraphs-True-degree-4",
-    "subgraphs-True-degree_cycles-4",
-    "subgraphs-True-cycles-4",
-    "subgraphs-True-cycles_match_chunks-4",
-    "subgraphs-True-components_biggest-4",
-    "subgraphs-True-components_spredded-4",
-    "subgraphs-False-none-4",
-    "subgraphs-False-random-4",
-    "subgraphs-False-degree-4",
-    "subgraphs-False-degree_cycles-4",
-    "subgraphs-False-cycles-4",
-    "subgraphs-False-cycles_match_chunks-4",
-    "subgraphs-False-components_biggest-4",
-    "subgraphs-False-components_spredded-4",
+] + [
+    flattened
+    for paired in [
+        (alg, alg + "-smart")
+        for alg in [
+            "subgraphs-True-none-4",
+            "subgraphs-True-random-4",
+            "subgraphs-True-degree-4",
+            "subgraphs-True-degree_cycles-4",
+            "subgraphs-True-cycles-4",
+            "subgraphs-True-cycles_match_chunks-4",
+            "subgraphs-True-components_biggest-4",
+            "subgraphs-True-components_spredded-4",
+            "subgraphs-False-none-4",
+            "subgraphs-False-random-4",
+            "subgraphs-False-degree-4",
+            "subgraphs-False-degree_cycles-4",
+            "subgraphs-False-cycles-4",
+            "subgraphs-False-cycles_match_chunks-4",
+            "subgraphs-False-components_biggest-4",
+            "subgraphs-False-components_spredded-4",
+        ]
+    ]
+    for flattened in paired
 ]
 NAC_RELABEL_STRATEGIES = [
     "none",
     "random",
     "bfs",
-    "beam-degree",
+    "beam_degree",
 ]
 
 
@@ -551,6 +559,7 @@ NAC_TEST_CASES: List[NACTestCase] = [
 ]
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
     [
@@ -572,7 +581,7 @@ def test_all_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges,
-            use_has_coloring_check = False,
+            use_has_coloring_check=False,
         )
     )
 
@@ -593,6 +602,7 @@ def test_all_NAC_colorings(
         assert graph.is_NAC_coloring(coloring)
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring", "result"),
     [
@@ -633,6 +643,7 @@ def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: b
     assert graph.is_NAC_coloring((blue, red)) == result
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring"),
     [
@@ -676,6 +687,7 @@ def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColori
     assert coloring == res2
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
     [
@@ -697,7 +709,7 @@ def test_all_cartesian_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges,
-            use_has_coloring_check = False,
+            use_has_coloring_check=False,
         )
     )
 
@@ -719,6 +731,7 @@ def test_all_cartesian_NAC_colorings(
         assert graph.is_cartesian_NAC_coloring(coloring)
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring"),
     [
@@ -766,6 +779,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
     assert graph.is_cartesian_NAC_coloring((blue, red)) == False
 
 
+@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring", "result"),
     [

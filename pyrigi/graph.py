@@ -35,7 +35,12 @@ from pyrigi.datastructures.union_find import UnionFind
 from pyrigi.data_type import NACColoring, Vertex, Edge, GraphType, FrameworkType
 from pyrigi.misc import doc_category, generate_category_tables
 from pyrigi.exception import LoopError
+from pyrigi.util.lazy_product import lazy_product
 from pyrigi.util.repetable_iterator import RepeatableIterator
+
+# TODO remove
+# NAC_PRINT_SWITCH = True
+NAC_PRINT_SWITCH = False
 
 
 class Graph(nx.Graph):
@@ -1125,6 +1130,7 @@ class Graph(nx.Graph):
                     algorithm=algorithm,
                     # we already checked for bridges
                     use_bridges_decomposition=False,
+                    use_has_coloring_check=False,
                 )
             ),
             None,
@@ -1685,11 +1691,44 @@ class Graph(nx.Graph):
             yield (coloring[0], coloring[1])
             yield (coloring[1], coloring[0])
 
+    # ensures components that are later joined are next to each other
+    # increasing the chance of NAC colorings being dismissed sooner
+    @staticmethod
+    def _split_and_find(
+        local_graph: nx.Graph,
+        local_chunk_sizes: List[int],
+        search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
+    ) -> List[int]:
+        if len(local_chunk_sizes) <= 2:
+            return search_func(local_graph, local_chunk_sizes)
+
+        length = len(local_chunk_sizes)
+        sizes = (
+            sum(local_chunk_sizes[: length // 2]),
+            sum(local_chunk_sizes[length // 2 :]),
+        )
+        ordered_vertices = search_func(local_graph, sizes)
+        groups = (ordered_vertices[: sizes[0]], ordered_vertices[sizes[0] :])
+        graphs = tuple(nx.induced_subgraph(local_graph, g) for g in groups)
+        assert len(graphs) == 2
+        return Graph._split_and_find(
+            graphs[0], local_chunk_sizes[: length // 2], search_func
+        ) + Graph._split_and_find(
+            graphs[1], local_chunk_sizes[length // 2 :], search_func
+        )
+
     @staticmethod
     def _subgraphs_strategy_highes_degree_naive(
-        degree_ordered_vertices: List[int],
-        vertex_cycles: List[List[Tuple[int, ...]]],
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        from_angle_preserving_components: bool,
     ) -> List[int]:
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        vertex_cycles = Graph._cycles_per_vertex(
+            graph, t_graph, component_to_edges, from_angle_preserving_components
+        )
+
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
         for v in degree_ordered_vertices:
@@ -1708,9 +1747,16 @@ class Graph(nx.Graph):
 
     @staticmethod
     def _subgraphs_strategy_cycles(
-        degree_ordered_vertices: List[int],
-        vertex_cycles: List[List[Tuple[int, ...]]],
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        from_angle_preserving_components: bool,
     ) -> List[int]:
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        vertex_cycles = Graph._cycles_per_vertex(
+            graph, t_graph, component_to_edges, from_angle_preserving_components
+        )
+
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
         all_vertices = deque(degree_ordered_vertices)
@@ -1742,10 +1788,18 @@ class Graph(nx.Graph):
 
     @staticmethod
     def _subgraphs_strategy_cycles_match_chunks(
-        chunk_size: int,
-        degree_ordered_vertices: List[int],
-        vertex_cycles: List[List[Tuple[int, ...]]],
+        chunk_sizes: Sequence[int],
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        from_angle_preserving_components: bool,
     ) -> List[int]:
+        chunk_size = chunk_sizes[0]
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        vertex_cycles = Graph._cycles_per_vertex(
+            graph, t_graph, component_to_edges, from_angle_preserving_components
+        )
+
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
         all_vertices = deque(degree_ordered_vertices)
@@ -1795,15 +1849,14 @@ class Graph(nx.Graph):
 
     @staticmethod
     def _subgraphs_strategy_bfs(
-        chunk_sizes: List[int],
-        degree_ordered_vertices: List[int],
         t_graph: nx.Graph,
+        chunk_sizes: Sequence[int],
     ) -> List[int]:
         graph = nx.Graph(t_graph)
         used_vertices: Set[int] = set()
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
-        for v in degree_ordered_vertices:
+        for v in Graph._degree_ordered_nodes(graph):
             if v in used_vertices:
                 continue
 
@@ -1833,18 +1886,24 @@ class Graph(nx.Graph):
         return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
-    def _subgraphs_strategy_beam_neighbors_impl(
-        graph: nx.Graph,
-        start_with_triangles: bool,
+    def _subgraphs_strategy_beam_neighbors(
+        t_graph: nx.Graph,
         chunk_sizes: Sequence[int],
-    ) -> List[List[int]]:
-        graph = nx.Graph(graph)
+        start_with_triangles: bool,
+        start_from_min: bool,
+    ) -> List[int]:
+        t_graph = nx.Graph(t_graph)
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
-        beam_size: int = chunk_sizes[0]
+        beam_size: int = min(chunk_sizes[0], 10)
 
-        while graph.number_of_nodes() > 0:
-            start = max(graph.degree(), key=lambda x: x[1])[0]
-            if start not in graph.nodes:
+        while t_graph.number_of_nodes() > 0:
+            # TODO benchmark min/max
+            if start_from_min:
+                start = min(t_graph.degree(), key=lambda x: x[1])[0]
+            else:
+                start = max(t_graph.degree(), key=lambda x: x[1])[0]
+
+            if start not in t_graph.nodes:
                 continue
 
             queue: List[int] = [start]
@@ -1862,9 +1921,12 @@ class Graph(nx.Graph):
             # in fact we just apply the same strategy as later
             # just for the first vertex added as it has no context yet
             if start_with_triangles:
-                start_neighbors = set(graph.neighbors(start))
+                start_neighbors = set(t_graph.neighbors(start))
                 for neighbor in start_neighbors:
-                    if len(start_neighbors.intersection(graph.neighbors(neighbor))) > 0:
+                    if (
+                        len(start_neighbors.intersection(t_graph.neighbors(neighbor)))
+                        > 0
+                    ):
                         queue.append(neighbor)
                         bfs_visited.add(neighbor)
                         break
@@ -1874,8 +1936,11 @@ class Graph(nx.Graph):
                 # also, this is asymptotically really slow,
                 # but I'm not implementing smart heaps, this is python,
                 # it's gonna be slow anyway (also the graphs are small)
+
+                # TODO do faster
                 values = [
-                    len(added_vertices.intersection(graph.neighbors(u))) for u in queue
+                    len(added_vertices.intersection(t_graph.neighbors(u)))
+                    for u in queue
                 ]
                 # values = [(len(added_vertices.intersection(graph.neighbors(u))), -graph.degree(u)) for u in queue]
                 largest = max(range(len(values)), key=values.__getitem__)
@@ -1885,77 +1950,22 @@ class Graph(nx.Graph):
                 added_vertices.add(v)
                 target.append(v)
 
-                for u in graph.neighbors(v):
+                for u in t_graph.neighbors(v):
                     if u in bfs_visited:
                         continue
                     bfs_visited.add(u)
                     queue.append(u)
 
-            graph.remove_nodes_from(added_vertices)
-        return ordered_vertices_groups
-
-    @staticmethod
-    def _subgraphs_strategy_beam_neighbors(
-        chunk_sizes: List[int],
-        t_graph: nx.Graph,
-        be_smart: bool,
-        start_with_triangles: bool,
-    ) -> List[int]:
-        graph = t_graph
-
-        if not be_smart:
-            return [
-                v
-                for group in Graph._subgraphs_strategy_beam_neighbors_impl(
-                    chunk_sizes=chunk_sizes,
-                    graph=graph,
-                    start_with_triangles=start_with_triangles,
-                )
-                for v in group
-            ]
-
-        # ensures components that are later joined are next to each other
-        # increasing the chance of NAC colorings being dismissed sooner
-        def split_and_find(
-            local_graph: nx.Graph,
-            local_chunk_sizes: List[int],
-        ) -> Iterable[List[int]]:
-            print(Graph(local_graph))
-            print(local_chunk_sizes)
-            if len(local_chunk_sizes) <= 2:
-                return Graph._subgraphs_strategy_beam_neighbors_impl(
-                    chunk_sizes=local_chunk_sizes,
-                    graph=local_graph,
-                    start_with_triangles=start_with_triangles,
-                )
-
-            length = len(local_chunk_sizes)
-            sizes = (
-                sum(local_chunk_sizes[: length // 2]),
-                sum(local_chunk_sizes[length // 2 :]),
-            )
-            print(sizes)
-            groups = Graph._subgraphs_strategy_beam_neighbors_impl(
-                chunk_sizes=sizes,
-                graph=local_graph,
-                start_with_triangles=start_with_triangles,
-            )
-            print(groups)
-            graphs = tuple(nx.induced_subgraph(local_graph, g) for g in groups)
-            assert len(graphs) == 2
-            return chain(
-                split_and_find(graphs[0], local_chunk_sizes[: length // 2]),
-                split_and_find(graphs[1], local_chunk_sizes[length // 2:]),
-            )
-
-        return [v for group in split_and_find(graph, chunk_sizes) for v in group]
+            t_graph.remove_nodes_from(added_vertices)
+        return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
     def _subgraphs_strategy_components(
-        chunk_no: int,
         t_graph: nx.Graph,
+        chunk_sizes: Sequence[int],
         start_from_biggest_component: bool,
     ) -> List[int]:
+        chunk_no = len(chunk_sizes)
         # NetworkX crashes otherwise
         if t_graph.number_of_nodes() < 2:
             return list(t_graph.nodes())
@@ -1993,6 +2003,45 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
+    def _degree_ordered_nodes(graph: nx.Graph) -> List[int]:
+        return list(
+            map(
+                lambda x: x[0],
+                sorted(
+                    graph.degree(),
+                    key=lambda x: x[1],
+                    reverse=True,
+                ),
+            )
+        )
+
+    @staticmethod
+    def _cycles_per_vertex(
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        from_angle_preserving_components: bool,
+    ) -> List[List[Tuple[int, ...]]]:
+        """
+        For each vertex we find all the cycles that contain it
+        Finds all the shortest cycles in the graph
+        """
+        cycles = Graph._find_cycles(
+            graph,
+            t_graph,
+            component_to_edges,
+            from_angle_preserving_components=from_angle_preserving_components,
+            all=True,
+        )
+
+        # vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
+        vertex_cycles = [[] for _ in range(max(t_graph.nodes) + 1)]
+        for cycle in cycles:
+            for v in cycle:
+                vertex_cycles[v].append(cycle)
+        return vertex_cycles
+
+    @staticmethod
     def _subgraphs_join_epochs(
         graph: Graph,
         t_graph: nx.Graph,
@@ -2002,7 +2051,7 @@ class Graph(nx.Graph):
         vertices: List[int],
         epoch1: Iterable[int],
         subgraph_mask_1: int,
-        epoch2: RepeatableIterator[int],
+        epoch2: Iterable[int],
         subgraph_mask_2: int,
     ) -> Iterable[int]:
         """
@@ -2051,34 +2100,44 @@ class Graph(nx.Graph):
         templates = [t for t in templates if t[1] > 0]
 
         counter = 0
-        c1 = 0
-        print(
-            f"Join started ({2**subgraph_mask_1.bit_count()}+{2**subgraph_mask_2.bit_count()}->{2**subgraph_mask.bit_count()})"
-        )
+        if NAC_PRINT_SWITCH:
+            print(
+                f"Join started ({2**subgraph_mask_1.bit_count()}+{2**subgraph_mask_2.bit_count()}->{2**subgraph_mask.bit_count()})"
+            )
 
-        for mask1 in epoch1:
-            c1 += 1
-            for mask2 in epoch2:
-                mask = mask1 | mask2
+        # in case lazy_product is removed, return nested fors as they are faster
+        # and also return repeatable iterator requirement
+        mask_iterator = ((mask1, mask2) for mask1 in epoch1 for mask2 in epoch2)
 
-                if Graph._mask_matches_templates(templates, mask, subgraph_mask):
-                    continue
+        # this prolongs the overall computation time,
+        # but in case we need just a "small" number of colorings,
+        # this can provide them faster
+        # disabled as result highly depended on the graph given
+        # TODO benchmark on larger dataset
+        # mask_iterator = lazy_product(epoch1, epoch2)
 
-                coloring = Graph._coloring_from_mask(
-                    vertices,
-                    mask,
-                    component_to_edges,
-                    subgraph_mask,
-                )
+        for mask1, mask2 in mask_iterator:
 
-                if not check_selected_NAC_coloring(graph, coloring):
-                    continue
+            mask = mask1 | mask2
 
-                counter += 1
-                yield mask
-        print(
-            f"Join yielded: {counter} ({c1}x{len(epoch2._cache)}->{c1*len(epoch2._cache)})"
-        )
+            if Graph._mask_matches_templates(templates, mask, subgraph_mask):
+                continue
+
+            coloring = Graph._coloring_from_mask(
+                vertices,
+                mask,
+                component_to_edges,
+                subgraph_mask,
+            )
+
+            if not check_selected_NAC_coloring(graph, coloring):
+                continue
+
+            counter += 1
+            yield mask
+
+        if NAC_PRINT_SWITCH:
+            print(f"Join yielded: {counter}")
 
     @staticmethod
     def _subgraph_colorings_generator(
@@ -2097,7 +2156,7 @@ class Graph(nx.Graph):
         """
         # The last chunk can be smaller
         local_vertices: List[int] = vertices[offset : offset + chunk_size]
-        print(f"Local vertices: {local_vertices}")
+        # print(f"Local vertices: {local_vertices}")
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
         local_cycles = Graph._find_cycles(
@@ -2135,7 +2194,9 @@ class Graph(nx.Graph):
 
             counter += 1
             yield mask << offset
-        print(f"Base yielded: {counter}")
+
+        if NAC_PRINT_SWITCH:
+            print(f"Base yielded: {counter}")
 
     @staticmethod
     def _NAC_colorings_subgraphs(
@@ -2144,6 +2205,7 @@ class Graph(nx.Graph):
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
         from_angle_preserving_components: bool,
+        get_subgraphs_together: bool = True,
         use_log_approach: bool = True,
         preferred_chunk_size: int | None = None,
         order_strategy: str = "none",
@@ -2165,25 +2227,8 @@ class Graph(nx.Graph):
         preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
         assert preferred_chunk_size >= 1
 
-        # for each vertex we find all the cycles that contain it
-        def create_vertex_cycles() -> List[List[Tuple[int, ...]]]:
-            # Finds all the shortest cycles in the graph
-            cycles = Graph._find_cycles(
-                graph,
-                t_graph,
-                component_to_edges,
-                from_angle_preserving_components=from_angle_preserving_components,
-                all=True,
-            )
-
-            vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
-            for cycle in cycles:
-                for v in cycle:
-                    vertex_cycles[v].append(cycle)
-            return vertex_cycles
-
         # We sort the vertices by degree
-        def degree_ordered_vertices() -> List[int]:
+        def degree_ordered_nodes() -> List[int]:
             return list(
                 map(
                     lambda x: x[0],
@@ -2225,70 +2270,112 @@ class Graph(nx.Graph):
             return chunk_sizes
 
         chunk_sizes = create_chunk_sizes()
-        chunk_no = len(chunk_sizes)
 
-        # TODO turn into enum
+        def process(
+            search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
+        ):
+            if get_subgraphs_together:
+                return Graph._split_and_find(
+                    t_graph,
+                    chunk_sizes,
+                    search_func,
+                )
+            else:
+                return search_func(t_graph, chunk_sizes)
+
         match order_strategy:
             case "none":
                 vertices = list(t_graph.nodes())
+
             case "random":
                 vertices = list(t_graph.nodes())
                 random.Random(42).shuffle(vertices)
+
             case "degree":
-                vertices = degree_ordered_vertices()
+                vertices = process(lambda g, _: Graph._degree_ordered_nodes(g))
+
             case "degree_cycles":
-                vertices = Graph._subgraphs_strategy_highes_degree_naive(
-                    degree_ordered_vertices(), create_vertex_cycles()
+                vertices = process(
+                    lambda g, _: Graph._subgraphs_strategy_highes_degree_naive(
+                        graph,
+                        g,
+                        component_to_edges,
+                        from_angle_preserving_components,
+                    )
                 )
             case "cycles":
-                vertices = Graph._subgraphs_strategy_cycles(
-                    degree_ordered_vertices(), create_vertex_cycles()
+                vertices = process(
+                    lambda g, _: Graph._subgraphs_strategy_cycles(
+                        graph,
+                        g,
+                        component_to_edges,
+                        from_angle_preserving_components,
+                    )
                 )
             case "cycles_match_chunks":
-                vertices = Graph._subgraphs_strategy_cycles_match_chunks(
-                    vertices_no // chunk_no,
-                    degree_ordered_vertices(),
-                    create_vertex_cycles(),
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_cycles_match_chunks(
+                        l,
+                        graph,
+                        g,
+                        component_to_edges,
+                        from_angle_preserving_components,
+                    )
                 )
             case "bfs":
-                vertices = Graph._subgraphs_strategy_bfs(
-                    chunk_sizes, degree_ordered_vertices(), t_graph
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_bfs(
+                        t_graph=g,
+                        chunk_sizes=l,
+                    )
                 )
             case "beam_neighbors":
-                vertices = Graph._subgraphs_strategy_beam_neighbors(
-                    chunk_sizes,
-                    t_graph,
-                    be_smart=False,
-                    start_with_triangles=False,
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                        t_graph=g,
+                        chunk_sizes=l,
+                        start_with_triangles=False,
+                        start_from_min=True,
+                    )
                 )
-            case "beam_neighbors_smart":
-                vertices = Graph._subgraphs_strategy_beam_neighbors(
-                    chunk_sizes,
-                    t_graph,
-                    be_smart=True,
-                    start_with_triangles=False,
+            case "beam_neighbors_max":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                        t_graph=g,
+                        chunk_sizes=l,
+                        start_with_triangles=False,
+                        start_from_min=False,
+                    )
                 )
             case "beam_neighbors_triangles":
-                vertices = Graph._subgraphs_strategy_beam_neighbors(
-                    chunk_sizes,
-                    t_graph,
-                    be_smart=False,
-                    start_with_triangles=True,
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                        t_graph=g,
+                        chunk_sizes=l,
+                        start_with_triangles=True,
+                        start_from_min=True,
+                    )
                 )
-            case "beam_neighbors_smart_triangles":
-                vertices = Graph._subgraphs_strategy_beam_neighbors(
-                    chunk_sizes,
-                    t_graph,
-                    be_smart=True,
-                    start_with_triangles=True,
+            case "beam_neighbors_max_triangles":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                        t_graph=g,
+                        chunk_sizes=l,
+                        start_with_triangles=True,
+                        start_from_min=False,
+                    )
                 )
             case "components_biggest":
-                vertices = Graph._subgraphs_strategy_components(
-                    chunk_no, t_graph, start_from_biggest_component=True
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_components(
+                        g, l, start_from_biggest_component=True
+                    )
                 )
             case "components_spredded":
-                vertices = Graph._subgraphs_strategy_components(
-                    chunk_no, t_graph, start_from_biggest_component=False
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_components(
+                        g, l, start_from_biggest_component=False
+                    )
                 )
             case _:
                 raise ValueError(
@@ -2297,47 +2384,48 @@ class Graph(nx.Graph):
 
         assert vertices_no == len(vertices)
 
-        # print("-"*80)
-        # print(nx.nx_agraph.to_agraph(graph))
-        print("-" * 80)
-        my_t_graph = nx.Graph()
-        my_t_graph.name = order_strategy
-        offset = 0
-        colors = [
-            "red",
-            "green",
-            "blue",
-            "purple",
-            "yellow",
-            "orange",
-            "pink",
-            "teal",
-            "turquoise",
-            "navy",
-            "maroon",
-            "gray",
-            "silver",
-            "gold",
-        ]
+        if NAC_PRINT_SWITCH:
+            # print("-"*80)
+            # print(nx.nx_agraph.to_agraph(graph))
+            # print("-" * 80)
+            # my_t_graph = nx.Graph()
+            # my_t_graph.name = order_strategy
+            # offset = 0
+            # colors = [
+            #     "red",
+            #     "green",
+            #     "blue",
+            #     "purple",
+            #     "yellow",
+            #     "orange",
+            #     "pink",
+            #     "teal",
+            #     "turquoise",
+            #     "navy",
+            #     "maroon",
+            #     "gray",
+            #     "silver",
+            #     "gold",
+            # ]
 
-        for i, chunk_size in enumerate(chunk_sizes):
-            local_vertices = vertices[offset : offset + chunk_size]
-            offset += chunk_size
-            for v in local_vertices:
-                my_t_graph.add_nodes_from(
-                    [(v, {"color": colors[i % len(colors)], "style": "filled"})]
-                )
-        my_t_graph.add_edges_from(t_graph.edges)
-        print(nx.nx_agraph.to_agraph(my_t_graph))
-        print("-" * 80)
+            # for i, chunk_size in enumerate(chunk_sizes):
+            #     local_vertices = vertices[offset : offset + chunk_size]
+            #     offset += chunk_size
+            #     for v in local_vertices:
+            #         my_t_graph.add_nodes_from(
+            #             [(v, {"color": colors[i % len(colors)], "style": "filled"})]
+            #         )
+            # my_t_graph.add_edges_from(t_graph.edges)
+            # print(nx.nx_agraph.to_agraph(my_t_graph))
+            # print("-" * 80)
 
-        print(f"Vertices no:  {nx.number_of_nodes(graph)}")
-        print(f"Edges no:     {nx.number_of_edges(graph)}")
-        print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
-        print(f"Comp. to ed.: {component_to_edges}")
-        print(f"Chunk no.:    {len(chunk_sizes)}")
-        print(f"Chunk sizes:  {chunk_sizes}")
-        print("-" * 80)
+            print(f"Vertices no:  {nx.number_of_nodes(graph)}")
+            print(f"Edges no:     {nx.number_of_edges(graph)}")
+            print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
+            print(f"Comp. to ed.: {component_to_edges}")
+            print(f"Chunk no.:    {len(chunk_sizes)}")
+            print(f"Chunk sizes:  {chunk_sizes}")
+            print("-" * 80)
 
         def colorings_merge_wrapper(
             colorings_1: Tuple[Iterable[int], int],
@@ -2348,6 +2436,7 @@ class Graph(nx.Graph):
 
             epoch1 = RepeatableIterator(epoch1)
             epoch2 = RepeatableIterator(epoch2)
+            # epoch2_switched = ( # could be RepeatableIterator
             epoch2_switched = RepeatableIterator(
                 # this has to be list so the iterator is not iterated concurrently
                 [coloring ^ subgraph_mask_2 for coloring in epoch2]
@@ -2648,8 +2737,9 @@ class Graph(nx.Graph):
 
         random.Random(seed).shuffle(vertices)
         if strategy == "random":
-            mapping = {k: v for k, v in enumerate(vertices)}
-            return nx.relabel_nodes(graph, mapping, copy=copy)
+            mapping = {v: k for k, v in enumerate(vertices)}
+            graph = nx.relabel_nodes(graph, mapping, copy=copy)
+            return graph
 
         for start in vertices:
             if start in used_vertices:
@@ -2736,7 +2826,7 @@ class Graph(nx.Graph):
             )
             t_graph = Graph._create_T_graph_from_components(graph, edge_to_component)
 
-            algorithm_parts = algorithm.split("-")
+            algorithm_parts = list(algorithm.split("-"))
             match algorithm_parts[0]:
                 case "naive":
                     is_NAC_coloring = (
@@ -2801,13 +2891,14 @@ class Graph(nx.Graph):
                             if algorithm_parts[3] != "auto"
                             else None
                         ),
+                        get_subgraphs_together=(
+                            algorithm_parts[4] == "smart"
+                            if len(algorithm_parts) == 5
+                            else False
+                        ),
                     )
                 case _:
                     raise ValueError(f"Unknown algorighm type: {algorithm}")
-
-        graph: nx.Graph = self
-
-        processor: Callable[[nx.Graph], Iterable[NACColoring]] = run
 
         def apply_processor(
             processor: Callable[[nx.Graph], Iterable[NACColoring]],
@@ -2818,6 +2909,14 @@ class Graph(nx.Graph):
         ) -> Callable[[nx.Graph], Iterable[NACColoring]]:
             return lambda g: func(processor, g)
 
+        graph: nx.Graph = self
+        processor: Callable[[nx.Graph], Iterable[NACColoring]] = run
+
+        if use_bridges_decomposition:
+            processor = apply_processor(
+                processor, lambda p, g: Graph._NAC_colorings_with_bridges(g, p)
+            )
+
         processor = apply_processor(
             processor,
             lambda p, g: p(
@@ -2825,10 +2924,6 @@ class Graph(nx.Graph):
             ),
         )
 
-        if use_bridges_decomposition:
-            processor = apply_processor(
-                processor, lambda p, g: Graph._NAC_colorings_with_bridges(g, p)
-            )
         return processor(graph)
 
     @doc_category("Generic rigidity")
