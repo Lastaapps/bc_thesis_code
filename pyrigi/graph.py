@@ -836,6 +836,10 @@ class Graph(nx.Graph):
             clean_list = [self]
         return clean_list
 
+    # -------------------------------------------------------------------------
+    # --- NAC coloring --------------------------------------------------------
+    # -------------------------------------------------------------------------
+
     def _check_NAC_constrains(self) -> bool:
         """
         Checks some basic constrains for NAC coloring to even make sense
@@ -860,10 +864,6 @@ class Graph(nx.Graph):
             return False
 
         return True
-
-    # -------------------------------------------------------------------------
-    # --- NAC coloring --------------------------------------------------------
-    # -------------------------------------------------------------------------
 
     def _single_general_NAC_coloring(self) -> Optional[NACColoring]:
         """
@@ -2201,6 +2201,7 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        seed: int,
         from_angle_preserving_components: bool,
         get_subgraphs_together: bool = True,
         use_log_approach: bool = True,
@@ -2286,7 +2287,7 @@ class Graph(nx.Graph):
 
             case "random":
                 vertices = list(t_graph.nodes())
-                random.Random(42).shuffle(vertices)
+                random.Random(seed).shuffle(vertices)
 
             case "degree":
                 vertices = process(lambda g, _: Graph._degree_ordered_nodes(g))
@@ -2713,17 +2714,32 @@ class Graph(nx.Graph):
         pass
 
     @staticmethod
+    def _renamed_coloring(
+        ordered_vertices: Sequence[Vertex],
+        colorings: Iterable[NACColoring],
+    ) -> Iterable[NACColoring]:
+        """
+        Expects graph vertices to be named from 0 to N-1.
+        """
+        for coloring in colorings:
+            yield tuple(
+                [(ordered_vertices[u], ordered_vertices[v]) for u, v in group]
+                for group in coloring
+            )
+
+    @staticmethod
     def _relabel_graph_for_NAC_coloring(
+        processor: Callable[[nx.Graph], Iterable[NACColoring]],
         graph: nx.Graph,
+        seed: int,
         strategy: str = "random",
         copy: bool = True,
         restart_after: int | None = None,
-        seed: int = 42,
-    ) -> nx.Graph:
+    ) -> Iterable[NACColoring]:
         if strategy == "none":
             # this is correct, but harmless (for now)
             # return graph if not copy else nx.Graph(graph)
-            return graph
+            return processor(graph)
 
         vertices = list(graph.nodes)
         used_vertices: Set[Vertex] = set()
@@ -2733,10 +2749,11 @@ class Graph(nx.Graph):
             restart_after = graph.number_of_nodes()
 
         random.Random(seed).shuffle(vertices)
+
         if strategy == "random":
             mapping = {v: k for k, v in enumerate(vertices)}
             graph = nx.relabel_nodes(graph, mapping, copy=copy)
-            return graph
+            return Graph._renamed_coloring(vertices, processor(graph))
 
         for start in vertices:
             if start in used_vertices:
@@ -2774,8 +2791,9 @@ class Graph(nx.Graph):
 
             assert start in used_vertices
 
-        mapping = {k: v for k, v in enumerate(ordered_vertices)}
-        return nx.relabel_nodes(graph, mapping, copy=copy)
+        mapping = {v: k for k, v in enumerate(ordered_vertices)}
+        graph = nx.relabel_nodes(graph, mapping, copy=copy)
+        return Graph._renamed_coloring(ordered_vertices, processor(graph))
 
     @doc_category("Generic rigidity")
     def _NAC_colorings_base(
@@ -2785,6 +2803,7 @@ class Graph(nx.Graph):
         use_bridges_decomposition: bool = True,
         is_cartesian: bool = False,
         use_has_coloring_check: bool = True,  # I disable the check in tests
+        seed: int | None = None,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -2813,6 +2832,8 @@ class Graph(nx.Graph):
         # Checks if it even makes sense to do the search
         if use_has_coloring_check and self._has_NAC_coloring_checks() == False:
             return []
+
+        rand = random.Random(seed)
 
         def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
             graph = Graph(graph_nx)
@@ -2874,6 +2895,7 @@ class Graph(nx.Graph):
                             component_to_edge,
                             is_NAC_coloring,
                             from_angle_preserving_components=is_cartesian,
+                            seed=rand.randint(0, 2**16 - 1),
                         )
                     return Graph._NAC_colorings_subgraphs(
                         graph,
@@ -2881,6 +2903,7 @@ class Graph(nx.Graph):
                         component_to_edge,
                         is_NAC_coloring,
                         from_angle_preserving_components=is_cartesian,
+                        seed=rand.randint(0, 2**16 - 1),
                         use_log_approach=bool(algorithm_parts[1]),
                         order_strategy=algorithm_parts[2],
                         preferred_chunk_size=(
@@ -2916,8 +2939,8 @@ class Graph(nx.Graph):
 
         processor = apply_processor(
             processor,
-            lambda p, g: p(
-                Graph._relabel_graph_for_NAC_coloring(g, strategy=relabel_strategy)
+            lambda p, g: Graph._relabel_graph_for_NAC_coloring(
+                p, g, strategy=relabel_strategy, seed=rand.randint(0, 2**16 - 1)
             ),
         )
 
@@ -2930,6 +2953,7 @@ class Graph(nx.Graph):
         relabel_strategy: str = "none",
         use_bridges_decomposition: bool = True,
         use_has_coloring_check: bool = True,
+        seed: int | None = None,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -2958,6 +2982,7 @@ class Graph(nx.Graph):
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=False,
             use_has_coloring_check=use_has_coloring_check,
+            seed=seed,
         )
 
     @doc_category("Generic rigidity")
@@ -2967,6 +2992,7 @@ class Graph(nx.Graph):
         relabel_strategy: str = "none",
         use_bridges_decomposition: bool = True,
         use_has_coloring_check: bool = True,
+        seed: int | None = None,
     ) -> Iterable[NACColoring]:
         """
         TODO update to cartesian NAC coloring
@@ -2997,6 +3023,7 @@ class Graph(nx.Graph):
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=True,
             use_has_coloring_check=use_has_coloring_check,
+            seed=seed,
         )
 
     @staticmethod

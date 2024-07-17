@@ -1,3 +1,4 @@
+import random
 from typing import List
 from benchmarks.dataset import (
     load_all_small_graphs,
@@ -175,12 +176,16 @@ def test_bench_NAC_colorings(
     Measures the time to find all the NAC colorings of the graph given if any
     exists. This can also get slow really quickly for some algorithms.
     """
+    rand = random.Random(42)
 
     def perform_test():
+
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 use_bridges_decomposition=bridges,
+                use_has_coloring_check=False,
+                seed=rand.randint(0, 2**32 - 1),
             ):
                 pass
 
@@ -207,13 +212,17 @@ def test_bench_NAC_colorings_fast(
     Measures the time to find all the NAC colorings of the graph given if any
     exists. This can also get slow really quickly for some algorithms.
     """
+    rand = random.Random(42)
 
     def perform_test():
+
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
                 use_bridges_decomposition=bridges,
+                use_has_coloring_check=False,
+                seed=rand.randint(0, 2**32 - 1),
             ):
                 pass
 
@@ -260,10 +269,14 @@ def test_bench_NAC_colorings_laman_large_first_n(
     dataset = list(
         filter(lambda g: nx.number_of_nodes(g) == vertices_no, laman_large_graphs)
     )[:graph_cnt]
+    rand = random.Random(42)
 
     def perform_test():
-        for i, graph in enumerate(dataset):
-            # print("Graph:   ", i, graph_cnt)
+
+        print()
+        from tqdm import tqdm
+
+        for graph in tqdm(dataset):
             j = -1
             for j, _ in zip(
                 range(first_n),
@@ -272,6 +285,7 @@ def test_bench_NAC_colorings_laman_large_first_n(
                     relabel_strategy=relabel_strategy,
                     use_bridges_decomposition=bridges,
                     use_has_coloring_check=False,
+                    seed=rand.randint(0, 2**32 - 1),
                 ),
             ):
                 pass
@@ -287,7 +301,7 @@ def test_bench_NAC_colorings_laman_large_first_n(
 @pytest.mark.parametrize(
     "dataset",
     [v[:32] for _, v in general_graphs],
-    ids= [k for k, _ in general_graphs],
+    ids=[k for k, _ in general_graphs],
 )
 @pytest.mark.parametrize("first_n", [1, 512])
 def test_bench_NAC_colorings_general_first_n(
@@ -303,10 +317,14 @@ def test_bench_NAC_colorings_general_first_n(
     exist. The reason for this test is that you don't usually need all the NAC
     colorings of a graph and some algorithms may use it to their advantage.
     """
+    rand = random.Random(42)
 
     def perform_test():
-        for i, graph in enumerate(dataset):
-            # print(f"Graph({i}): [{graph.number_of_nodes()}, {graph.number_of_edges()}] {graph}")
+
+        print()
+        from tqdm import tqdm
+
+        for graph in tqdm(dataset):
             j = None
             for j, _ in zip(
                 range(first_n),
@@ -315,6 +333,7 @@ def test_bench_NAC_colorings_general_first_n(
                     relabel_strategy=relabel_strategy,
                     use_bridges_decomposition=bridges,
                     use_has_coloring_check=False,
+                    seed=rand.randint(0, 2**32 - 1),
                 ),
             ):
                 pass
@@ -324,11 +343,12 @@ def test_bench_NAC_colorings_general_first_n(
 
     benchmark(perform_test)
 
+
 @pytest.mark.slow
-# @pytest.mark.parametrize("algorithm", ["cycles", "subgraphs"])
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("graph", small_graphs[:SMALL_GRAPH_FUZZY_LIMIT])
-def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
+def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strategy: str):
     """
     Checks algorithm validity against the naive implementation
     (that is hopefully correct) and checks that outputs are the same.
@@ -337,7 +357,7 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
 
     # print(graph)
     naive = list(graph.NAC_colorings(algorithm="naive"))
-    tested = list(graph.NAC_colorings(algorithm=algorithm))
+    tested = list(graph.NAC_colorings(algorithm=algorithm, relabel_strategy=relabel_strategy))
 
     l1, l2 = len(naive), len(tested)
     assert l1 == l2
@@ -347,8 +367,14 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph):
     # for coloring in tested:
     #     graph.is_NAC_coloring(coloring)
 
-    naive = {Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False) for coloring in naive}
-    tested = {Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False) for coloring in tested}
+    naive = {
+        Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False)
+        for coloring in naive
+    }
+    tested = {
+        Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False)
+        for coloring in tested
+    }
 
     s1, s2 = len(naive), len(tested)
     assert s1 == s2
@@ -390,6 +416,8 @@ def test_wtf_is_going_on():
                     algorithm=algorithm,
                     relabel_strategy=relabel_strategy,
                     use_bridges_decomposition=use_bridges_decomposition,
+                    use_has_coloring_check=False,
+                    seed=rand.randint(0, 2**32 - 1),
                 ),
             ):
                 data.append(c)
