@@ -52,3 +52,38 @@ selfcomp13.g6
 selfcomp16.g6
 ```
 
+## Environment
+
+The results may not be always comparable because of differences in my laptop
+cooling capacity during summer and other processes running on the system.
+
+```
+                  -`                     petr@msi
+                 .o+`                    --------
+                `ooo/                    OS: Arch Linux x86_64
+               `+oooo:                   Host: GL62 6QE (REV:1.0)
+              `+oooooo:                  Kernel: Linux 6.9.8-arch1-1
+              -+oooooo+:                 Uptime: 5 days, 15 hours, 54 mins
+            `/:-:++oooo+:                Packages: 2246 (pacman)
+           `/++++/+++++++:               Shell: zsh 5.9
+          `/++++++++++++++:              Display (CMN15D2): 1920x1080 @ 60Hz
+         `/+++ooooooooooooo/`            WM: awesome (X11)
+        ./ooosssso++osssssso+`           Theme: Materia [GTK2], Material [GTK3]
+       .oossssso-````/ossssss+`          Icons: Arc-Dark [GTK2/3]
+      -osssssso.      :ssssssso.         Font: Roboto (11pt) [GTK2/3]
+     :osssssss/        osssso+++.        Cursor: Adwaita
+    /ossssssss/        +ssssooo/-        Terminal: alacritty 0.13.2
+  `/ossssso+/:-        -:/+osssso+-      Terminal Font: alacritty (9.0pt)
+ `+sso+:-`                 `.-/+oso:     CPU: Intel(R) Core(TM) i5-6300HQ (4) @ 3.20 Gz
+`++:.                           `-/+/    GPU 1: Intel HD Graphics 530 @ 0.95 GHz [Inte]
+.`                                 `/    GPU 2: NVIDIA GeForce GTX 950M [Discrete]
+                                         Memory: 11.45 GiB / 15.51 GiB (74%)
+                                         Swap: 2.95 GiB / 8.00 GiB (37%)
+                                         Disk (/): 210.47 GiB / 250.92 GiB (84%) - ext4
+                                         Disk (/mnt/d): 495.76 GiB / 550.00 GiB (90%) k
+                                         Disk (/mnt/f): 86.42 GiB / 381.51 GiB (23%) -k
+                                         Disk (/mnt/space): 14.40 GiB / 16.00 GiB (90%s
+                                         Local IP (wlan0): 192.168.1.100/24
+                                         Battery: 94% [AC Connected]
+                                         Locale: en_US.UTF-8
+```

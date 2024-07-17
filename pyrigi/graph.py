@@ -1897,7 +1897,6 @@ class Graph(nx.Graph):
         beam_size: int = min(chunk_sizes[0], 10)
 
         while t_graph.number_of_nodes() > 0:
-            # TODO benchmark min/max
             if start_from_min:
                 start = min(t_graph.degree(), key=lambda x: x[1])[0]
             else:
@@ -1937,7 +1936,6 @@ class Graph(nx.Graph):
                 # but I'm not implementing smart heaps, this is python,
                 # it's gonna be slow anyway (also the graphs are small)
 
-                # TODO do faster
                 values = [
                     len(added_vertices.intersection(t_graph.neighbors(u)))
                     for u in queue
@@ -2051,7 +2049,7 @@ class Graph(nx.Graph):
         vertices: List[int],
         epoch1: Iterable[int],
         subgraph_mask_1: int,
-        epoch2: Iterable[int],
+        epoch2: RepeatableIterator[int],
         subgraph_mask_2: int,
     ) -> Iterable[int]:
         """
@@ -2117,7 +2115,6 @@ class Graph(nx.Graph):
         # mask_iterator = lazy_product(epoch1, epoch2)
 
         for mask1, mask2 in mask_iterator:
-
             mask = mask1 | mask2
 
             if Graph._mask_matches_templates(templates, mask, subgraph_mask):
