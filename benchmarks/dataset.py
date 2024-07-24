@@ -7,7 +7,7 @@ import urllib.request
 from enum import Enum
 import networkx as nx
 import zipfile
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from pyrigi.graph import Graph
 
@@ -116,6 +116,7 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True):
 
 
 def load_general_graphs(
+    category: Literal["simple", "hard"],
     dir: str = GENERAL_DIR,
 ) -> Dict[str, List[Graph]]:
     limit: int | None = 64
@@ -125,35 +126,112 @@ def load_general_graphs(
         "highlyirregular": "highly_irregular",
         "hypo": "hypohamiltonian",
         "selfcomp": "self_complementary",
+        "planar_conn": "planar",
+        "c34_": "no_3,4_cycles",
     }
+
+    dir = os.path.join(dir, category)
 
     graphs: Dict[str, List[Graph]] = defaultdict(list)
     for file in os.listdir(dir):
-        if not file.endswith(".g6"):
-            continue
-
         name = None
         for prefix in prefix_to_name:
             if file.startswith(prefix):
                 name = prefix_to_name[prefix]
                 break
-        assert name
 
         path = os.path.join(dir, file)
-        # print(f"Loading file {path}")
 
-        if limit is None:
-            graphs[name] += [Graph(g) for g in nx.read_graph6(path)]
-        else:
-            with open(path, mode="rb") as input_file:
-                for _, line in zip(range(limit), input_file):
-                    line = line.strip()
-                    if not len(line):
-                        continue
-                    graphs[name] += [Graph(nx.from_graph6_bytes(line))]
+        if file.endswith(".g6"):
+            assert name
+            # print(f"Loading file {path}")
+
+            if limit is None:
+                graphs[name] += [Graph(g) for g in nx.read_graph6(path)]
+            else:
+                with open(path, mode="rb") as input_file:
+                    for _, line in zip(range(limit), input_file):
+                        line = line.strip()
+                        if not len(line):
+                            continue
+                        graphs[name] += [Graph(nx.from_graph6_bytes(line))]
+        elif file.endswith(".s6"):
+            assert name
+            # print(f"Loading file {path}")
+
+            if limit is None:
+                graphs[name] += [Graph(g) for g in nx.read_graph6(path)]
+            else:
+                with open(path, mode="rb") as input_file:
+                    for _, line in zip(range(limit), input_file):
+                        line = line.strip()
+                        if not len(line):
+                            continue
+                        graphs[name] += [Graph(nx.from_sparse6_bytes(line))]
 
     for key in graphs.keys():
         graphs[key] = [Graph(g) for g in graphs[key]]
+
+    return graphs
+
+
+# kneser_graph(n, k)[source]
+#
+# Returns the Kneser Graph with parameters n and k.
+# The Kneser Graph has nodes that are k-tuples (subsets) of the integers between 0 and n-1. Nodes are adjacent if their corresponding sets are disjoint.
+#
+# Parameters:
+#     n: int
+#         Number of integers from which to make node subsets. Subsets are drawn from set(range(n)).
+#     k: int
+#         Size of the subsets.
+
+
+
+def load_small_generated_graphs( limit: int = 128) -> Dict[str, List[Graph]]:
+    graphs: Dict[str, List[Graph]] = {}
+
+    rand = random.Random(42)
+    randint = rand.randint
+
+    # fmt: off
+    # print(f"Generating graphs")
+    # average (#, #) (vertices,edges)/graph
+
+    graphs["sparse_small"] = [nx.gnm_random_graph(randint(10, 14), randint(17, 22), randint(0, 1234)) for _ in range(limit)]
+
+    graphs["dense_small"] = [nx.gnm_random_graph(randint(7, 9), randint(20, 25), randint(0, 1234)) for _ in range(limit)]
+    # fmt: on
+
+    for key in graphs.keys():
+        data = [Graph(g) for g in graphs[key]]
+        rand.shuffle(data)
+        graphs[key] = data
+
+    return graphs
+
+def load_medium_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
+    graphs: Dict[str, List[Graph]] = {}
+
+    rand = random.Random(42)
+    randint = rand.randint
+
+    # fmt: off
+    # print(f"Generating graphs")
+    # average (#, #) (vertices,edges)/graph
+
+    # Kneser graphs have pairs as vertices
+    graphs["kneser"] = [nx.kneser_graph(randint(5, 6), randint(2, 3)) for _ in range(limit)] # (13.7060546875, 17.1533203125)
+
+    graphs["sparse_medium"] = [nx.gnm_random_graph(randint(14, 17), randint(22, 27), randint(0, 1234)) for _ in range(limit)]
+
+    graphs["dense_medium"] = [nx.gnm_random_graph(randint(14, 17), randint(28, 34), randint(0, 1234)) for _ in range(limit)]
+    # fmt: on
+
+    for key in graphs.keys():
+        data = [Graph(g) for g in graphs[key]]
+        rand.shuffle(data)
+        graphs[key] = data
 
     return graphs
 
@@ -163,16 +241,36 @@ def load_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
     rand = random.Random(42)
     randint = rand.randint
 
+    # fmt: off
     # print(f"Generating graphs")
-    graphs["complete_multipartite"] = [nx.complete_multipartite_graph([randint(1, 10) for _ in range(randint(2, 8))]) for _ in range(limit)]
-    # graphs["kneser"]= [nx.kneser_graph(randint(6, 8), randint(2, 6)) for _ in range(limit)]
-    graphs["kneser"]= [nx.kneser_graph(randint(3, 5), randint(2, 3)) for _ in range(limit)]
-    # graphs["gnm_random"]= [nx.gnm_random_graph(randint(10, 48), randint(16, 128), randint(0, 1234)) for _ in range(limit)]
-    graphs["gnm_random"]= [nx.gnm_random_graph(randint(10, 30), randint(16, 28), randint(0, 1234)) for _ in range(limit)]
-    #graphs["random_regular"]= [nx.random_regular_graph(randint(4, 10)//2*2, randint(16, 48), randint(0, 1234)) for _ in range(limit)]
-    graphs["random_regular"]= [nx.random_regular_graph(randint(4, 6)//2*2, randint(12, 18), randint(0, 1234)) for _ in range(limit)]
+    # average (#, #) (vertices,edges)/graph
+
+    # I decided they don't make sense to check anyway, as they are known class of graphs in terms of NAC coloring
+    # graphs["complete_bipartite"] = [nx.complete_multipartite_graph(*[randint(2, 4) for _ in range(3)]) for _ in range(limit)]
+    # graphs["complete_tripartite"] = [nx.complete_multipartite_graph(*[randint(2, 4) for _ in range(3)]) for _ in range(limit)]
+
+    # Kneser graphs have pairs as vertices
+    # graphs["kneser"] = [nx.kneser_graph(randint(3, 5), randint(2, 3)) for _ in range(limit)] # (5.5849609375, 3.03515625)
+    graphs["kneser"] = [nx.kneser_graph(randint(5, 6), randint(2, 3)) for _ in range(limit)] # (13.7060546875, 17.1533203125)
+    # graphs["kneser"] = [nx.kneser_graph(randint(5, 7), randint(2, 4)) for _ in range(limit)] # (18.7685546875, 26.923828125)
+    # graphs["kneser"] = [nx.kneser_graph(randint(6, 8), randint(2, 6)) for _ in range(limit)] # (27.4609375, 49.228515625)
+
+    # graphs["random_sparse"] = [nx.gnm_random_graph(randint(10, 30), randint(16, 28), randint(0, 1234)) for _ in range(limit)]
+    graphs["random_sparse_medium"] = [nx.gnm_random_graph(randint(20, 25), randint(30, 40), randint(0, 1234)) for _ in range(limit)]
+    # graphs["random_sparse_large"] = [nx.gnm_random_graph(randint(26, 32), randint(40, 50), randint(0, 1234)) for _ in range(limit)]
+
+    graphs["random_dense_medium"] = [nx.gnm_random_graph(randint(15, 20), randint(40, 50), randint(0, 1234)) for _ in range(limit)]
+
+    # graphs["random_regular"] = [nx.random_regular_graph(randint(4, 6)//2*2, randint(12, 18), randint(0, 1234)) for _ in range(limit)] # (15.0498046875, 35.4189453125)
+    graphs["random_regular"] = (
+        [nx.random_regular_graph(4, randint(14, 16), randint(0, 1234)) for _ in range(limit // 2)] + # (15.0068359375, 30.013671875)
+        [nx.random_regular_graph(6, randint(10, 12), randint(0, 1234)) for _ in range(limit // 2)] # (10.9814453125, 32.9443359375)
+    )
+    # fmt: on
 
     for key in graphs.keys():
-        graphs[key] = [Graph(g) for g in graphs[key]]
+        data = [Graph(g) for g in graphs[key]]
+        rand.shuffle(data)
+        graphs[key] = data
 
     return graphs

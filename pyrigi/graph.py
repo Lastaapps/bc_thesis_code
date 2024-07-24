@@ -1718,7 +1718,7 @@ class Graph(nx.Graph):
         )
 
     @staticmethod
-    def _subgraphs_strategy_highes_degree_naive(
+    def _subgraphs_strategy_degree_cycles(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
@@ -1940,10 +1940,17 @@ class Graph(nx.Graph):
                     len(added_vertices.intersection(t_graph.neighbors(u)))
                     for u in queue
                 ]
-                # values = [(len(added_vertices.intersection(graph.neighbors(u))), -graph.degree(u)) for u in queue]
-                largest = max(range(len(values)), key=values.__getitem__)
-                v = queue.pop(largest)
-                queue = queue[:beam_size]
+                # values = [(len(added_vertices.intersection(t_graph.neighbors(u))), -t_graph.degree(u)) for u in queue]
+
+                sorted_by_metric = sorted([i for i in range(len(values))], key=lambda i: values[i], reverse=True)
+                v = queue[sorted_by_metric[0]]
+                queue = [queue[i] for i in sorted_by_metric[1:beam_size+1]]
+
+                # this is worse, but somehow slightly more performant
+                # but I'm not using it anyway ;)
+                # largest = max(range(len(values)), key=values.__getitem__)
+                # v = queue.pop(largest)
+                # queue = queue[:beam_size]
 
                 added_vertices.add(v)
                 target.append(v)
@@ -2294,7 +2301,7 @@ class Graph(nx.Graph):
 
             case "degree_cycles":
                 vertices = process(
-                    lambda g, _: Graph._subgraphs_strategy_highes_degree_naive(
+                    lambda g, _: Graph._subgraphs_strategy_degree_cycles(
                         graph,
                         g,
                         component_to_edges,

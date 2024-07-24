@@ -5,6 +5,8 @@ from benchmarks.dataset import (
     load_general_graphs,
     load_generated_graphs,
     load_laman_graphs,
+    load_medium_generated_graphs,
+    load_small_generated_graphs,
 )
 from pyrigi.graph import Graph
 import pytest
@@ -23,114 +25,70 @@ laman_larger_graphs = list(
 )
 laman_large_graphs = list(filter(lambda g: nx.number_of_nodes(g) > 15, laman_graphs))
 
-general_graphs = (load_general_graphs() | load_generated_graphs())
+general_small_graphs = load_small_generated_graphs()
+general_small_graphs = general_small_graphs.items()
+
+general_medium_graphs = load_general_graphs("simple") | load_medium_generated_graphs()
+general_medium_graphs = general_medium_graphs.items()
+
+general_graphs = load_general_graphs("hard") | load_generated_graphs()
 general_quick = ["complete_multipartite", "self_complementary", "highly_irregular"]
-general_disabled = ["kneser"] # + general_quick
+general_disabled = ["kneser"]  # + general_quick
 for key in general_disabled:
     general_graphs.pop(key, None)
 general_graphs = general_graphs.items()
 
 
-# can be used for debugging
-# small_graphs = sorted(small_graphs, key=lambda g: nx.number_of_nodes(g))
-
 NAC_ALGORITHMS = [
     "naive",
     "cycles-True",
     "cycles-False",
-    "subgraphs-True-none-auto-smart",
-    "subgraphs-False-random-auto-smart",
-    "subgraphs-True-degree-auto-smart",
-    "subgraphs-True-degree_cycles-auto-smart",
-    "subgraphs-True-cycles-auto-smart",
-    "subgraphs-True-cycles_match_chunks-auto-smart",
-    "subgraphs-True-components_biggest-auto-smart",
-    "subgraphs-True-components_spredded-auto-smart",
-    "subgraphs-False-none-auto-smart",
-    "subgraphs-False-degree-auto-smart",
-    "subgraphs-False-degree_cycles-auto-smart",
-    "subgraphs-False-cycles-auto-smart",
-    "subgraphs-False-cycles_match_chunks-auto-smart",
-    "subgraphs-False-components_biggest-auto-smart",
-    "subgraphs-False-components_spredded-auto-smart",
-    "subgraphs-True-bfs-4-smart",
+    "subgraphs-True-none-4",
+    "subgraphs-False-random-4",
+    "subgraphs-True-degree-4",
+    "subgraphs-True-degree_cycles-4",
+    "subgraphs-True-cycles-4",
+    "subgraphs-True-cycles_match_chunks-4",
+    "subgraphs-True-components_biggest-4",
+    "subgraphs-True-components_spredded-4",
+    "subgraphs-False-none-4",
+    "subgraphs-False-degree-4",
+    "subgraphs-False-degree_cycles-4",
+    "subgraphs-False-cycles-4",
+    "subgraphs-False-cycles_match_chunks-4",
+    "subgraphs-False-components_biggest-4",
+    "subgraphs-False-components_spredded-4",
+    "subgraphs-True-bfs-4",
     "subgraphs-True-beam_neighbors-4",
     "subgraphs-True-beam_neighbors_triangles-4",
-]
-NAC_ALGORITHMS_FAST = [
-    "subgraphs-True-none-auto",
-    "subgraphs-True-random-auto",
-    "subgraphs-True-degree-auto",
-    "subgraphs-True-degree_cycles-auto",
-    "subgraphs-True-cycles-auto",
-    "subgraphs-True-cycles_match_chunks-auto",
+    "subgraphs-True-beam_neighbors_max-4",
+    "subgraphs-True-beam_neighbors_max_triangles-4",
+    "subgraphs-True-none-4-smart",
+    "subgraphs-False-random-4-smart",
+    "subgraphs-True-degree-4-smart",
+    "subgraphs-True-degree_cycles-4-smart",
+    "subgraphs-True-cycles-4-smart",
+    "subgraphs-True-cycles_match_chunks-4-smart",
+    "subgraphs-True-components_biggest-4-smart",
+    "subgraphs-True-components_spredded-4-smart",
+    "subgraphs-False-none-4-smart",
+    "subgraphs-False-degree-4-smart",
+    "subgraphs-False-degree_cycles-4-smart",
+    "subgraphs-False-cycles-4-smart",
+    "subgraphs-False-cycles_match_chunks-4-smart",
+    "subgraphs-False-components_biggest-4-smart",
+    "subgraphs-False-components_spredded-4-smart",
+    "subgraphs-True-bfs-4-smart",
+    "subgraphs-True-beam_neighbors-4-smart",
+    "subgraphs-True-beam_neighbors_triangles-4-smart",
+    "subgraphs-True-beam_neighbors_max-4-smart",
+    "subgraphs-True-beam_neighbors_max_triangles-4-smart",
 ]
 NAC_RELABEL_STRATEGIES = [
     "none",
     "random",
     "bfs",
-    "beam-degree",
-]
-# pairs (algorithm, relabel)
-NAC_FASTEST_LAMAN = [
-    # smart is not working well here
-    ("subgraphs-True-none-4", "none"),
-    ("subgraphs-True-none-8", "none"),
-    ("subgraphs-True-none-4", "random"),
-    ("subgraphs-True-none-8", "random"),
-    ("subgraphs-True-degree_cycles-8", "random"),
-    ("subgraphs-True-cycles-8", "random"),
-    ("subgraphs-True-cycles_match_chunks-8", "random"),
-    ("subgraphs-True-beam_neighbors-4", "random"),
-    ("subgraphs-True-beam_neighbors-8", "random"),
-    ("subgraphs-True-beam_neighbors_triangles-4", "random"),
-    ("subgraphs-True-beam_neighbors_triangles-8", "random"),
-    ("subgraphs-True-beam_neighbors_max-4", "random"),
-    ("subgraphs-True-beam_neighbors_max-8", "random"),
-    ("subgraphs-True-beam_neighbors_max_triangles-4", "random"),
-    ("subgraphs-True-beam_neighbors_max_triangles-8", "random"),
-]
-NAC_FASTEST_GENERAL = [
-    ("subgraphs-True-none-4", "none"),
-    ("subgraphs-True-none-8", "none"),
-    ("subgraphs-True-degree-4", "random"),
-    ("subgraphs-True-degree-8", "random"),
-    ("subgraphs-True-degree_cycles-4", "random"),
-    ("subgraphs-True-degree_cycles-8", "random"),
-    ("subgraphs-True-cycles-4", "random"),
-    ("subgraphs-True-cycles-8", "random"),
-    ("subgraphs-True-cycles_match_chunks-4", "random"),
-    ("subgraphs-True-cycles_match_chunks-8", "random"),
-    ("subgraphs-True-bfs-4", "random"),
-    ("subgraphs-True-bfs-8", "random"),
-    ("subgraphs-True-beam_neighbors-4", "random"),
-    ("subgraphs-True-beam_neighbors-8", "random"),
-    ("subgraphs-True-beam_neighbors_max-4", "random"),
-    ("subgraphs-True-beam_neighbors_max-8", "random"),
-    ("subgraphs-True-beam_neighbors_triangles-4", "random"),
-    ("subgraphs-True-beam_neighbors_triangles-8", "random"),
-    ("subgraphs-True-beam_neighbors_max_triangles-4", "random"),
-    ("subgraphs-True-beam_neighbors_max_triangles-8", "random"),
-    # ("subgraphs-True-none-4-smart", "none"),
-    # ("subgraphs-True-none-8-smart", "none"),
-    # ("subgraphs-True-degree-4-smart", "random"),
-    # ("subgraphs-True-degree-8-smart", "random"),
-    # ("subgraphs-True-degree_cycles-4-smart", "random"),
-    # ("subgraphs-True-degree_cycles-8-smart", "random"),
-    # ("subgraphs-True-cycles-4-smart", "random"),
-    # ("subgraphs-True-cycles-8-smart", "random"),
-    # ("subgraphs-True-cycles_match_chunks-4-smart", "random"),
-    # ("subgraphs-True-cycles_match_chunks-8-smart", "random"),
-    # ("subgraphs-True-bfs-4-smart", "random"),
-    # ("subgraphs-True-bfs-8-smart", "random"),
-    # ("subgraphs-True-beam_neighbors-4-smart", "random"),
-    # ("subgraphs-True-beam_neighbors-8-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_max-4-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_max-8-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_triangles-4-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_triangles-8-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_max_triangles-4-smart", "random"),
-    # ("subgraphs-True-beam_neighbors_max_triangles-8-smart", "random"),
+    "beam_degree",
 ]
 
 
@@ -138,8 +96,9 @@ NAC_FASTEST_GENERAL = [
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize(
     "dataset",
-    [small_graphs[:32], laman_small_graphs[:32]],
-    ids=["small", "laman_small"],
+    [small_graphs[:32], laman_small_graphs[:32]]
+    + [v[:32] for _, v in general_small_graphs],
+    ids=["small", "laman_small"] + [k for k, _ in general_small_graphs],
 )
 def test_bench_single_NAC_colorings(
     benchmark,
@@ -155,21 +114,29 @@ def test_bench_single_NAC_colorings(
         for graph in dataset:
             graph.single_NAC_coloring(algorithm=algorithm)
 
-    benchmark(perform_test)
+    benchmark.pedantic(perform_test, warmup_rounds=0)
 
 
+BENCH_ROUNDS_SMALL = 3
+
+
+@pytest.mark.timeout(60 * BENCH_ROUNDS_SMALL)
 @pytest.mark.nac_benchmark
-@pytest.mark.parametrize("bridges", [True, False])
+# @pytest.mark.parametrize("bridges", [True, False])
+@pytest.mark.parametrize("bridges", [True])
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize(
     "dataset",
-    [small_graphs[:32], laman_small_graphs[:32]],
-    ids=["small", "laman_small"],
+    [small_graphs[:128], laman_small_graphs[:64]]
+    + [v[:32] for _, v in general_small_graphs],
+    ids=["small", "laman_small"] + [k for k, _ in general_small_graphs],
 )
-def test_bench_NAC_colorings(
+def test_bench_NAC_colorings_small(
     benchmark,
     algorithm: str,
     bridges: bool,
+    relabel_strategy: str,
     dataset: List[Graph],
 ):
     """
@@ -185,27 +152,55 @@ def test_bench_NAC_colorings(
                 algorithm=algorithm,
                 use_bridges_decomposition=bridges,
                 use_has_coloring_check=False,
+                relabel_strategy=relabel_strategy,
                 seed=rand.randint(0, 2**32 - 1),
             ):
                 pass
 
-    benchmark(perform_test)
+    benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_SMALL, warmup_rounds=0)
+
+
+NAC_ALGORITHMS_LAMAN_FAST = [
+    "subgraphs-True-none-8-smart",
+    "subgraphs-True-degree-8-smart",
+    "subgraphs-True-degree_cycles-8-smart",
+    "subgraphs-True-cycles-8-smart",
+    "subgraphs-True-cycles_match_chunks-8-smart",
+    "subgraphs-True-beam_neighbors-8-smart",
+    "subgraphs-True-beam_neighbors_triangles-8-smart",
+    "subgraphs-True-beam_neighbors_max-8-smart",
+    "subgraphs-True-beam_neighbors_max_triangles-8-smart",
+]
+NAC_RELABEL_STRATEGIES_LAMAN_FAST = [
+    "none",
+    "random",
+    "bfs",
+    "beam_degree",
+]
+
+
+BENCH_ROUNDS_LAMAN_FAST = 5
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.parametrize("bridges", [True])
-@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_FAST)
-@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+@pytest.mark.timeout(240 * BENCH_ROUNDS_LAMAN_FAST)
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_LAMAN_FAST)
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_LAMAN_FAST)
 @pytest.mark.parametrize(
     "dataset",
-    [laman_medium_graphs[:32], laman_larger_graphs[:16]],
-    ids=["laman_medium", "laman_larger"],
+    [
+        # laman_medium_graphs[:32],
+        laman_larger_graphs[:16],
+    ],
+    ids=[
+        # "laman_medium",
+        "laman_larger",
+    ],
 )
-def test_bench_NAC_colorings_fast(
+def test_bench_NAC_colorings_laman_fast(
     benchmark,
     algorithm: str,
     relabel_strategy: str,
-    bridges: bool,
     dataset: List[Graph],
 ):
     """
@@ -213,23 +208,115 @@ def test_bench_NAC_colorings_fast(
     exists. This can also get slow really quickly for some algorithms.
     """
     rand = random.Random(42)
+    print()
 
     def perform_test():
+        from tqdm import tqdm
+        for graph in tqdm(dataset):
+        # for graph in dataset:
+            for _ in graph.NAC_colorings(
+                algorithm=algorithm,
+                relabel_strategy=relabel_strategy,
+                use_bridges_decomposition=True,
+                use_has_coloring_check=False,
+                seed=rand.randint(0, 2**32 - 1),
+            ):
+                pass
+
+    benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_LAMAN_FAST, warmup_rounds=0)
+
+
+NAC_ALGORITHMS_GENERAL_FAST = [
+    "subgraphs-True-none-4-smart",
+    "subgraphs-True-degree-4-smart",
+    "subgraphs-True-degree_cycles-4-smart",
+    "subgraphs-True-cycles-4-smart",
+    "subgraphs-True-cycles_match_chunks-4-smart",
+    "subgraphs-True-beam_neighbors-4-smart",
+    "subgraphs-True-beam_neighbors_triangles-4-smart",
+    "subgraphs-True-beam_neighbors_max-4-smart",
+    "subgraphs-True-beam_neighbors_max_triangles-4-smart",
+]
+NAC_RELABEL_STRATEGIES_GENERAL_FAST = [
+    # "none",
+    # "random",
+    # "bfs",
+    "beam_degree",
+]
+
+
+BENCH_ROUNDS_GENERAL_MEDIUM = 3
+
+
+@pytest.mark.nac_benchmark
+@pytest.mark.timeout(180 * BENCH_ROUNDS_GENERAL_MEDIUM)
+@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_GENERAL_FAST)
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_GENERAL_FAST)
+@pytest.mark.parametrize(
+    "dataset",
+    [v for _, v in general_medium_graphs],
+    ids=[k for k, _ in general_medium_graphs],
+)
+@pytest.mark.parametrize("graph_cnt", [32])
+def test_bench_NAC_colorings_general_medium(
+    benchmark,
+    algorithm: str,
+    relabel_strategy: str,
+    dataset: List[Graph],
+    graph_cnt: int,
+):
+    """
+    Measures the time to find all the NAC colorings of the graph given if any
+    exists. This can also get slow really quickly for some algorithms.
+    """
+    rand = random.Random(42)
+    # print()
+    dataset = dataset[:graph_cnt]
+
+    def perform_test():
+        # from tqdm import tqdm
+        # for graph in tqdm(dataset):
 
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
-                use_bridges_decomposition=bridges,
+                use_bridges_decomposition=True,
                 use_has_coloring_check=False,
                 seed=rand.randint(0, 2**32 - 1),
             ):
                 pass
 
-    benchmark(perform_test)
+    benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_GENERAL_MEDIUM)
+
+
+# pairs (algorithm, relabel)
+NAC_FASTEST_LAMAN = [
+    # smart is not working well here
+    ("subgraphs-True-none-4-smart", "none"),
+    ("subgraphs-True-beam_neighbors-4-smart", "beam_degree"),
+    # ("subgraphs-True-none-4", "none"),
+    # ("subgraphs-True-none-8", "none"),
+    # ("subgraphs-True-none-4", "random"),
+    # ("subgraphs-True-none-8", "random"),
+    # ("subgraphs-True-degree_cycles-8", "random"),
+    # ("subgraphs-True-cycles-8", "random"),
+    # ("subgraphs-True-cycles_match_chunks-8", "random"),
+    # ("subgraphs-True-beam_neighbors-4", "random"),
+    # ("subgraphs-True-beam_neighbors-8", "random"),
+    # ("subgraphs-True-beam_neighbors_triangles-4", "random"),
+    # ("subgraphs-True-beam_neighbors_triangles-8", "random"),
+    # ("subgraphs-True-beam_neighbors_max-4", "random"),
+    # ("subgraphs-True-beam_neighbors_max-8", "random"),
+    # ("subgraphs-True-beam_neighbors_max_triangles-4", "random"),
+    # ("subgraphs-True-beam_neighbors_max_triangles-8", "random"),
+]
+
+BENCH_ROUNDS_LAMAN_LARGE = 4
 
 
 @pytest.mark.nac_benchmark
+@pytest.mark.timeout(360 * BENCH_ROUNDS_LAMAN_LARGE)
 @pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_LAMAN)
 @pytest.mark.parametrize(
     ("vertices_no", "graph_cnt", "first_n"),
@@ -265,15 +352,15 @@ def test_bench_NAC_colorings_laman_large_first_n(
     exist. The reason for this test is that you don't usually need all the NAC
     colorings of a graph and some algorithms may use it to their advantage.
     """
+    rand = random.Random(42)
+    print()
 
     dataset = list(
         filter(lambda g: nx.number_of_nodes(g) == vertices_no, laman_large_graphs)
     )[:graph_cnt]
-    rand = random.Random(42)
 
     def perform_test():
 
-        print()
         from tqdm import tqdm
 
         for graph in tqdm(dataset):
@@ -293,10 +380,56 @@ def test_bench_NAC_colorings_laman_large_first_n(
                 #     print("Coloring:", j, graph_cnt)
             # print("Coloring:", j, graph_cnt)
 
-    benchmark(perform_test)
+    benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_LAMAN_LARGE, warmup_rounds=0)
+
+
+NAC_FASTEST_GENERAL = [
+    ("subgraphs-True-none-4", "none"),
+    ("subgraphs-True-none-8", "none"),
+    ("subgraphs-True-degree-4", "random"),
+    ("subgraphs-True-degree-8", "random"),
+    ("subgraphs-True-degree_cycles-4", "random"),
+    ("subgraphs-True-degree_cycles-8", "random"),
+    ("subgraphs-True-cycles-4", "random"),
+    ("subgraphs-True-cycles-8", "random"),
+    ("subgraphs-True-cycles_match_chunks-4", "random"),
+    ("subgraphs-True-cycles_match_chunks-8", "random"),
+    ("subgraphs-True-beam_neighbors-4", "random"),
+    ("subgraphs-True-beam_neighbors-8", "random"),
+    ("subgraphs-True-beam_neighbors_max-4", "random"),
+    ("subgraphs-True-beam_neighbors_max-8", "random"),
+    ("subgraphs-True-beam_neighbors_triangles-4", "random"),
+    ("subgraphs-True-beam_neighbors_triangles-8", "random"),
+    ("subgraphs-True-beam_neighbors_max_triangles-4", "random"),
+    ("subgraphs-True-beam_neighbors_max_triangles-8", "random"),
+    # ("subgraphs-True-none-4-smart", "none"),
+    # ("subgraphs-True-none-8-smart", "none"),
+    # ("subgraphs-True-degree-4-smart", "random"),
+    # ("subgraphs-True-degree-8-smart", "random"),
+    # ("subgraphs-True-degree_cycles-4-smart", "random"),
+    # ("subgraphs-True-degree_cycles-8-smart", "random"),
+    # ("subgraphs-True-cycles-4-smart", "random"),
+    # ("subgraphs-True-cycles-8-smart", "random"),
+    # ("subgraphs-True-cycles_match_chunks-4-smart", "random"),
+    # ("subgraphs-True-cycles_match_chunks-8-smart", "random"),
+    # ("subgraphs-True-bfs-4-smart", "random"),
+    # ("subgraphs-True-bfs-8-smart", "random"),
+    # ("subgraphs-True-beam_neighbors-4-smart", "random"),
+    # ("subgraphs-True-beam_neighbors-8-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_max-4-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_max-8-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_triangles-4-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_triangles-8-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_max_triangles-4-smart", "random"),
+    # ("subgraphs-True-beam_neighbors_max_triangles-8-smart", "random"),
+]
+
+
+BENCH_ROUNDS_GENERAL_LARGE = 3
 
 
 @pytest.mark.nac_benchmark
+@pytest.mark.timeout(180 * BENCH_ROUNDS_GENERAL_LARGE)
 @pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_GENERAL)
 @pytest.mark.parametrize(
     "dataset",
@@ -318,10 +451,9 @@ def test_bench_NAC_colorings_general_first_n(
     colorings of a graph and some algorithms may use it to their advantage.
     """
     rand = random.Random(42)
+    print()
 
     def perform_test():
-
-        print()
         from tqdm import tqdm
 
         for graph in tqdm(dataset):
@@ -341,7 +473,7 @@ def test_bench_NAC_colorings_general_first_n(
                 #     print("Coloring:", j)
             # print(f"Colorings:{j}\n")
 
-    benchmark(perform_test)
+    benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_GENERAL_LARGE, warmup_rounds=0)
 
 
 @pytest.mark.slow
@@ -357,7 +489,9 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
 
     # print(graph)
     naive = list(graph.NAC_colorings(algorithm="naive"))
-    tested = list(graph.NAC_colorings(algorithm=algorithm, relabel_strategy=relabel_strategy))
+    tested = list(
+        graph.NAC_colorings(algorithm=algorithm, relabel_strategy=relabel_strategy)
+    )
 
     l1, l2 = len(naive), len(tested)
     assert l1 == l2
