@@ -34,11 +34,12 @@ class UnionFind[T: Hashable]:
         self._data[a] = res
         return res
 
-    def join(self, a: T, b: T) -> None:
+    def join(self, a: T, b: T) -> bool:
         ca, cb = self.find(a), self.find(b)
         if ca == cb:
-            return
+            return False
         self._data[cb] = ca
+        return True
 
     def root_cnt(self, total: int) -> int:
         """

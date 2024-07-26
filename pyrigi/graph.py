@@ -1176,6 +1176,7 @@ class Graph(nx.Graph):
     @staticmethod
     def _find_triangle_components(
         graph: nx.Graph,
+        use_triangles_over_component: bool = True,
         is_cartesian_NAC_coloring: bool = False,
     ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
         """
@@ -1208,6 +1209,49 @@ class Graph(nx.Graph):
             for w in intersection:
                 components.join((u, v), (w, v))
                 components.join((u, v), (w, u))
+
+        # Checks for edges & triangles over component
+        # This MUST be run before search for squares of other search
+        # that may produce disconnected components, as cycles may not exist!
+        # There routines are highly inefficient, but the time is still
+        # negligible compared to the main algorithm running time.
+        if use_triangles_over_component:
+            # we try again until we find no other component to merge
+            # new opinions may appear later
+            # could be most probably implemented smarter
+            done = False
+            while not done:
+                done = True
+
+                vertex_to_components: List[Set[Edge]] = [set() for _ in range(max(graph.nodes) + 1)]
+
+                # prepare updated vertex to component mapping
+                for e in graph.edges:
+                    comp_id = components.find(e)
+                    vertex_to_components[e[0]].add(comp_id)
+                    vertex_to_components[e[1]].add(comp_id)
+
+                # v is the top of the triangle over component
+                for v in graph.nodes:
+                    # maps component to set of vertices containing it
+                    comp_to_vertices: Dict[Edge, Set[int]] = defaultdict(set)
+                    for u in graph.neighbors(v):
+                        # find all the components v neighbors with
+                        for comp in vertex_to_components[u]:
+                            comp_to_vertices[comp].add(u)
+
+                    # if we found more edges to the same component,
+                    # we also found a triangle and we merge it's arms
+                    for comp, vertices in comp_to_vertices.items():
+                        if comp ==len(vertices) <= 1:
+                            continue
+
+                        vertices = iter(vertices)
+                        w = next(vertices)
+                        for u in vertices:
+                            # if something changed, we may have another
+                            # change for improvement the next round
+                            done &= not components.join((v, w), (v, u))
 
         # Finds squares
         for edge in graph.edges if is_cartesian_NAC_coloring else []:
@@ -1895,6 +1939,7 @@ class Graph(nx.Graph):
         t_graph = nx.Graph(t_graph)
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
         beam_size: int = min(chunk_sizes[0], 10)
+        # beam_size: int = 1024
 
         while t_graph.number_of_nodes() > 0:
             if start_from_min:
