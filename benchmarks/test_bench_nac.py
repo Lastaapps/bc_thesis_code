@@ -12,10 +12,11 @@ from pyrigi.graph import Graph
 import pytest
 import networkx as nx
 
+
 SMALL_GRAPH_FILE_LIMIT = 64
 SMALL_GRAPH_FUZZY_LIMIT = 256
 small_graphs: List[Graph] = load_all_small_graphs(SMALL_GRAPH_FILE_LIMIT)
-laman_graphs: List[Graph] = load_laman_graphs()
+laman_graphs: List[Graph] = list(load_laman_graphs())
 laman_small_graphs = list(filter(lambda g: nx.number_of_nodes(g) < 10, laman_graphs))
 laman_medium_graphs = list(
     filter(lambda g: nx.number_of_nodes(g) in range(10, 15 + 1), laman_graphs)
@@ -212,8 +213,9 @@ def test_bench_NAC_colorings_laman_fast(
 
     def perform_test():
         from tqdm import tqdm
+
         for graph in tqdm(dataset):
-        # for graph in dataset:
+            # for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
@@ -519,10 +521,13 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
 
 def test_wtf_is_going_on():
     import time
+    from tqdm import tqdm
 
-    # limit = 1_000_000
+    rand = random.Random(42)
+
+    limit = 1_000_000
     # limit = 10_000
-    limit = 1_000
+    # limit = 1_000
 
     # dataset: List[Graph] = list(
     #     filter(lambda g: nx.number_of_nodes(g) == 15, laman_medium_graphs)
@@ -531,9 +536,15 @@ def test_wtf_is_going_on():
     # ]  # [7:8]
     # dataset = general_graphs[:10]
     # dataset = general_graphs[6:7]
-    dataset = [general_graphs[i] for i in [6, 10, 13]]
+    # dataset = [general_graphs[i] for i in [6, 10, 13]]
+    # dataset: List[Graph] = list(
+    #     filter(lambda g: nx.number_of_nodes(g) == 15, laman_medium_graphs)
+    #     )[:30][16:17]
+    dataset: List[Graph] = list(
+        filter(lambda g: nx.number_of_nodes(g) == 13, laman_medium_graphs)
+    )[:30][10:11]
 
-    for graph in dataset:
+    for graph in tqdm(dataset):
         results = []
 
         def test(
@@ -562,82 +573,14 @@ def test_wtf_is_going_on():
             results.append(duration)
             print(f"Duration: {duration}")
 
-        # test(
-        #     algorithm="subgraphs-True-none-auto",
-        #     relabel_strategy="none",
-        # )
-        # for i in [7, 13]: # 42 edges
-        #     test(
-        #         algorithm=f"subgraphs-True-none-{i}",
-        #         relabel_strategy="none",
-        #     )
-        #######################################################################
-
-        if True:
-            # test(
-            #     algorithm="subgraphs-True-bfs-4",
-            #     relabel_strategy="none",
-            # )
-            # test(
-            #     algorithm="subgraphs-True-bfs-8",
-            #     relabel_strategy="none",
-            # )
-            # test(
-            #     algorithm="subgraphs-True-bfs_smart-4",
-            #     relabel_strategy="none",
-            # )
-            # test(
-            #     algorithm="subgraphs-True-bfs_smart-8",
-            #     relabel_strategy="none",
-            # )
-            test(
-                algorithm="subgraphs-True-beam_neighbors_smart_triangles-4",
-                relabel_strategy="none",
-            )
-            # test(
-            #     algorithm="subgraphs-True-beam_neighbors_smart_triangles-8",
-            #     relabel_strategy="none",
-            # )
-
-        if False:
-            # 43
-            test(
-                algorithm="subgraphs-True-beam_neighbors-4",
-                relabel_strategy="random",
-            )
-            # 12
-            test(
-                algorithm="subgraphs-True-beam_neighbors-4",
-                relabel_strategy="bfs",
-            )
-            # 30
-            test(
-                algorithm="subgraphs-True-beam_neighbors-4",
-                relabel_strategy="beam_degree",
-            )
-
-            # trash
-            test(
-                algorithm="subgraphs-True-beam_neighbors-5",
-                relabel_strategy="none",
-            )
-            test(
-                algorithm="subgraphs-True-beam_neighbors-5",
-                relabel_strategy="random",
-            )
-            test(
-                algorithm="subgraphs-True-beam_neighbors-5",
-                relabel_strategy="bfs",
-            )
-            test(
-                algorithm="subgraphs-True-beam_neighbors-5",
-                relabel_strategy="beam_degree",
-            )
+        test(
+            algorithm="subgraphs-True-none-4-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-True-beam_neighbors-4-smart",
+            relabel_strategy="none",
+        )
 
         print(results)
-        # print()
-        # print()
-        # print()
-        # print()
-        # print()
-        # print()
+        # [print() for _ in range(5)]

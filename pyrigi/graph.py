@@ -1223,7 +1223,9 @@ class Graph(nx.Graph):
             while not done:
                 done = True
 
-                vertex_to_components: List[Set[Edge]] = [set() for _ in range(max(graph.nodes) + 1)]
+                vertex_to_components: List[Set[Edge]] = [
+                    set() for _ in range(max(graph.nodes) + 1)
+                ]
 
                 # prepare updated vertex to component mapping
                 for e in graph.edges:
@@ -1243,7 +1245,7 @@ class Graph(nx.Graph):
                     # if we found more edges to the same component,
                     # we also found a triangle and we merge it's arms
                     for comp, vertices in comp_to_vertices.items():
-                        if comp ==len(vertices) <= 1:
+                        if comp == len(vertices) <= 1:
                             continue
 
                         vertices = iter(vertices)
@@ -1987,9 +1989,13 @@ class Graph(nx.Graph):
                 ]
                 # values = [(len(added_vertices.intersection(t_graph.neighbors(u))), -t_graph.degree(u)) for u in queue]
 
-                sorted_by_metric = sorted([i for i in range(len(values))], key=lambda i: values[i], reverse=True)
+                sorted_by_metric = sorted(
+                    [i for i in range(len(values))],
+                    key=lambda i: values[i],
+                    reverse=True,
+                )
                 v = queue[sorted_by_metric[0]]
-                queue = [queue[i] for i in sorted_by_metric[1:beam_size+1]]
+                queue = [queue[i] for i in sorted_by_metric[1 : beam_size + 1]]
 
                 # this is worse, but somehow slightly more performant
                 # but I'm not using it anyway ;)
@@ -2276,19 +2282,6 @@ class Graph(nx.Graph):
 
         preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
         assert preferred_chunk_size >= 1
-
-        # We sort the vertices by degree
-        def degree_ordered_nodes() -> List[int]:
-            return list(
-                map(
-                    lambda x: x[0],
-                    sorted(
-                        t_graph.degree(),
-                        key=lambda x: x[1],
-                        reverse=True,
-                    ),
-                )
-            )
 
         # Represents size (no. of vertices of the t-graph) of a basic subgraph
         vertices_no = t_graph.number_of_nodes()
@@ -2658,8 +2651,8 @@ class Graph(nx.Graph):
 
     @staticmethod
     def _NAC_colorings_with_bridges(
-        graph: nx.Graph,
         processor: Callable[[nx.Graph], Iterable[NACColoring]],
+        graph: nx.Graph,
         copy: bool = True,
     ) -> Iterable[NACColoring]:
         """
@@ -2847,6 +2840,210 @@ class Graph(nx.Graph):
         graph = nx.relabel_nodes(graph, mapping, copy=copy)
         return Graph._renamed_coloring(ordered_vertices, processor(graph))
 
+    @staticmethod
+    def _NAC_colorings_without_vertex(
+        processor: Callable[[nx.Graph], Iterable[NACColoring]],
+        graph: nx.Graph,
+        vertex: Vertex | None,
+    ) -> Iterable[NACColoring]:
+        if vertex is None:
+            vertex = max(graph.degree, key=lambda vd: vd[1])[0]
+
+        subgraph = nx.Graph(graph)
+        subgraph.remove_node(vertex)
+
+        endpoints = list(graph.neighbors(vertex))
+        incident_edges = [(vertex, u) for u in endpoints]
+        # print()
+        # print(Graph(graph))
+        # print(Graph(subgraph))
+        # print(f"{incident_edges=}")
+
+        # TODO cache when the last coloring is opposite of the current one
+        iterator = iter(Graph._NAC_colorings_with_non_surjective(
+            subgraph,
+            processor(subgraph),
+        ))
+
+        # In case there are no edges in the subgraph,
+        # both the all red and blue components are empty
+        if subgraph.number_of_edges() == 0:
+            r, b = next(iterator)
+            assert len(r) == 0
+            assert len(b) == 0
+
+        for coloring in iterator:
+            # Naming explanation
+            # vertex -> forbidden
+            # endpoint -> for each edge (vertex, u), it's u
+            # edge -> one of the edges incident to vertex
+            # component -> connected component in the coloring given
+            # group -> set of components
+            #          if there are more edges/endpoints, that share the same color
+
+            # print(f"{coloring=}")
+            
+            # create red & blue components
+            def find_components_and_neighbors(
+                red_edges: Collection[Edge],
+                blue_edges: Collection[Edge],
+            ) -> Tuple[Dict[Vertex, int], List[Set[int]]]:
+                sub = nx.Graph()
+                sub.add_nodes_from(endpoints)
+                sub.add_edges_from(red_edges)
+                vertex_to_comp: Dict[Vertex, int] = defaultdict(lambda: -1)
+                id = -1
+                for id, comp in enumerate( nx.connected_components(sub)):
+                    for v in comp:
+                        vertex_to_comp[v] = id
+                neighboring_components: List[Set[int]] = [set() for _ in range(id + 1)]
+                for u, v in blue_edges:
+                    c1, c2 = vertex_to_comp[u], vertex_to_comp[v]
+                    if c1 != c2 and c1 != -1 and c2 != -1:
+                        neighboring_components[c1].add(c2)
+                        neighboring_components[c2].add(c1)
+                return vertex_to_comp, neighboring_components
+
+            red_endpoint_to_comp, red_neighboring_components = (
+                find_components_and_neighbors(coloring[0], coloring[1])
+            )
+            blue_endpoint_to_comp_id, blue_neighboring_components = find_components_and_neighbors(coloring[1], coloring[0])
+            endpoint_to_comp_id = (red_endpoint_to_comp, blue_endpoint_to_comp_id)
+            neighboring_components = (red_neighboring_components, blue_neighboring_components)
+            # print(f"{endpoint_to_comp_id=}")
+            # print(f"{neighboring_components=}")
+
+            # find endpoints that are connected to the same component
+            # we do this for both the red and blue, as this constrain has
+            # to be fulfilled for both of them
+            comp_to_endpoint : Tuple[Dict[int, int], Dict[int, int]]= ({}, {})
+            same_groups = UnionFind()
+            for u in endpoints:
+                comp_id = endpoint_to_comp_id[0][u]
+                if comp_id < 0:
+                    pass
+                elif comp_id in comp_to_endpoint[0]:
+                    # if there is already a vertex for this component, we merge
+                    same_groups.join(comp_to_endpoint[0][comp_id], u)
+                else:
+                    # otherwise we create a first record for the edge
+                    comp_to_endpoint[0][comp_id] = u
+
+                # same as above, but for blue
+                comp_id = endpoint_to_comp_id[1][u]
+                if comp_id < 0:
+                    pass
+                elif comp_id in comp_to_endpoint[1]:
+                    same_groups.join(comp_to_endpoint[1][comp_id], u)
+                else:
+                    comp_to_endpoint[1][comp_id] = u
+            # print(f"{same_groups=}")
+            # print(f"{comp_to_endpoint=}")
+
+            # Now we need to create an equivalent of component_to_edges
+            # or to be precise vertex to edges
+            # endpoint_to_same: List[List[int]] = [[] for _ in endpoints]
+            endpoint_to_same: Dict[Vertex, List[int]] = defaultdict(list)
+            unique = set()
+            for u in endpoints:
+                id = same_groups.find(u)
+                endpoint_to_same[id].append(u)
+                unique.add(id)
+            # print(f"{endpoint_to_same=}")
+
+            # Now we need to remove empty components,
+            # but keep relation to neighbors (update vertex_to_components)
+            groups: List[List[int]] = []
+            group_to_components: Tuple[List[List[int]], List[List[int]]] = (
+                [],
+                [],
+            )  # holds component ids
+
+            for endpoints_in_same_group in endpoint_to_same.values():
+                if len(endpoints_in_same_group) == 0:
+                    continue
+
+                groups.append(endpoints_in_same_group)
+                group_to_components[0].append(
+                    list(filter(lambda x: x >= 0, (endpoint_to_comp_id[0][u] for u in endpoints_in_same_group)))
+                )
+                group_to_components[1].append(
+                    list(filter(lambda x: x >= 0, (endpoint_to_comp_id[1][u] for u in endpoints_in_same_group)))
+                )
+            # print(f"{groups=}")
+            # print(f"{group_to_components=}")
+
+            # Map everything to groups so we don't need to use indirection later
+            groups_neighbors: Tuple[List[Set[int]], List[Set[int]]] = ([], [])
+            for red_components, blue_components in zip(*group_to_components):
+                groups_neighbors[0].append(
+                    {n for comp_id in red_components for n in neighboring_components[0][comp_id]}
+                )
+                groups_neighbors[1].append(
+                    {n for comp_id in blue_components for n in neighboring_components[1][comp_id]}
+                )
+            # print(f"{groups_neighbors=}")
+
+
+            # Check for contradictions
+            # if there are in one component edges that share the same component
+            # using one color, but use neighboring components using the other
+            # color, we can exit now as all the coloring cannot pass
+            # contradiction_found = False
+            # TODO not working
+            # for red_components, blue_components, red_neighbors, blue_neighbors in zip(
+            #     *group_to_components, *groups_neighbors
+            # ):
+            #     if len(red_neighbors.intersection(red_components)) > 0:
+            #         contradiction_found = True
+            #     if len(blue_neighbors.intersection(blue_components)) > 0:
+            #         contradiction_found = True
+            # if contradiction_found:
+            #     print("Contradiction found")
+            #     break
+            # TODO check if not all the components are neighboring
+
+            groups_edges : List[List[Edge]] = [[(vertex, endpoint) for endpoint in group] for group in groups]
+
+
+            # Now we iterate all the possible colorings of groups
+            for mask in range(2 ** len(groups)):
+                # we create red and blue components lists
+                current_comps = ([], [])
+                for i in range(len(groups)):
+                    if mask & (1 << i):
+                        current_comps[0].extend(group_to_components[0][i])
+                    else:
+                        current_comps[1].extend(group_to_components[1][i])
+
+                # no neighboring connected by the same color
+                r = iter(range(len(groups)))
+                i = next(r, None)
+                valid = True
+                while valid and i is not None:
+                    if mask & (1 << i):
+                        if groups_neighbors[0][i].intersection(current_comps[0]):
+                            valid = False
+                    else:
+                        if groups_neighbors[1][i].intersection(current_comps[1]):
+                            valid = False
+                    i = next(r, None)
+
+                if not valid:
+                    continue
+
+                current_edges: Tuple[List[Edge], List[Edge]] = ([], [])
+                for i in range(len(groups)):
+                    k = int((mask & (1 << i)) == 0)
+                    current_edges[k].extend(groups_edges[i])
+
+                to_emit = (coloring[0] + current_edges[0], coloring[1] + current_edges[1])
+                if len(to_emit[0]) * len(to_emit[1]) > 0:
+                    # print(f"{to_emit=}")
+                    assert Graph(graph).is_NAC_coloring(to_emit)
+                    yield to_emit
+            # print()
+
     @doc_category("Generic rigidity")
     def _NAC_colorings_base(
         self,
@@ -2889,6 +3086,11 @@ class Graph(nx.Graph):
 
         def run(graph_nx: nx.Graph) -> Iterable[NACColoring]:
             graph = Graph(graph_nx)
+
+            # in case graph has no edges because of some previous optimizations,
+            # there are no NAC colorings
+            if graph.number_of_edges() == 0:
+                return []
 
             edge_to_component, component_to_edge = Graph._find_triangle_components(
                 graph,
@@ -2984,9 +3186,15 @@ class Graph(nx.Graph):
         graph: nx.Graph = self
         processor: Callable[[nx.Graph], Iterable[NACColoring]] = run
 
+        if not is_cartesian:
+            for _ in range(1):
+                processor = apply_processor(
+                    processor, lambda p, g: Graph._NAC_colorings_without_vertex(p, g, None)
+                )
+
         if use_bridges_decomposition:
             processor = apply_processor(
-                processor, lambda p, g: Graph._NAC_colorings_with_bridges(g, p)
+                processor, lambda p, g: Graph._NAC_colorings_with_bridges(p, g)
             )
 
         processor = apply_processor(

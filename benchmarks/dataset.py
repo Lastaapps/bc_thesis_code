@@ -7,7 +7,7 @@ import urllib.request
 from enum import Enum
 import networkx as nx
 import zipfile
-from typing import Dict, List, Literal
+from typing import Dict, Iterable, List, Literal
 
 from pyrigi.graph import Graph
 
@@ -96,8 +96,13 @@ def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph
 
     return graphs
 
+def _filter_triangle_only_laman_graphs(graphs) -> filter:
+    return filter(
+        lambda g: len(Graph._find_triangle_components(g)[1]) > 1,
+        graphs,
+    )
 
-def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True):
+def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Graph]:
 
     graphs: List[Graph] = []
     for file in os.listdir(dir):
@@ -112,7 +117,7 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True):
     if shuffle:
         random.Random(42).shuffle(graphs)
 
-    return graphs
+    return _filter_triangle_only_laman_graphs(graphs)
 
 
 def load_general_graphs(

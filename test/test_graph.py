@@ -593,7 +593,7 @@ def test_all_NAC_colorings(
     }
     assert len(coloring_list) == len(no_duplicates)
 
-    # for coloring in sorted([str(x) for x in coloringList]):
+    # for coloring in sorted([str(x) for x in coloring_list]):
     #     print(coloring)
 
     assert colorings_no == len(coloring_list)

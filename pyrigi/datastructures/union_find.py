@@ -15,6 +15,12 @@ class UnionFind[T: Hashable]:
         # Maps used type into id used for list indexing
         self._data: Dict[T, T] = {}
 
+    def __repr__(self) -> str:
+        return self._data.__repr__()
+
+    def __str__(self) -> str:
+        return self._data.__str__()
+
     def same_set(self, a: T, b: T) -> bool:
         return self.find(a) == self.find(b)
 
