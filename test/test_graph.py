@@ -380,22 +380,22 @@ NAC_ALGORITHMS = [
     for paired in [
         (alg, alg + "-smart")
         for alg in [
-            "subgraphs-True-none-4",
-            "subgraphs-True-random-4",
-            "subgraphs-True-degree-4",
-            "subgraphs-True-degree_cycles-4",
-            "subgraphs-True-cycles-4",
-            "subgraphs-True-cycles_match_chunks-4",
-            "subgraphs-True-components_biggest-4",
-            "subgraphs-True-components_spredded-4",
-            "subgraphs-False-none-4",
-            "subgraphs-False-random-4",
-            "subgraphs-False-degree-4",
-            "subgraphs-False-degree_cycles-4",
-            "subgraphs-False-cycles-4",
-            "subgraphs-False-cycles_match_chunks-4",
-            "subgraphs-False-components_biggest-4",
-            "subgraphs-False-components_spredded-4",
+            "subgraphs-log-none-4",
+            "subgraphs-log-random-4",
+            "subgraphs-log-degree-4",
+            "subgraphs-log-degree_cycles-4",
+            "subgraphs-log-cycles-4",
+            "subgraphs-log-cycles_match_chunks-4",
+            "subgraphs-log-components_biggest-4",
+            "subgraphs-log-components_spredded-4",
+            "subgraphs-linear-none-4",
+            "subgraphs-linear-random-4",
+            "subgraphs-linear-degree-4",
+            "subgraphs-linear-degree_cycles-4",
+            "subgraphs-linear-cycles-4",
+            "subgraphs-linear-cycles_match_chunks-4",
+            "subgraphs-linear-components_biggest-4",
+            "subgraphs-linear-components_spredded-4",
         ]
     ]
     for flattened in paired

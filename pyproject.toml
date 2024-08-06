@@ -48,6 +48,7 @@ build-backend = "poetry.core.masonry.api"
 
 
 [tool.pytest.ini_options]
+addopts = "--benchmark-sort=mean"
 pythonpath = [
   "."
 ]

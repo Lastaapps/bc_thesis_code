@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from copy import deepcopy
 from functools import reduce
-from itertools import chain, combinations, product
+from itertools import combinations
 import itertools
 import random
 from typing import (
@@ -17,7 +17,7 @@ from typing import (
     Iterable,
     List,
     Any,
-    Protocol,
+    Literal,
     Sequence,
     Union,
     Tuple,
@@ -30,6 +30,7 @@ import networkx as nx
 from sympy import Matrix
 import math
 import numpy as np
+import time
 
 from pyrigi.datastructures.union_find import UnionFind
 from pyrigi.data_type import NACColoring, Vertex, Edge, GraphType, FrameworkType
@@ -39,8 +40,53 @@ from pyrigi.util.lazy_product import lazy_product
 from pyrigi.util.repetable_iterator import RepeatableIterator
 
 # TODO remove
-# NAC_PRINT_SWITCH = True
 NAC_PRINT_SWITCH = False
+NAC_PRINT_SWITCH = True
+
+statistics_storage: Dict[int, List[Any]] = defaultdict(list)
+
+
+def NAC_statistics_colorings_merge_wrapper[
+    T
+](func: Callable[..., Tuple[Iterable[T], int]]) -> Callable[
+    ..., Tuple[Iterable[T], int]
+]:
+    # return func
+    def stats(*args, **kwargs) -> Tuple[List[T], int]:
+        level = max(args[0][1].bit_count(), args[1][1].bit_count()) * 2
+        start = time.time()
+        orig, mask = func(*args, **kwargs)
+        res: List[T] = list(orig)
+        end = time.time()
+        diff = end - start
+        statistics_storage[level].append((diff, len(res)))
+        return res, mask
+
+    return stats
+
+
+def NAC_statistics_generator[
+    T
+](func: Callable[..., Iterable[T]]) -> Callable[..., Iterable[T]]:
+    # return func
+    def stats(*args, **kwargs) -> Iterable[T]:
+        level = 0
+        start = time.time()
+        res = list(func(*args, **kwargs))
+        end = time.time()
+        diff = end - start
+        statistics_storage[level].append((diff, len(res)))
+        return res
+
+    return stats
+
+
+def print_stats():
+    for key in sorted(statistics_storage.keys(), reverse=True):
+        l = statistics_storage[key]
+        s = sum(map(lambda x: x[0], l))
+        print(f"Level: {key:2d} - {s:.8f} -> {l}")
+    statistics_storage.clear()
 
 
 class Graph(nx.Graph):
@@ -2195,6 +2241,7 @@ class Graph(nx.Graph):
             print(f"Join yielded: {counter}")
 
     @staticmethod
+    @NAC_statistics_generator
     def _subgraph_colorings_generator(
         graph: Graph,
         t_graph: nx.Graph,
@@ -2262,7 +2309,9 @@ class Graph(nx.Graph):
         seed: int,
         from_angle_preserving_components: bool,
         get_subgraphs_together: bool = True,
-        use_log_approach: bool = True,
+        merge_strategy: (
+            str | Literal["linear", "log", "log_reverse", "min_max", "weight"]
+        ) = "log",
         preferred_chunk_size: int | None = None,
         order_strategy: str = "none",
     ) -> Iterable[NACColoring]:
@@ -2428,39 +2477,52 @@ class Graph(nx.Graph):
         assert vertices_no == len(vertices)
 
         if NAC_PRINT_SWITCH:
-            # print("-"*80)
-            # print(nx.nx_agraph.to_agraph(graph))
-            # print("-" * 80)
-            # my_t_graph = nx.Graph()
-            # my_t_graph.name = order_strategy
-            # offset = 0
-            # colors = [
-            #     "red",
-            #     "green",
-            #     "blue",
-            #     "purple",
-            #     "yellow",
-            #     "orange",
-            #     "pink",
-            #     "teal",
-            #     "turquoise",
-            #     "navy",
-            #     "maroon",
-            #     "gray",
-            #     "silver",
-            #     "gold",
-            # ]
+            my_graph = nx.Graph()
+            my_graph.name = order_strategy
+            my_t_graph = nx.Graph()
+            my_t_graph.name = order_strategy
+            offset = 0
+            colors = [
+                "red",
+                "green",
+                "cyan",
+                "purple",
+                "yellow",
+                "orange",
+                "pink",
+                "teal",
+                "turquoise",
+                "navy",
+                "maroon",
+                "gray",
+                "silver",
+                "gold",
+            ]
 
-            # for i, chunk_size in enumerate(chunk_sizes):
-            #     local_vertices = vertices[offset : offset + chunk_size]
-            #     offset += chunk_size
-            #     for v in local_vertices:
-            #         my_t_graph.add_nodes_from(
-            #             [(v, {"color": colors[i % len(colors)], "style": "filled"})]
-            #         )
-            # my_t_graph.add_edges_from(t_graph.edges)
-            # print(nx.nx_agraph.to_agraph(my_t_graph))
-            # print("-" * 80)
+            for i, chunk_size in enumerate(chunk_sizes):
+                local_vertices = vertices[offset : offset + chunk_size]
+                offset += chunk_size
+                for v in local_vertices:
+                    my_graph.add_edges_from(
+                        [
+                            (*e, {"color": colors[i % len(colors)], "style": "filled"})
+                            for e in component_to_edges[v]
+                        ]
+                    )
+                    my_t_graph.add_nodes_from(
+                        [(v, {"color": colors[i % len(colors)], "style": "filled"})]
+                    )
+            my_t_graph.add_edges_from(t_graph.edges)
+            my_t_graph = nx.relabel_nodes(
+                my_t_graph,
+                {v: f"{component_to_edges[v]} ({v})" for v in my_t_graph.nodes()},
+            )
+
+            print("-" * 80)
+            print(nx.nx_agraph.to_agraph(my_graph))
+            print("-" * 80)
+            print(nx.nx_agraph.to_agraph(my_t_graph))
+            print("-" * 80)
 
             print(f"Vertices no:  {nx.number_of_nodes(graph)}")
             print(f"Edges no:     {nx.number_of_edges(graph)}")
@@ -2470,6 +2532,7 @@ class Graph(nx.Graph):
             print(f"Chunk sizes:  {chunk_sizes}")
             print("-" * 80)
 
+        @NAC_statistics_colorings_merge_wrapper
         def colorings_merge_wrapper(
             colorings_1: Tuple[Iterable[int], int],
             colorings_2: Tuple[Iterable[int], int],
@@ -2539,33 +2602,289 @@ class Graph(nx.Graph):
             )
             offset += chunk_size
 
-            # Resolves crossproduct with the previous epoch (linear approach)
-            if use_log_approach:
-                continue
+        # TODO find why removing 1 vertex helped
+        match merge_strategy:
+            case "linear":
+                res: Tuple[Iterable[int], int] = all_epochs[0]
+                for g in all_epochs[1:]:
+                    res = colorings_merge_wrapper(res, g)
+                all_epochs = [res]
 
-            if len(all_epochs) <= 1:
-                # Nothing to join
-                continue
+            case "sorted_size" | "sorted_bits":
+                # Joins the subgraphs like a tree
+                all_epochs: List[Tuple[List[int], int]] = [
+                    (list(i), m) for i, m in all_epochs
+                ]
 
-            all_epochs.append(
-                colorings_merge_wrapper(
-                    all_epochs.pop(),
-                    all_epochs.pop(),
-                )
-            )
+                # even slower when placed inside of the cycle
+                match merge_strategy:
+                    case "sorted_size":
+                        all_epochs = sorted(
+                            all_epochs, key=lambda x: len(x[0]), reverse=True
+                        )
+                    case "sorted_bits":
+                        all_epochs = sorted(
+                            all_epochs, key=lambda x: x[1].bit_count(), reverse=True
+                        )
 
-        # Joins the subgraphs like a tree
-        while use_log_approach and len(all_epochs) > 1:
-            next_all_epochs: List[Tuple[Iterable[int], int]] = []
+                while len(all_epochs) > 1:
+                    iterable, mask = colorings_merge_wrapper(
+                        all_epochs[-1],
+                        all_epochs[-2],
+                    )
+                    all_epochs.pop()
+                    all_epochs[-1] = (list(iterable), mask)
 
-            # always join 2 subgraphs
-            for batch in itertools.batched(all_epochs, 2):
-                if len(batch) == 1:
-                    next_all_epochs.append(batch[0])
-                    continue
+            case "log" | "log_reverse":
+                # Joins the subgraphs like a tree
+                while len(all_epochs) > 1:
+                    next_all_epochs: List[Tuple[Iterable[int], int]] = []
 
-                next_all_epochs.append(colorings_merge_wrapper(*batch))
-                all_epochs = next_all_epochs
+                    # always join 2 subgraphs
+                    for batch in itertools.batched(all_epochs, 2):
+                        if len(batch) == 1:
+                            next_all_epochs.append(batch[0])
+                            continue
+
+                        next_all_epochs.append(colorings_merge_wrapper(*batch))
+
+                    match merge_strategy:
+                        case "log_reverse":
+                            next_all_epochs = list(reversed(next_all_epochs))
+
+                    all_epochs = next_all_epochs
+
+            case "min_max":
+                # Joins the subgraphs like a tree
+                all_epochs: List[Tuple[List[int], int]] = [
+                    (list(i), m) for i, m in all_epochs
+                ]
+                while len(all_epochs) > 1:
+                    next_all_epochs: List[Tuple[List[int], int]] = []
+
+                    all_epochs = sorted(all_epochs, key=lambda x: x[1].bit_count())
+
+                    for batch_id in range(len(all_epochs) // 2):
+
+                        iterable, mask = colorings_merge_wrapper(
+                            all_epochs[batch_id],
+                            all_epochs[-(batch_id + 1)],
+                        )
+                        next_all_epochs.append((list(iterable), mask))
+
+                    if len(all_epochs) % 2 == 1:
+                        next_all_epochs.append(all_epochs[len(all_epochs) // 2])
+
+                    all_epochs = next_all_epochs
+
+            case "score":
+                # Joins the subgraphs like a tree
+                all_epochs: List[Tuple[List[int], int]] = [
+                    (list(i), m) for i, m in all_epochs
+                ]
+                while len(all_epochs) > 1:
+                    best_pair = (0, 1)
+                    lowers_score = 9_223_372_036_854_775_807
+                    for i in range(len(all_epochs)):
+                        e1 = all_epochs[i]
+                        for j in range(i + 1, len(all_epochs)):
+                            e2 = all_epochs[j]
+                            # size of colorings product * size of graph
+                            score = (
+                                len(e1[0]) * len(e2[0]) * (e1[1] | e2[1]).bit_count()
+                            )
+                            if score < lowers_score:
+                                lowers_score = score
+                                best_pair = (i, j)
+
+                    e1 = all_epochs[best_pair[0]]
+                    e2 = all_epochs[best_pair[1]]
+                    print(f"{len(e1[0])} {len(e2[0])} {(e1[1] | e2[1]).bit_count()}")
+                    iterable, mask = colorings_merge_wrapper(
+                        all_epochs[best_pair[0]],
+                        all_epochs[best_pair[1]],
+                    )
+                    # this is safe (and slow) as the second coordinate is greater
+                    all_epochs.pop(best_pair[1])
+                    all_epochs[best_pair[0]] = (list(iterable), mask)
+
+            case "dynamic":
+                # Joins the subgraphs like a tree
+                all_epochs: List[Tuple[List[int], int]] = [
+                    (list(i), m) for i, m in all_epochs
+                ]
+
+                all_ones = 2 ** len(all_epochs) - 1
+                print(len(all_epochs))
+                print(all_ones)
+                cache: List[None | Tuple[int, int, int, Tuple[int, int]]] = [
+                    None for _ in range(2 ** len(all_epochs))
+                ]
+                cache[all_ones] = (0, 0, 0, (0, 1))
+
+                def dynamic_process_search(
+                    mask: int,
+                ) -> Tuple[int, int, int, Tuple[int, int]]:
+                    if cache[mask] is not None:
+                        return cache[mask]
+
+                    if mask.bit_count() + 1 == len(all_epochs):
+                        index = (mask ^ all_ones).bit_length() - 1
+                        a, b = all_epochs[index]
+                        return 0, len(a), b.bit_count(), (index, index)
+
+                    least_work = 9_223_372_036_854_775_807**2
+                    result: Tuple[int, int, int, Tuple[int, int]]
+
+                    for i in range(len(all_epochs)):
+                        if mask & (1 << i):
+                            continue
+
+                        e1 = all_epochs[i]
+                        for j in range(i + 1, len(all_epochs)):
+                            if mask & (1 << j):
+                                continue
+
+                            e2 = all_epochs[j]
+                            # size of colorings product * size of graph
+                            my_size = (e1[1] | e2[1]).bit_count()
+                            my_work = len(e1[0]) * len(e2[0]) * my_size
+                            my_outputs = len(e1[0]) * len(e2[0])  # TODO heuristics
+                            mask ^= (1 << i) | (1 << j)
+                            work, outputs, size, _ = dynamic_process_search(mask)
+                            final_size = my_size + size
+                            final_output = my_outputs * outputs
+                            final_work = work + my_work + final_output * final_size
+                            mask ^= (1 << i) | (1 << j)
+                            if final_work < least_work:
+                                least_work = final_work
+                                result = (final_work, final_output, final_size, (i, j))
+                    cache[mask] = result
+                    return result
+
+                algo_mask = 0
+                while algo_mask != all_ones:
+                    # print(f"{algo_mask=} {bin(algo_mask)} <- {bin(all_ones)}")
+                    _, _, _, best_pair = dynamic_process_search(algo_mask)
+                    # print(f"{best_pair=}")
+
+                    if best_pair[0] == best_pair[1]:
+                        all_epochs = [all_epochs[best_pair[0]]]
+                        break
+
+                    algo_mask |= 1 << best_pair[1]
+
+                    e1 = all_epochs[best_pair[0]]
+                    e2 = all_epochs[best_pair[1]]
+                    # print(f"{len(e1[0])} {len(e2[0])} {(e1[1] | e2[1]).bit_count()}")
+                    iterable, mask = colorings_merge_wrapper(
+                        all_epochs[best_pair[0]],
+                        all_epochs[best_pair[1]],
+                    )
+                    # this is safe (and slow) as the second coordinate is greater
+                    # all_epochs.pop(best_pair[1])
+                    all_epochs[best_pair[0]] = (list(iterable), mask)
+
+            case "recursion" | "recursion_almost":
+                # Joins the subgraphs like a tree
+                all_epochs: List[Tuple[List[int], int]] = [
+                    (list(i), m) for i, m in all_epochs
+                ]
+
+                all_ones = 2 ** len(all_epochs) - 1
+                algo_mask = 0
+
+                cache: List[None | Tuple[int, int, int, Tuple[int, int]]] = [
+                    None for _ in range(2 ** len(all_epochs))
+                ]
+                cache[all_ones] = (0, 0, 0, (0, 1))
+
+                while algo_mask != all_ones:
+
+                    def dynamic_process_search(
+                        mask: int,
+                    ) -> Tuple[int, int, int, Tuple[int, int]]:
+                        if cache[mask] is not None:
+                            return cache[mask]
+
+                        if mask.bit_count() + 1 == len(all_epochs):
+                            index = (mask ^ all_ones).bit_length() - 1
+                            a, b = all_epochs[index]
+                            return 0, len(a), b.bit_count(), (index, index)
+
+                        least_work = 9_223_372_036_854_775_807**2
+                        result: Tuple[int, int, int, Tuple[int, int]]
+
+                        for i in range(len(all_epochs)):
+                            if mask & (1 << i):
+                                continue
+
+                            e1 = all_epochs[i]
+                            for j in range(i + 1, len(all_epochs)):
+                                if mask & (1 << j):
+                                    continue
+
+                                e2 = all_epochs[j]
+                                # size of colorings product * size of graph
+                                my_size = (e1[1] | e2[1]).bit_count()
+                                my_work = len(e1[0]) * len(e2[0]) * my_size
+                                my_outputs = len(e1[0]) * len(e2[0])  # TODO heuristics
+                                mask ^= (1 << i) | (1 << j)
+                                work, outputs, size, _ = dynamic_process_search(mask)
+                                final_size = my_size + size
+                                final_output = my_outputs * outputs
+                                final_work = work + my_work + final_output * final_size
+                                mask ^= (1 << i) | (1 << j)
+                                if final_work < least_work:
+                                    least_work = final_work
+                                    result = (
+                                        final_work,
+                                        final_output,
+                                        final_size,
+                                        (i, j),
+                                    )
+                        cache[mask] = result
+                        return result
+
+                    # actually, the whole cache should be invalidated
+                    def invalidate_cache(
+                        cache: List[None | Tuple[int, int, int, Tuple[int, int]]],
+                        bit: int,
+                    ) -> List[None | Tuple[int, int, int, Tuple[int, int]]]:
+                        if merge_strategy == "recursion":
+                            cache = [None for _ in range(2 ** len(all_epochs))]
+                            cache[all_ones] = (0, 0, 0, (0, 1))
+                            return cache
+
+                        mlow = 2**bit - 1
+                        mhigh = all_ones ^ mlow
+                        for i in range(all_ones // 2):
+                            i = ((i & mhigh) << 1) | (mlow & i)
+                            cache[i] = None
+                        return cache
+
+                    _, _, _, best_pair = dynamic_process_search(algo_mask)
+
+                    if best_pair[0] == best_pair[1]:
+                        all_epochs = [all_epochs[best_pair[0]]]
+                        break
+
+                    algo_mask |= 1 << best_pair[1]
+                    cache = invalidate_cache(cache, best_pair[0])
+
+                    e1 = all_epochs[best_pair[0]]
+                    e2 = all_epochs[best_pair[1]]
+                    # print(f"{len(e1[0])} {len(e2[0])} {(e1[1] | e2[1]).bit_count()}")
+                    iterable, mask = colorings_merge_wrapper(
+                        all_epochs[best_pair[0]],
+                        all_epochs[best_pair[1]],
+                    )
+                    # this is safe (and slow) as the second coordinate is greater
+                    # all_epochs.pop(best_pair[1])
+                    all_epochs[best_pair[0]] = (list(iterable), mask)
+
+            case _:
+                raise ValueError(f"Unknown merge strategy: {merge_strategy}")
 
         assert len(all_epochs) == 1
         expected_subgraph_mask = 2**vertices_no - 1
@@ -2846,6 +3165,10 @@ class Graph(nx.Graph):
         graph: nx.Graph,
         vertex: Vertex | None,
     ) -> Iterable[NACColoring]:
+
+        if graph.number_of_nodes() <= 1:
+            return
+
         if vertex is None:
             vertex = max(graph.degree, key=lambda vd: vd[1])[0]
 
@@ -2853,17 +3176,17 @@ class Graph(nx.Graph):
         subgraph.remove_node(vertex)
 
         endpoints = list(graph.neighbors(vertex))
-        incident_edges = [(vertex, u) for u in endpoints]
         # print()
         # print(Graph(graph))
         # print(Graph(subgraph))
-        # print(f"{incident_edges=}")
 
         # TODO cache when the last coloring is opposite of the current one
-        iterator = iter(Graph._NAC_colorings_with_non_surjective(
-            subgraph,
-            processor(subgraph),
-        ))
+        iterator = iter(
+            Graph._NAC_colorings_with_non_surjective(
+                subgraph,
+                processor(subgraph),
+            )
+        )
 
         # In case there are no edges in the subgraph,
         # both the all red and blue components are empty
@@ -2872,7 +3195,24 @@ class Graph(nx.Graph):
             assert len(r) == 0
             assert len(b) == 0
 
+        # in many of my algorithms I return coloring and it's symmetric
+        # variant after each other. In that case local results are also symmetric
+        previous_coloring: NACColoring | None = None
+        previous_results: List[NACColoring] = []
+
         for coloring in iterator:
+            if previous_coloring is not None:
+                if (
+                    coloring[0] == previous_coloring[1]
+                    and coloring[1] == previous_coloring[0]
+                ):
+                    for previous in previous_results:
+                        yield previous[1], previous[0]
+                    previous_coloring = None
+                    continue
+            previous_coloring = coloring
+            previous_results = []
+
             # Naming explanation
             # vertex -> forbidden
             # endpoint -> for each edge (vertex, u), it's u
@@ -2882,7 +3222,7 @@ class Graph(nx.Graph):
             #          if there are more edges/endpoints, that share the same color
 
             # print(f"{coloring=}")
-            
+
             # create red & blue components
             def find_components_and_neighbors(
                 red_edges: Collection[Edge],
@@ -2893,7 +3233,7 @@ class Graph(nx.Graph):
                 sub.add_edges_from(red_edges)
                 vertex_to_comp: Dict[Vertex, int] = defaultdict(lambda: -1)
                 id = -1
-                for id, comp in enumerate( nx.connected_components(sub)):
+                for id, comp in enumerate(nx.connected_components(sub)):
                     for v in comp:
                         vertex_to_comp[v] = id
                 neighboring_components: List[Set[int]] = [set() for _ in range(id + 1)]
@@ -2907,16 +3247,21 @@ class Graph(nx.Graph):
             red_endpoint_to_comp, red_neighboring_components = (
                 find_components_and_neighbors(coloring[0], coloring[1])
             )
-            blue_endpoint_to_comp_id, blue_neighboring_components = find_components_and_neighbors(coloring[1], coloring[0])
+            blue_endpoint_to_comp_id, blue_neighboring_components = (
+                find_components_and_neighbors(coloring[1], coloring[0])
+            )
             endpoint_to_comp_id = (red_endpoint_to_comp, blue_endpoint_to_comp_id)
-            neighboring_components = (red_neighboring_components, blue_neighboring_components)
+            neighboring_components = (
+                red_neighboring_components,
+                blue_neighboring_components,
+            )
             # print(f"{endpoint_to_comp_id=}")
             # print(f"{neighboring_components=}")
 
             # find endpoints that are connected to the same component
             # we do this for both the red and blue, as this constrain has
             # to be fulfilled for both of them
-            comp_to_endpoint : Tuple[Dict[int, int], Dict[int, int]]= ({}, {})
+            comp_to_endpoint: Tuple[Dict[int, int], Dict[int, int]] = ({}, {})
             same_groups = UnionFind()
             for u in endpoints:
                 comp_id = endpoint_to_comp_id[0][u]
@@ -2937,6 +3282,7 @@ class Graph(nx.Graph):
                     same_groups.join(comp_to_endpoint[1][comp_id], u)
                 else:
                     comp_to_endpoint[1][comp_id] = u
+
             # print(f"{same_groups=}")
             # print(f"{comp_to_endpoint=}")
 
@@ -2958,6 +3304,10 @@ class Graph(nx.Graph):
                 [],
                 [],
             )  # holds component ids
+            group_to_components_masks: Tuple[List[int], List[int]] = (
+                [],
+                [],
+            )  # holds component ids
 
             for endpoints_in_same_group in endpoint_to_same.values():
                 if len(endpoints_in_same_group) == 0:
@@ -2965,25 +3315,61 @@ class Graph(nx.Graph):
 
                 groups.append(endpoints_in_same_group)
                 group_to_components[0].append(
-                    list(filter(lambda x: x >= 0, (endpoint_to_comp_id[0][u] for u in endpoints_in_same_group)))
+                    list(
+                        filter(
+                            lambda x: x >= 0,
+                            (
+                                endpoint_to_comp_id[0][u]
+                                for u in endpoints_in_same_group
+                            ),
+                        )
+                    )
                 )
                 group_to_components[1].append(
-                    list(filter(lambda x: x >= 0, (endpoint_to_comp_id[1][u] for u in endpoints_in_same_group)))
+                    list(
+                        filter(
+                            lambda x: x >= 0,
+                            (
+                                endpoint_to_comp_id[1][u]
+                                for u in endpoints_in_same_group
+                            ),
+                        )
+                    )
                 )
+                mask0, mask1 = 0, 0
+                for u in endpoints_in_same_group:
+                    if u >= 0:
+                        mask0 |= 1 << endpoint_to_comp_id[0][u]
+                        mask1 |= 1 << endpoint_to_comp_id[1][u]
+                group_to_components_masks[0].append(mask0)
+                group_to_components_masks[1].append(mask1)
+
             # print(f"{groups=}")
             # print(f"{group_to_components=}")
 
             # Map everything to groups so we don't need to use indirection later
-            groups_neighbors: Tuple[List[Set[int]], List[Set[int]]] = ([], [])
+            groups_neighbors: Tuple[List[int], List[int]] = ([], [])
             for red_components, blue_components in zip(*group_to_components):
-                groups_neighbors[0].append(
-                    {n for comp_id in red_components for n in neighboring_components[0][comp_id]}
-                )
-                groups_neighbors[1].append(
-                    {n for comp_id in blue_components for n in neighboring_components[1][comp_id]}
-                )
-            # print(f"{groups_neighbors=}")
+                # groups_neighbors[0].append(
+                #     {n for comp_id in red_components for n in neighboring_components[0][comp_id]}
+                # )
+                # groups_neighbors[1].append(
+                #     {n for comp_id in blue_components for n in neighboring_components[1][comp_id]}
+                # )
 
+                mask = 0
+                for comp_id in red_components:
+                    for n in neighboring_components[0][comp_id]:
+                        mask |= 1 << n
+                groups_neighbors[0].append(mask)
+
+                mask = 0
+                for comp_id in blue_components:
+                    for n in neighboring_components[1][comp_id]:
+                        mask |= 1 << n
+                groups_neighbors[1].append(mask)
+
+            # print(f"{groups_neighbors=}")
 
             # Check for contradictions
             # if there are in one component edges that share the same component
@@ -3003,18 +3389,25 @@ class Graph(nx.Graph):
             #     break
             # TODO check if not all the components are neighboring
 
-            groups_edges : List[List[Edge]] = [[(vertex, endpoint) for endpoint in group] for group in groups]
-
+            groups_edges: List[List[Edge]] = [
+                [(vertex, endpoint) for endpoint in group] for group in groups
+            ]
 
             # Now we iterate all the possible colorings of groups
             for mask in range(2 ** len(groups)):
                 # we create red and blue components lists
-                current_comps = ([], [])
+                # current_comps = ([], [])
+                # for i in range(len(groups)):
+                #     if mask & (1 << i):
+                #         current_comps[0].extend(group_to_components[0][i])
+                #     else:
+                #         current_comps[1].extend(group_to_components[1][i])
+                current_comps0, current_comps1 = (0, 0)
                 for i in range(len(groups)):
                     if mask & (1 << i):
-                        current_comps[0].extend(group_to_components[0][i])
+                        current_comps0 |= group_to_components_masks[0][i]
                     else:
-                        current_comps[1].extend(group_to_components[1][i])
+                        current_comps1 |= group_to_components_masks[1][i]
 
                 # no neighboring connected by the same color
                 r = iter(range(len(groups)))
@@ -3022,10 +3415,10 @@ class Graph(nx.Graph):
                 valid = True
                 while valid and i is not None:
                     if mask & (1 << i):
-                        if groups_neighbors[0][i].intersection(current_comps[0]):
+                        if groups_neighbors[0][i] & current_comps0:
                             valid = False
                     else:
-                        if groups_neighbors[1][i].intersection(current_comps[1]):
+                        if groups_neighbors[1][i] & current_comps1:
                             valid = False
                     i = next(r, None)
 
@@ -3037,22 +3430,28 @@ class Graph(nx.Graph):
                     k = int((mask & (1 << i)) == 0)
                     current_edges[k].extend(groups_edges[i])
 
-                to_emit = (coloring[0] + current_edges[0], coloring[1] + current_edges[1])
+                to_emit = (
+                    coloring[0] + current_edges[0],
+                    coloring[1] + current_edges[1],
+                )
                 if len(to_emit[0]) * len(to_emit[1]) > 0:
                     # print(f"{to_emit=}")
-                    assert Graph(graph).is_NAC_coloring(to_emit)
+                    # assert Graph(graph).is_NAC_coloring(to_emit)
+
                     yield to_emit
+                    previous_results.append(to_emit)
             # print()
 
     @doc_category("Generic rigidity")
     def _NAC_colorings_base(
         self,
-        algorithm: str = "subgraphs",
-        relabel_strategy: str = "random",
-        use_bridges_decomposition: bool = True,
-        is_cartesian: bool = False,
-        use_has_coloring_check: bool = True,  # I disable the check in tests
-        seed: int | None = None,
+        algorithm: str,
+        relabel_strategy: str,
+        use_bridges_decomposition: bool,
+        is_cartesian: bool,
+        remove_vertices_cnt: int,
+        use_has_coloring_check: bool,  # I disable the check in tests
+        seed: int | None,
     ) -> Iterable[NACColoring]:
         """
         Finds all NAC-colorings of a graph.
@@ -3158,7 +3557,7 @@ class Graph(nx.Graph):
                         is_NAC_coloring,
                         from_angle_preserving_components=is_cartesian,
                         seed=rand.randint(0, 2**16 - 1),
-                        use_log_approach=bool(algorithm_parts[1]),
+                        merge_strategy=algorithm_parts[1],
                         order_strategy=algorithm_parts[2],
                         preferred_chunk_size=(
                             int(algorithm_parts[3])
@@ -3186,11 +3585,11 @@ class Graph(nx.Graph):
         graph: nx.Graph = self
         processor: Callable[[nx.Graph], Iterable[NACColoring]] = run
 
-        if not is_cartesian:
-            for _ in range(1):
-                processor = apply_processor(
-                    processor, lambda p, g: Graph._NAC_colorings_without_vertex(p, g, None)
-                )
+        assert not (is_cartesian and remove_vertices_cnt > 0)
+        for _ in range(remove_vertices_cnt):
+            processor = apply_processor(
+                processor, lambda p, g: Graph._NAC_colorings_without_vertex(p, g, None)
+            )
 
         if use_bridges_decomposition:
             processor = apply_processor(
@@ -3212,6 +3611,7 @@ class Graph(nx.Graph):
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
         use_bridges_decomposition: bool = True,
+        remove_vertices_cnt: int = 0,
         use_has_coloring_check: bool = True,
         seed: int | None = None,
     ) -> Iterable[NACColoring]:
@@ -3241,6 +3641,7 @@ class Graph(nx.Graph):
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=False,
+            remove_vertices_cnt=remove_vertices_cnt,
             use_has_coloring_check=use_has_coloring_check,
             seed=seed,
         )
@@ -3282,6 +3683,7 @@ class Graph(nx.Graph):
             relabel_strategy=relabel_strategy,
             use_bridges_decomposition=use_bridges_decomposition,
             is_cartesian=True,
+            remove_vertices_cnt=0,
             use_has_coloring_check=use_has_coloring_check,
             seed=seed,
         )
