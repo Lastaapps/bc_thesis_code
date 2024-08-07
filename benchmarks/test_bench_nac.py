@@ -162,15 +162,30 @@ def test_bench_NAC_colorings_small(
 
 
 NAC_ALGORITHMS_LAMAN_FAST = [
-    "subgraphs-linear-none-4-smart",
-    "subgraphs-linear-degree-4-smart",
-    "subgraphs-linear-degree_cycles-4-smart",
-    "subgraphs-linear-cycles-4-smart",
-    "subgraphs-linear-cycles_match_chunks-4-smart",
-    "subgraphs-linear-beam_neighbors-4-smart",
-    "subgraphs-linear-beam_neighbors_triangles-4-smart",
-    "subgraphs-linear-beam_neighbors_max-4-smart",
-    "subgraphs-linear-beam_neighbors_max_triangles-4-smart",
+    # "subgraphs-linear-none-4-smart",
+    # "subgraphs-linear-none-6-smart",
+    "subgraphs-linear-none-8-smart",
+    # "subgraphs-linear-degree-4-smart",
+    # "subgraphs-linear-degree_cycles-4-smart",
+    # "subgraphs-linear-cycles-4-smart",
+    # "subgraphs-linear-cycles_match_chunks-4-smart",
+    # "subgraphs-linear-neighbors-4-smart",
+    # "subgraphs-linear-neighbors_cycle-4-smart",
+    # "subgraphs-linear-neighbors_iterative-4-smart",
+    # "subgraphs-linear-cycles-6-smart",
+    # "subgraphs-linear-cycles_match_chunks-6-smart",
+    # "subgraphs-linear-neighbors-6-smart",
+    # "subgraphs-linear-neighbors_cycle-6-smart",
+    # "subgraphs-linear-neighbors_iterative-6-smart",
+    # "subgraphs-linear-cycles-8-smart",
+    # "subgraphs-linear-cycles_match_chunks-8-smart",
+    "subgraphs-linear-neighbors-8-smart",
+    # "subgraphs-linear-neighbors_cycle-8-smart",
+    # "subgraphs-linear-neighbors_iterative-8-smart",
+    # "subgraphs-linear-beam_neighbors-4-smart",
+    # "subgraphs-linear-beam_neighbors_triangles-4-smart",
+    # "subgraphs-linear-beam_neighbors_max-4-smart",
+    # "subgraphs-linear-beam_neighbors_max_triangles-4-smart",
     # "subgraphs-log-none-4-smart",
     # "subgraphs-log-degree-4-smart",
     # "subgraphs-log-degree_cycles-4-smart",
@@ -208,12 +223,12 @@ BENCH_ROUNDS_LAMAN_FAST = 4
 @pytest.mark.parametrize(
     "dataset",
     [
-        laman_medium_graphs[:32],
-        # laman_larger_graphs[:16],
+        # laman_medium_graphs[:32],
+        laman_larger_graphs[:16],
     ],
     ids=[
-        "laman_medium",
-        # "laman_larger",
+        # "laman_medium",
+        "laman_larger",
     ],
 )
 def test_bench_NAC_colorings_laman_fast(
@@ -359,7 +374,11 @@ def test_bench_nac_colorings_general_medium(
 NAC_FASTEST_LAMAN = [
     # smart is not working well here
     ("subgraphs-linear-none-4", "none"),
-    ("subgraphs-linear-none-4", "beam_degree"),
+    ("subgraphs-linear-none-8", "none"),
+    ("subgraphs-linear-neighbors-6-smart", "beam_degree"),
+    ("subgraphs-linear-neighbors_cycles-6-smart", "beam_degree"),
+    ("subgraphs-linear-neighbors-8-smart", "beam_degree"),
+    ("subgraphs-linear-neighbors_cycles-8-smart", "beam_degree"),
     # ("subgraphs-linear-degree_cycles-4", "beam_degree"),
     # ("subgraphs-linear-cycles-4", "beam_degree"),
     # ("subgraphs-linear-cycles_match_chunks-4", "beam_degree"),
@@ -367,8 +386,8 @@ NAC_FASTEST_LAMAN = [
     # ("subgraphs-linear-beam_neighbors_triangles-4", "beam_degree"),
     # ("subgraphs-linear-beam_neighbors_max-4", "beam_degree"),
     # ("subgraphs-linear-beam_neighbors_max_triangles-4", "beam_degree"),
-    ("subgraphs-log-none-4-smart", "none"),
-    ("subgraphs-log-beam_neighbors-4-smart", "beam_degree"),
+    # ("subgraphs-log-none-4-smart", "none"),
+    # ("subgraphs-log-beam_neighbors-4-smart", "beam_degree"),
     # ("subgraphs-log-none-4", "none"),
     # ("subgraphs-log-none-8", "none"),
     # ("subgraphs-log-none-4", "beam_degree"),
@@ -621,20 +640,18 @@ def test_wtf_is_going_on():
     # dataset = general_graphs[:10]
     # dataset = general_graphs[6:7]
     # dataset = [general_graphs[i] for i in [6, 10, 13]]
-    # dataset: List[Graph] = list(
-    #     filter(lambda g: nx.number_of_nodes(g) == 15, laman_medium_graphs)
-    #     )[:30][16:17]
     dataset: List[Graph] = list(
-        filter(lambda g: nx.number_of_nodes(g) == 13, laman_medium_graphs)
+        filter(lambda g: nx.number_of_nodes(g) == 15, laman_medium_graphs)
     )[:30]
-    # previous
-    # [20:21]
-    # reverse
-    # [8:9]
-    # [14:15]
-    # [18:19]
-    # dataset = [dataset[20], dataset[8], dataset[14], dataset[18]]
-    dataset = [dataset[8]]
+    dataset = [
+        dataset[8],
+        # dataset[18],
+        # dataset[20],
+        # dataset[23],
+        # dataset[24],
+        # dataset[25],
+        # dataset[28],
+    ]
 
     for graph in tqdm(dataset):
         results = []
@@ -671,6 +688,7 @@ def test_wtf_is_going_on():
             algorithm="subgraphs-linear-none-4-smart",
             relabel_strategy="none",
         )
+
         # test(
         #     algorithm="subgraphs-log-none-4-smart",
         #     relabel_strategy="none",
@@ -689,14 +707,80 @@ def test_wtf_is_going_on():
         # )
 
         test(
-            algorithm="subgraphs-linear-beam_neighbors-4-smart",
+            algorithm="subgraphs-linear-neighbors-4-smart",
             relabel_strategy="none",
         )
-
         test(
-            algorithm="subgraphs-linear-cycles_match_chunks-4",
+            algorithm="subgraphs-linear-neighbors-6-smart",
             relabel_strategy="none",
         )
+        test(
+            algorithm="subgraphs-linear-neighbors-8-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative-4-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative-6-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative-8-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative_cycle-4-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative_cycle-6-smart",
+            relabel_strategy="none",
+        )
+        test(
+            algorithm="subgraphs-linear-neighbors_iterative_cycle-8-smart",
+            relabel_strategy="none",
+        )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors-8-smart",
+        #     relabel_strategy="none",
+        # )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors-13-smart",
+        #     relabel_strategy="none",
+        # )
+
+        # test(
+        #     algorithm="subgraphs-linear-neighbors-8-smart",
+        #     relabel_strategy="none",
+        # )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors_cycle-4-smart",
+        #     relabel_strategy="none",
+        # )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors_cycle-6-smart",
+        #     relabel_strategy="none",
+        # )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors_cycle-8-smart",
+        #     relabel_strategy="none",
+        # )
+        # test(
+        #     algorithm="subgraphs-linear-neighbors-6-smart",
+        #     relabel_strategy="none",
+        # )
+
+        # test(
+        #     algorithm="subgraphs-linear-beam_neighbors-4-smart",
+        #     relabel_strategy="none",
+        # )
+
+        # test(
+        #     algorithm="subgraphs-linear-cycles_match_chunks-4",
+        #     relabel_strategy="none",
+        # )
 
         # test(
         #     algorithm="subgraphs-sorted_size-beam_neighbors-4-smart",

@@ -1637,7 +1637,7 @@ class Graph(nx.Graph):
         """
         found_cycles: Dict[int, Set[Tuple[int, ...]]] = defaultdict(set)
 
-        edges_to_components: Dict[Tuple[int, int], int] = {
+        edge_to_components: Dict[Tuple[int, int], int] = {
             e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp
         }
 
@@ -1707,8 +1707,8 @@ class Graph(nx.Graph):
                 comp_cycle: List[int] = [start_component_id]
                 for i in range(len(cycle) - 1):
                     edge: Tuple[int, int] = tuple(cycle[i : i + 2])
-                    comp_id: int = edges_to_components.get(
-                        edge, edges_to_components.get((edge[1], edge[0]), None)
+                    comp_id: int = edge_to_components.get(
+                        edge, edge_to_components.get((edge[1], edge[0]), None)
                     )
                     assert comp_id is not None
                     if comp_cycle[-1] != comp_id:
@@ -1723,8 +1723,8 @@ class Graph(nx.Graph):
                 ------
                     True if the search should continue
                 """
-                comp_id: int = edges_to_components.get(
-                    (vfrom, vto), edges_to_components.get((vto, vfrom), None)
+                comp_id: int = edge_to_components.get(
+                    (vfrom, vto), edge_to_components.get((vto, vfrom), None)
                 )
                 if comp_id not in subgraph_components:
                     return True
@@ -2013,12 +2013,12 @@ class Graph(nx.Graph):
         )
 
     @staticmethod
-    def _wrong_subgraphs_strategy_degree_cycles(
+    def _subgraphs_strategy_degree_cycles(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> List[int]:
-        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
@@ -2038,12 +2038,12 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _wrong_subgraphs_strategy_cycles(
+    def _subgraphs_strategy_cycles(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> List[int]:
-        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
@@ -2076,14 +2076,14 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _wrong_subgraphs_strategy_cycles_match_chunks(
+    def _subgraphs_strategy_cycles_match_chunks(
         chunk_sizes: Sequence[int],
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
     ) -> List[int]:
         chunk_size = chunk_sizes[0]
-        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
@@ -2134,7 +2134,7 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _wrong_subgraphs_strategy_bfs(
+    def _subgraphs_strategy_bfs(
         t_graph: nx.Graph,
         chunk_sizes: Sequence[int],
     ) -> List[int]:
@@ -2142,7 +2142,7 @@ class Graph(nx.Graph):
         used_vertices: Set[int] = set()
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
-        for v in Graph._wrong_degree_ordered_nodes(graph):
+        for v in Graph._degree_ordered_nodes(graph):
             if v in used_vertices:
                 continue
 
@@ -2169,6 +2169,174 @@ class Graph(nx.Graph):
 
             graph.remove_nodes_from(added_vertices)
 
+        return [v for group in ordered_vertices_groups for v in group]
+
+    @staticmethod
+    def _subgraphs_strategy_neighbors(
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        chunk_sizes: Sequence[int],
+        iterative: bool,
+        start_with_cycle: bool,
+        seed: int | None,
+    ) -> List[int]:
+        t_graph = nx.Graph(t_graph)
+        ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
+
+        # if False, chunk does need to assign random component
+        is_random_component_required: List[bool] = [True for _ in chunk_sizes]
+
+        edge_to_components: Dict[Tuple[int, int], int] = {
+            e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp
+        }
+        # print(f"{component_to_edges=}")
+
+        # start algo and fill a chunk
+        # profit
+        while t_graph.number_of_nodes() > 0:
+            # TODO run algorithm per component, not per vertex
+            # TODO omit adding vertices with only single connection when
+            #      the chunk is almost full
+
+            component_ids = list(t_graph.nodes)
+            rand = random.Random(seed)
+            rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
+
+            # could by avoided by having a proper subgraph
+            local_vertices: Set[int] = {
+                v
+                for comp_id, comp in enumerate(component_to_edges)
+                for e in comp
+                for v in e
+                if comp_id in component_ids
+            }
+            # print(f"{component_ids=}")
+            # print(f"{local_vertices=}")
+
+            chunk_index = min(
+                range(len(ordered_vertices_groups)),
+                key=lambda x: len(ordered_vertices_groups[x]) / chunk_sizes[x],
+            )
+            target = ordered_vertices_groups[chunk_index]
+            # print(f"Open target {chunk_index}, {len(target)}/{chunk_sizes[chunk_index]}")
+
+            if is_random_component_required[chunk_index]:
+                if start_with_cycle:
+                    cycles = Graph._find_shortest_cycles(
+                        graph,
+                        t_graph,
+                        component_to_edges,
+                        all=True,
+                    )
+                    shortest: List[Tuple[int, ...]] = []
+                    shortest_len = 2**42
+                    for cycle in cycles:
+                        if len(cycle) == shortest_len:
+                            shortest.append(cycle)
+                        elif len(cycle) < shortest_len:
+                            shortest = [cycle]
+                            shortest_len = len(cycle)
+
+                    # no cycles found of the cycles are to long
+                    if len(cycles) == 0 or shortest_len > chunk_sizes[
+                        chunk_index
+                    ] - len(target):
+                        added_components: Set[int] = set([rand_comp])
+                        target.append(rand_comp)
+                    else:
+                        cycle = shortest[rand.randint(0, len(shortest) - 1)]
+                        added_components = set([c for c in cycle])
+                        target.extend(cycle)
+                else:
+                    # print(f"Rand comp: {rand_comp} -> {component_to_edges[rand_comp]}")
+                    added_components: Set[int] = set([rand_comp])
+                    target.append(rand_comp)
+                is_random_component_required[chunk_index] = False
+            else:
+                added_components = set()
+
+            used_vertices = {
+                v for comp in target for e in component_to_edges[comp] for v in e
+            }
+            opened: Set[int] = set()
+
+            for v in used_vertices:
+                for u in graph.neighbors(v):
+                    if u in used_vertices:
+                        continue
+                    if u not in local_vertices:
+                        continue
+                    opened.add(u)
+
+            iteration_no = 0
+            while (
+                opened
+                and len(target) < chunk_sizes[chunk_index]
+                and (iteration_no <= 1 or not iterative)
+            ):
+                comp_added = False
+
+                values = [
+                    (u, len(used_vertices.intersection(graph.neighbors(u))))
+                    for u in opened
+                ]
+                # TODO handle maybe
+                # rand.shuffle(values)
+
+                # print(f"{values=}")
+                best_vertex = max(values, key=lambda x: x[1])[0]
+                # print(f"Choosen {best_vertex}")
+                for neighbor in used_vertices.intersection(
+                    graph.neighbors(best_vertex)
+                ):
+                    if neighbor not in local_vertices:
+                        # print("X: Non-local")
+                        continue
+
+                    comp_id: int = edge_to_components.get(
+                        (best_vertex, neighbor),
+                        edge_to_components.get((neighbor, best_vertex), None),
+                    )
+                    if comp_id not in component_ids:
+                        # print("X: Invalid component")
+                        continue
+                    if comp_id in added_components:
+                        # print("X: Already added")
+                        continue
+
+                    # print(f"Adding component ({best_vertex} -- {neighbor}) {comp_id} -> {component_to_edges[comp_id]}")
+                    added_components.add(comp_id)
+                    target.append(comp_id)
+                    comp_added = True
+
+                    if len(target) >= chunk_sizes[chunk_index]:
+                        # print("Chunk is full")
+                        break
+
+                    new_vertices: Set[int] = {
+                        v for e in component_to_edges[comp_id] for v in e
+                    }
+                    used_vertices |= new_vertices
+                    opened -= new_vertices
+
+                    for v in new_vertices:
+                        for u in graph.neighbors(v):
+                            if u in used_vertices:
+                                continue
+                            if u not in local_vertices:
+                                continue
+                            opened.add(u)
+                if comp_added:
+                    iteration_no += 1
+                else:
+                    opened.remove(best_vertex)
+
+            # Nothing happened, we need to find some component randomly
+            if iteration_no == 0:
+                is_random_component_required[chunk_index] = True
+
+            t_graph.remove_nodes_from(added_components)
         return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
@@ -2299,7 +2467,7 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _wrong_degree_ordered_nodes(graph: nx.Graph) -> List[int]:
+    def _degree_ordered_nodes(graph: nx.Graph) -> List[int]:
         return list(
             map(
                 lambda x: x[0],
@@ -2564,51 +2732,98 @@ class Graph(nx.Graph):
             else:
                 return search_func(t_graph, chunk_sizes)
 
-        order_strategy = "wrong_" + order_strategy
         match order_strategy:
-            case "wrong_none":
+            case "none":
                 vertices = list(t_graph.nodes())
 
-            case "wrong_random":
+            case "random":
                 vertices = list(t_graph.nodes())
                 random.Random(seed).shuffle(vertices)
 
-            case "wrong_degree":
-                vertices = process(lambda g, _: Graph._wrong_degree_ordered_nodes(g))
+            case "degree":
+                vertices = process(lambda g, _: Graph._degree_ordered_nodes(g))
 
-            case "wrong_degree_cycles":
+            case "degree_cycles":
                 vertices = process(
-                    lambda g, _: Graph._wrong_subgraphs_strategy_degree_cycles(
+                    lambda g, _: Graph._subgraphs_strategy_degree_cycles(
                         graph,
                         g,
                         component_to_edges,
                     )
                 )
-            case "wrong_cycles":
+            case "cycles":
                 vertices = process(
-                    lambda g, _: Graph._wrong_subgraphs_strategy_cycles(
+                    lambda g, _: Graph._subgraphs_strategy_cycles(
                         graph,
                         g,
                         component_to_edges,
                     )
                 )
-            case "wrong_cycles_match_chunks":
+            case "cycles_match_chunks":
                 vertices = process(
-                    lambda g, l: Graph._wrong_subgraphs_strategy_cycles_match_chunks(
+                    lambda g, l: Graph._subgraphs_strategy_cycles_match_chunks(
                         l,
                         graph,
                         g,
                         component_to_edges,
                     )
                 )
-            case "wrong_bfs":
+            case "bfs":
                 vertices = process(
-                    lambda g, l: Graph._wrong_subgraphs_strategy_bfs(
+                    lambda g, l: Graph._subgraphs_strategy_bfs(
                         t_graph=g,
                         chunk_sizes=l,
                     )
                 )
-            case "wrong_beam_neighbors":
+            case "neighbors":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_neighbors(
+                        graph=graph,
+                        t_graph=g,
+                        component_to_edges=component_to_edges,
+                        chunk_sizes=l,
+                        start_with_cycle=False,
+                        iterative=False,
+                        seed=seed,
+                    )
+                )
+            case "neighbors_cycle":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_neighbors(
+                        graph=graph,
+                        t_graph=g,
+                        component_to_edges=component_to_edges,
+                        chunk_sizes=l,
+                        start_with_cycle=True,
+                        iterative=False,
+                        seed=seed,
+                    )
+                )
+            case "neighbors_iterative":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_neighbors(
+                        graph=graph,
+                        t_graph=g,
+                        component_to_edges=component_to_edges,
+                        chunk_sizes=l,
+                        start_with_cycle=False,
+                        iterative=True,
+                        seed=seed,
+                    )
+                )
+            case "neighbors_iterative_cycle":
+                vertices = process(
+                    lambda g, l: Graph._subgraphs_strategy_neighbors(
+                        graph=graph,
+                        t_graph=g,
+                        component_to_edges=component_to_edges,
+                        chunk_sizes=l,
+                        start_with_cycle=True,
+                        iterative=True,
+                        seed=seed,
+                    )
+                )
+            case "beam_neighbors":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
@@ -2617,7 +2832,7 @@ class Graph(nx.Graph):
                         start_from_min=True,
                     )
                 )
-            case "wrong_beam_neighbors_max":
+            case "beam_neighbors_max":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
@@ -2626,7 +2841,7 @@ class Graph(nx.Graph):
                         start_from_min=False,
                     )
                 )
-            case "wrong_beam_neighbors_triangles":
+            case "beam_neighbors_triangles":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
@@ -2635,7 +2850,7 @@ class Graph(nx.Graph):
                         start_from_min=True,
                     )
                 )
-            case "wrong_beam_neighbors_max_triangles":
+            case "beam_neighbors_max_triangles":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
@@ -2644,13 +2859,13 @@ class Graph(nx.Graph):
                         start_from_min=False,
                     )
                 )
-            case "wrong_components_biggest":
+            case "components_biggest":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_components(
                         g, l, start_from_biggest_component=True
                     )
                 )
-            case "wrong_components_spredded":
+            case "components_spredded":
                 vertices = process(
                     lambda g, l: Graph._wrong_subgraphs_strategy_components(
                         g, l, start_from_biggest_component=False
@@ -2708,8 +2923,8 @@ class Graph(nx.Graph):
             print("-" * 80)
             print(nx.nx_agraph.to_agraph(my_graph))
             print("-" * 80)
-            print(nx.nx_agraph.to_agraph(my_t_graph))
-            print("-" * 80)
+            # print(nx.nx_agraph.to_agraph(my_t_graph))
+            # print("-" * 80)
 
             print(f"Vertices no:  {nx.number_of_nodes(graph)}")
             print(f"Edges no:     {nx.number_of_edges(graph)}")
