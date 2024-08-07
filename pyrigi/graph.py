@@ -41,7 +41,7 @@ from pyrigi.util.repetable_iterator import RepeatableIterator
 
 # TODO remove
 NAC_PRINT_SWITCH = False
-NAC_PRINT_SWITCH = True
+# NAC_PRINT_SWITCH = True
 
 statistics_storage: Dict[int, List[Any]] = defaultdict(list)
 
@@ -1595,8 +1595,24 @@ class Graph(nx.Graph):
         return found_cycles
 
     @staticmethod
+    def _find_shortest_cycles(
+        graph: nx.Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[Set[Tuple[int, int]]],
+        all: bool = False,
+    ) -> Set[Tuple[int, ...]]:
+        cycles = Graph._find_shortest_cycles_for_components(
+            graph=graph,
+            t_graph=t_graph,
+            component_to_edges=component_to_edges,
+            all=all,
+        )
+        return {c for comp_cycles in cycles.values() for c in comp_cycles}
+
+    @staticmethod
     def _find_shortest_cycles_for_components(
         graph: nx.Graph,
+        t_graph: nx.Graph,
         component_to_edges: List[Set[Tuple[int, int]]],
         all: bool = False,
     ) -> Dict[int, Set[Tuple[int, ...]]]:
@@ -1621,11 +1637,12 @@ class Graph(nx.Graph):
         """
         found_cycles: Dict[int, Set[Tuple[int, ...]]] = defaultdict(set)
 
-        edges_to_components: Dict[Tuple[int, int], int] = (
-            {e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp}
-        )
+        edges_to_components: Dict[Tuple[int, int], int] = {
+            e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp
+        }
 
         vertices = list(graph.nodes)
+        subgraph_components = set(t_graph.nodes)
 
         def insert_found_cycle(comp_id: int, cycle: List[int]) -> None:
             """
@@ -1689,8 +1706,10 @@ class Graph(nx.Graph):
                 # cycle translated to comp ids
                 comp_cycle: List[int] = [start_component_id]
                 for i in range(len(cycle) - 1):
-                    edge: Tuple[int, int] = tuple(cycle[i:i+2])
-                    comp_id: int = edges_to_components.get(edge, edges_to_components.get((edge[1], edge[0]), None))
+                    edge: Tuple[int, int] = tuple(cycle[i : i + 2])
+                    comp_id: int = edges_to_components.get(
+                        edge, edges_to_components.get((edge[1], edge[0]), None)
+                    )
                     assert comp_id is not None
                     if comp_cycle[-1] != comp_id:
                         comp_cycle.append(comp_id)
@@ -1704,9 +1723,14 @@ class Graph(nx.Graph):
                 ------
                     True if the search should continue
                 """
+                comp_id: int = edges_to_components.get(
+                    (vfrom, vto), edges_to_components.get((vto, vfrom), None)
+                )
+                if comp_id not in subgraph_components:
+                    return True
+
                 nonlocal local_cycle_len
                 branch_id = parent_and_id[vfrom][1]
-                comp_id: int = edges_to_components.get((vfrom, vto), edges_to_components.get((vto, vfrom), None))
                 assert comp_id is not None
                 edges = component_to_edges[comp_id]
                 vertices = {v for e in edges for v in e}
@@ -1768,6 +1792,8 @@ class Graph(nx.Graph):
 
         for component in range(len(component_to_edges)):
             # bfs is a separate function so I can use return in it
+            if component not in subgraph_components:
+                continue
             bfs(component)
 
         return found_cycles
@@ -1898,11 +1924,10 @@ class Graph(nx.Graph):
         vertices.sort()
 
         # find some small cycles for state filtering
-        cycles = Graph._find_cycles(
+        cycles = Graph._find_shortest_cycles(
             graph,
             t_graph,
             component_to_edges,
-            from_angle_preserving_components=from_angle_preserving_components,
             all=use_all_cycles,
         )
         # the idea is that smaller cycles reduce the state space more
@@ -1992,12 +2017,9 @@ class Graph(nx.Graph):
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        from_angle_preserving_components: bool,
     ) -> List[int]:
         degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
-        vertex_cycles = Graph._cycles_per_vertex(
-            graph, t_graph, component_to_edges, from_angle_preserving_components
-        )
+        vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
@@ -2020,12 +2042,9 @@ class Graph(nx.Graph):
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        from_angle_preserving_components: bool,
     ) -> List[int]:
         degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
-        vertex_cycles = Graph._cycles_per_vertex(
-            graph, t_graph, component_to_edges, from_angle_preserving_components
-        )
+        vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
@@ -2062,13 +2081,10 @@ class Graph(nx.Graph):
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        from_angle_preserving_components: bool,
     ) -> List[int]:
         chunk_size = chunk_sizes[0]
         degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
-        vertex_cycles = Graph._cycles_per_vertex(
-            graph, t_graph, component_to_edges, from_angle_preserving_components
-        )
+        vertex_cycles = Graph._cycles_per_vertex(graph, t_graph, component_to_edges)
 
         ordered_vertices: List[int] = []
         used_vertices: Set[int] = set()
@@ -2300,17 +2316,15 @@ class Graph(nx.Graph):
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
-        from_angle_preserving_components: bool,
     ) -> List[List[Tuple[int, ...]]]:
         """
         For each vertex we find all the cycles that contain it
         Finds all the shortest cycles in the graph
         """
-        cycles = Graph._find_cycles(
+        cycles = Graph._find_shortest_cycles(
             graph,
             t_graph,
             component_to_edges,
-            from_angle_preserving_components=from_angle_preserving_components,
             all=True,
         )
 
@@ -2361,11 +2375,10 @@ class Graph(nx.Graph):
                 local_vertices.append(v)
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_cycles(
+        local_cycles = Graph._find_shortest_cycles(
             graph,
             local_t_graph,
             component_to_edges,
-            from_angle_preserving_components=from_angle_preserving_components,
         )
 
         mapped_components_to_edges = lambda ind: component_to_edges[vertices[ind]]
@@ -2425,7 +2438,6 @@ class Graph(nx.Graph):
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
-        from_angle_preserving_components: bool,
         vertices: List[int],
         chunk_size: int,
         offset: int,
@@ -2439,11 +2451,10 @@ class Graph(nx.Graph):
         # print(f"Local vertices: {local_vertices}")
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_cycles(
+        local_cycles = Graph._find_shortest_cycles(
             graph,
             local_t_graph,
             component_to_edges,
-            from_angle_preserving_components=from_angle_preserving_components,
         )
 
         # local -> first chunk_size vertices
@@ -2553,11 +2564,12 @@ class Graph(nx.Graph):
             else:
                 return search_func(t_graph, chunk_sizes)
 
+        order_strategy = "wrong_" + order_strategy
         match order_strategy:
-            case "none":
+            case "wrong_none":
                 vertices = list(t_graph.nodes())
 
-            case "random":
+            case "wrong_random":
                 vertices = list(t_graph.nodes())
                 random.Random(seed).shuffle(vertices)
 
@@ -2570,7 +2582,6 @@ class Graph(nx.Graph):
                         graph,
                         g,
                         component_to_edges,
-                        from_angle_preserving_components,
                     )
                 )
             case "wrong_cycles":
@@ -2579,7 +2590,6 @@ class Graph(nx.Graph):
                         graph,
                         g,
                         component_to_edges,
-                        from_angle_preserving_components,
                     )
                 )
             case "wrong_cycles_match_chunks":
@@ -2589,7 +2599,6 @@ class Graph(nx.Graph):
                         graph,
                         g,
                         component_to_edges,
-                        from_angle_preserving_components,
                     )
                 )
             case "wrong_bfs":
@@ -2770,7 +2779,6 @@ class Graph(nx.Graph):
                         t_graph,
                         component_to_edges,
                         check_selected_NAC_coloring,
-                        from_angle_preserving_components,
                         vertices,
                         chunk_size,
                         offset,
@@ -3278,12 +3286,19 @@ class Graph(nx.Graph):
         copy: bool = True,
         restart_after: int | None = None,
     ) -> Iterable[NACColoring]:
+        vertices = list(graph.nodes)
+
         if strategy == "none":
             # this is correct, but harmless (for now)
             # return graph if not copy else nx.Graph(graph)
-            return processor(graph)
+            if vertices == list(range(graph.number_of_nodes())):
+                return processor(graph)
 
-        vertices = list(graph.nodes)
+            # make all the nodes names in range 0..<n
+            mapping = {v: k for k, v in enumerate(vertices)}
+            graph = nx.relabel_nodes(graph, mapping, copy=copy)
+            return Graph._renamed_coloring(vertices, processor(graph))
+
         used_vertices: Set[Vertex] = set()
         ordered_vertices: List[Vertex] = []
 
