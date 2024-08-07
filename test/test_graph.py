@@ -371,6 +371,154 @@ def test__find_cycles(graph, result: Set[Tuple]):
     assert result == res
 
 
+@pytest.mark.parametrize(
+    ("graph", "result"),
+    [
+        (
+            graphs.Path(3),
+            {},
+        ),
+        (
+            graphs.Cycle(3),
+            {},
+            # This is empty as the whole graph is one triangle component
+            # {i: [(0, 1, 2)] for i in range(3)},
+        ),
+        (
+            graphs.Cycle(4),
+            {i: {(0, 1, 3, 2)} for i in range(4)},
+        ),
+        (
+            graphs.Cycle(5),
+            {i: {(0, 1, 4, 3, 2)} for i in range(5)},
+        ),
+        (
+            graphs.Diamond(),
+            {},
+        ),
+        (
+            graphs.ThreePrism(),
+            {
+                # [[(0, 1), (0, 2), (1, 2)], [(0, 3)], [(1, 4)], [(2, 5)], [(3, 4), (3, 5), (4, 5)]]
+                0: {(0, 1, 4, 3), (0, 2, 4, 3), (0, 1, 4, 2)},
+                1: {(0, 1, 4, 3), (0, 1, 4, 2)},
+                2: {(0, 2, 4, 3), (0, 1, 4, 2)},
+                3: {(0, 1, 4, 3), (0, 2, 4, 3)},
+                4: {(0, 1, 4, 3), (0, 2, 4, 3), (0, 1, 4, 2)},
+            },
+        ),
+        (
+            graphs.ThreePrismPlusEdge(),
+            {},
+        ),
+        (
+            graphs.DiamondWithZeroExtension(),
+            {
+                # [[(0, 1), (0, 3), (0, 2), (1, 2), (2, 3)], [(1, 4), (3, 4)]]
+                0: {(0, 1)},
+                1: {(0, 1)},
+            },
+        ),
+        (
+            Graph.from_vertices_and_edges(
+                [0, 1, 2, 3, 4, 5, 6, 7],
+                [
+                    (0, 1),
+                    (0, 5),
+                    (1, 3),
+                    (1, 7),
+                    (2, 3),
+                    (2, 4),
+                    (3, 7),
+                    (4, 5),
+                    (4, 6),
+                    (5, 6),
+                    (6, 7),
+                ],
+            ),
+            {
+                # 0: [[(0, 1)]
+                # 1: [(0, 5)]
+                # 2: [(1, 3), (1, 7), (3, 7)]
+                # 3: [(2, 3)]
+                # 4: [(2, 4)]
+                # 5: [(4, 5), (4, 6), (5, 6)]
+                # 6: [(6, 7)]]
+                0: {(0, 1, 5, 6, 2)},
+                1: {(0, 1, 5, 6, 2)},
+                2: {(0, 1, 5, 6, 2), (2, 3, 4, 5, 6)},
+                3: {(2, 3, 4, 5, 6)},
+                4: {(2, 3, 4, 5, 6)},
+                5: {(0, 1, 5, 6, 2), (2, 3, 4, 5, 6)},
+                6: {(0, 1, 5, 6, 2), (2, 3, 4, 5, 6)},
+            },
+        ),
+        (
+            Graph.from_vertices_and_edges(
+                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                [
+                    (0, 1),
+                    (0, 5),
+                    (1, 6),
+                    (2, 3),
+                    (2, 4),
+                    (3, 5),
+                    (3, 8),
+                    (3, 10),
+                    (4, 6),
+                    (4, 7),
+                    (4, 9),
+                    (5, 8),
+                    (5, 10),
+                    (6, 7),
+                    (6, 9),
+                    (7, 8),
+                    (7, 9),
+                    (8, 10),
+                    (9, 10),
+                ],
+            ),
+            {
+                # [[(0, 1)], [(0, 5)], [(1, 6)], [(2, 3)], [(2, 4)], [(3, 5), (3, 8), (3, 10), (5, 8), (5, 10), (8, 10)], [(4, 6), (4, 7), (4, 9), (6, 7), (6, 9), (7, 9)], [(7, 8)], [(9, 10)]]
+                0: {(0, 1, 5, 7, 6, 2), (0, 1, 5, 8, 6, 2)},
+                1: {(0, 1, 5, 7, 6, 2), (0, 1, 5, 8, 6, 2)},
+                2: {(0, 1, 5, 7, 6, 2), (0, 1, 5, 8, 6, 2)},
+                3: {(3, 4, 6, 8, 5), (3, 4, 6, 7, 5)},
+                4: {(3, 4, 6, 8, 5), (3, 4, 6, 7, 5)},
+                5: {(5, 7, 6, 8)},
+                6: {(5, 7, 6, 8)},
+                7: {(5, 7, 6, 8)},
+                8: {(5, 7, 6, 8)},
+            },
+        ),
+    ],
+    ids=[
+        "path",
+        "cycle3",
+        "cycle4",
+        "cycle5",
+        "diamond",
+        "prism",
+        "prismPlus",
+        "minimallyRigid",
+        "smaller_problemist",
+        "large_problemist",
+    ],
+)
+def test__find_shortest_cycles_for_components(graph: Graph, result: Set[Tuple]):
+    _, component_to_edges = Graph._find_triangle_components(graph)
+    # print()
+    # print(graph)
+    # print(component_to_edges)
+    res = Graph._find_shortest_cycles_for_components(
+        graph,
+        component_to_edges,
+        all=True,
+    )
+    # print(f"{res=}")
+    assert res == result
+
+
 NAC_ALGORITHMS = [
     "naive",
     "cycles-True",

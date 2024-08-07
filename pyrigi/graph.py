@@ -1595,6 +1595,184 @@ class Graph(nx.Graph):
         return found_cycles
 
     @staticmethod
+    def _find_shortest_cycles_for_components(
+        graph: nx.Graph,
+        component_to_edges: List[Set[Tuple[int, int]]],
+        all: bool = False,
+    ) -> Dict[int, Set[Tuple[int, ...]]]:
+        """
+        For each edge finds one/all of the shortest cycles it lays on
+
+        Parameters
+        ----------
+        graph:
+            The graph to work with, vertices should be integers indexed from 0.
+            Usually a graphs with triangle and angle preserving components.
+        all:
+            if set to True, all the shortest cycles are returned
+            Notice that for dense graphs the number of cycles can be quite huge
+            if set to False, some cycle is returned for each vertex
+            Defaults to False
+        ----------
+
+        Return
+        ------
+            Component to the smallest cycle mapping, result is list of comp ids
+        """
+        found_cycles: Dict[int, Set[Tuple[int, ...]]] = defaultdict(set)
+
+        edges_to_components: Dict[Tuple[int, int], int] = (
+            {e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp}
+        )
+
+        vertices = list(graph.nodes)
+
+        def insert_found_cycle(comp_id: int, cycle: List[int]) -> None:
+            """
+            Runs post-processing on a cycle
+            Makes sure the first element is the smallest one
+            and the second one is greater than the last one.
+            This is required for equality checks in set later.
+            """
+
+            # find the smallest element index
+            smallest = 0
+            for i, e in enumerate(cycle):
+                if e < cycle[smallest]:
+                    smallest = i
+
+            # makes sure that the element following the smallest one
+            # is greater than the one preceding it
+            if cycle[smallest - 1] < cycle[(smallest + 1) % len(cycle)]:
+                cycle = list(reversed(cycle))
+                smallest = len(cycle) - smallest - 1
+
+            # rotates the list so the smallest element is first
+            cycle = cycle[smallest:] + cycle[:smallest]
+
+            found_cycles[comp_id].add(tuple(cycle))
+
+        def bfs(start_component_id: int) -> None:
+            """
+            Finds the shortest cycle(s) for the edge given
+            """
+            start_component = component_to_edges[start_component_id]
+
+            # Stores node and id of branch it's from
+            queue: deque[Tuple[int, int]] = deque()
+            # this wastes a little, but whatever (parent, branch_id)
+            parent_and_id = [(-1, -1) for _ in range(max(vertices) + 1)]
+            local_cycle_len = -1
+
+            start_component_vertices: Set[int] = {v for e in start_component for v in e}
+
+            def backtrack(v: int, u: int) -> List[int]:
+                """
+                Reconstructs the found cycle
+                """
+                cycle: List[int] = []
+
+                cycle.append(u)
+                traversed = parent_and_id[u]
+                while traversed[0] != -1:
+                    cycle.append(traversed[0])
+                    traversed = parent_and_id[traversed[0]]
+
+                cycle = list(reversed(cycle))
+
+                cycle.append(v)
+                traversed = parent_and_id[v]
+                while traversed[0] != -1:
+                    cycle.append(traversed[0])
+                    traversed = parent_and_id[traversed[0]]
+
+                # cycle translated to comp ids
+                comp_cycle: List[int] = [start_component_id]
+                for i in range(len(cycle) - 1):
+                    edge: Tuple[int, int] = tuple(cycle[i:i+2])
+                    comp_id: int = edges_to_components.get(edge, edges_to_components.get((edge[1], edge[0]), None))
+                    assert comp_id is not None
+                    if comp_cycle[-1] != comp_id:
+                        comp_cycle.append(comp_id)
+
+                assert len(comp_cycle) == len(set(comp_cycle))
+                return comp_cycle
+
+            def add_vertex(vfrom: int, vto: int) -> bool:
+                """
+                Return
+                ------
+                    True if the search should continue
+                """
+                nonlocal local_cycle_len
+                branch_id = parent_and_id[vfrom][1]
+                comp_id: int = edges_to_components.get((vfrom, vto), edges_to_components.get((vto, vfrom), None))
+                assert comp_id is not None
+                edges = component_to_edges[comp_id]
+                vertices = {v for e in edges for v in e}
+
+                q = deque([vfrom])
+                while q:
+                    v = q.popleft()
+                    for u in graph.neighbors(v):
+                        if u not in vertices:
+                            continue
+
+                        _, id = parent_and_id[u]
+                        if id == -1:
+                            q.append(u)
+                            queue.append((u, branch_id))
+                            parent_and_id[u] = (v, branch_id)
+                            continue
+                        elif id == branch_id:
+                            continue
+
+                        # a cycle was found
+                        cycle = backtrack(v, u)
+
+                        if local_cycle_len == -1:
+                            local_cycle_len = len(cycle)
+
+                        # We are so far in the bfs process that all
+                        # the cycles will be longer now
+                        if len(cycle) > local_cycle_len:
+                            return False
+
+                        insert_found_cycle(start_component_id, cycle)
+
+                        if all:
+                            continue
+                        else:
+                            return False
+                return True
+
+            for v in start_component_vertices:
+                parent_and_id[v] = (-1, v)
+            for v in start_component_vertices:
+                for u in graph.neighbors(v):
+                    if u in start_component_vertices:
+                        continue
+                    if not add_vertex(v, u):
+                        return
+
+            # typical BFS
+            while queue:
+                v, id = queue.popleft()
+                parent = parent_and_id[v][0]
+
+                for u in graph.neighbors(v):
+                    if u == parent:
+                        continue
+                    if not add_vertex(v, u):
+                        return
+
+        for component in range(len(component_to_edges)):
+            # bfs is a separate function so I can use return in it
+            bfs(component)
+
+        return found_cycles
+
+    @staticmethod
     def _create_bitmask_for_t_graph_cycle(
         graph: nx.Graph,
         component_to_edges: Callable[[int], List[Edge]],
@@ -1810,13 +1988,13 @@ class Graph(nx.Graph):
         )
 
     @staticmethod
-    def _subgraphs_strategy_degree_cycles(
+    def _wrong_subgraphs_strategy_degree_cycles(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         from_angle_preserving_components: bool,
     ) -> List[int]:
-        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(
             graph, t_graph, component_to_edges, from_angle_preserving_components
         )
@@ -1838,13 +2016,13 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _subgraphs_strategy_cycles(
+    def _wrong_subgraphs_strategy_cycles(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
         from_angle_preserving_components: bool,
     ) -> List[int]:
-        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(
             graph, t_graph, component_to_edges, from_angle_preserving_components
         )
@@ -1879,7 +2057,7 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _subgraphs_strategy_cycles_match_chunks(
+    def _wrong_subgraphs_strategy_cycles_match_chunks(
         chunk_sizes: Sequence[int],
         graph: nx.Graph,
         t_graph: nx.Graph,
@@ -1887,7 +2065,7 @@ class Graph(nx.Graph):
         from_angle_preserving_components: bool,
     ) -> List[int]:
         chunk_size = chunk_sizes[0]
-        degree_ordered_vertices = Graph._degree_ordered_nodes(t_graph)
+        degree_ordered_vertices = Graph._wrong_degree_ordered_nodes(t_graph)
         vertex_cycles = Graph._cycles_per_vertex(
             graph, t_graph, component_to_edges, from_angle_preserving_components
         )
@@ -1940,7 +2118,7 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _subgraphs_strategy_bfs(
+    def _wrong_subgraphs_strategy_bfs(
         t_graph: nx.Graph,
         chunk_sizes: Sequence[int],
     ) -> List[int]:
@@ -1948,7 +2126,7 @@ class Graph(nx.Graph):
         used_vertices: Set[int] = set()
         ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
-        for v in Graph._degree_ordered_nodes(graph):
+        for v in Graph._wrong_degree_ordered_nodes(graph):
             if v in used_vertices:
                 continue
 
@@ -1978,7 +2156,7 @@ class Graph(nx.Graph):
         return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
-    def _subgraphs_strategy_beam_neighbors(
+    def _wrong_subgraphs_strategy_beam_neighbors(
         t_graph: nx.Graph,
         chunk_sizes: Sequence[int],
         start_with_triangles: bool,
@@ -2062,7 +2240,7 @@ class Graph(nx.Graph):
         return [v for group in ordered_vertices_groups for v in group]
 
     @staticmethod
-    def _subgraphs_strategy_components(
+    def _wrong_subgraphs_strategy_components(
         t_graph: nx.Graph,
         chunk_sizes: Sequence[int],
         start_from_biggest_component: bool,
@@ -2105,7 +2283,7 @@ class Graph(nx.Graph):
         return ordered_vertices
 
     @staticmethod
-    def _degree_ordered_nodes(graph: nx.Graph) -> List[int]:
+    def _wrong_degree_ordered_nodes(graph: nx.Graph) -> List[int]:
         return list(
             map(
                 lambda x: x[0],
@@ -2383,30 +2561,30 @@ class Graph(nx.Graph):
                 vertices = list(t_graph.nodes())
                 random.Random(seed).shuffle(vertices)
 
-            case "degree":
-                vertices = process(lambda g, _: Graph._degree_ordered_nodes(g))
+            case "wrong_degree":
+                vertices = process(lambda g, _: Graph._wrong_degree_ordered_nodes(g))
 
-            case "degree_cycles":
+            case "wrong_degree_cycles":
                 vertices = process(
-                    lambda g, _: Graph._subgraphs_strategy_degree_cycles(
+                    lambda g, _: Graph._wrong_subgraphs_strategy_degree_cycles(
                         graph,
                         g,
                         component_to_edges,
                         from_angle_preserving_components,
                     )
                 )
-            case "cycles":
+            case "wrong_cycles":
                 vertices = process(
-                    lambda g, _: Graph._subgraphs_strategy_cycles(
+                    lambda g, _: Graph._wrong_subgraphs_strategy_cycles(
                         graph,
                         g,
                         component_to_edges,
                         from_angle_preserving_components,
                     )
                 )
-            case "cycles_match_chunks":
+            case "wrong_cycles_match_chunks":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_cycles_match_chunks(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_cycles_match_chunks(
                         l,
                         graph,
                         g,
@@ -2414,58 +2592,58 @@ class Graph(nx.Graph):
                         from_angle_preserving_components,
                     )
                 )
-            case "bfs":
+            case "wrong_bfs":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_bfs(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_bfs(
                         t_graph=g,
                         chunk_sizes=l,
                     )
                 )
-            case "beam_neighbors":
+            case "wrong_beam_neighbors":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
                         chunk_sizes=l,
                         start_with_triangles=False,
                         start_from_min=True,
                     )
                 )
-            case "beam_neighbors_max":
+            case "wrong_beam_neighbors_max":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
                         chunk_sizes=l,
                         start_with_triangles=False,
                         start_from_min=False,
                     )
                 )
-            case "beam_neighbors_triangles":
+            case "wrong_beam_neighbors_triangles":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
                         chunk_sizes=l,
                         start_with_triangles=True,
                         start_from_min=True,
                     )
                 )
-            case "beam_neighbors_max_triangles":
+            case "wrong_beam_neighbors_max_triangles":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_beam_neighbors(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_beam_neighbors(
                         t_graph=g,
                         chunk_sizes=l,
                         start_with_triangles=True,
                         start_from_min=False,
                     )
                 )
-            case "components_biggest":
+            case "wrong_components_biggest":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_components(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_components(
                         g, l, start_from_biggest_component=True
                     )
                 )
-            case "components_spredded":
+            case "wrong_components_spredded":
                 vertices = process(
-                    lambda g, l: Graph._subgraphs_strategy_components(
+                    lambda g, l: Graph._wrong_subgraphs_strategy_components(
                         g, l, start_from_biggest_component=False
                     )
                 )
