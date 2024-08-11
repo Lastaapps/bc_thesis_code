@@ -1,9 +1,13 @@
+from collections import defaultdict, deque
+import numpy as np
+import itertools
 import random
 from typing import List
 from benchmarks.dataset import (
     load_all_small_graphs,
     load_general_graphs,
     load_generated_graphs,
+    load_laman_degree_3_plus_all,
     load_laman_graphs,
     load_medium_generated_graphs,
     load_small_generated_graphs,
@@ -40,6 +44,7 @@ for key in general_disabled:
 general_graphs = general_graphs.items()
 
 
+################################################################################
 NAC_ALGORITHMS = [
     "naive",
     "cycles-True",
@@ -161,55 +166,38 @@ def test_bench_NAC_colorings_small(
     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_SMALL, warmup_rounds=0)
 
 
+################################################################################
 NAC_ALGORITHMS_LAMAN_FAST = [
-    # "subgraphs-linear-none-4-smart",
-    # "subgraphs-linear-none-6-smart",
-    "subgraphs-linear-none-8-smart",
-    # "subgraphs-linear-degree-4-smart",
-    # "subgraphs-linear-degree_cycles-4-smart",
-    # "subgraphs-linear-cycles-4-smart",
-    # "subgraphs-linear-cycles_match_chunks-4-smart",
-    # "subgraphs-linear-neighbors-4-smart",
-    # "subgraphs-linear-neighbors_cycle-4-smart",
-    # "subgraphs-linear-neighbors_iterative-4-smart",
-    # "subgraphs-linear-cycles-6-smart",
-    # "subgraphs-linear-cycles_match_chunks-6-smart",
-    # "subgraphs-linear-neighbors-6-smart",
-    # "subgraphs-linear-neighbors_cycle-6-smart",
-    # "subgraphs-linear-neighbors_iterative-6-smart",
-    # "subgraphs-linear-cycles-8-smart",
-    # "subgraphs-linear-cycles_match_chunks-8-smart",
-    "subgraphs-linear-neighbors-8-smart",
-    # "subgraphs-linear-neighbors_cycle-8-smart",
-    # "subgraphs-linear-neighbors_iterative-8-smart",
-    # "subgraphs-linear-beam_neighbors-4-smart",
-    # "subgraphs-linear-beam_neighbors_triangles-4-smart",
-    # "subgraphs-linear-beam_neighbors_max-4-smart",
-    # "subgraphs-linear-beam_neighbors_max_triangles-4-smart",
-    # "subgraphs-log-none-4-smart",
-    # "subgraphs-log-degree-4-smart",
-    # "subgraphs-log-degree_cycles-4-smart",
-    # "subgraphs-log-cycles-4-smart",
-    # "subgraphs-log-cycles_match_chunks-4-smart",
-    # "subgraphs-log-beam_neighbors-4-smart",
-    # "subgraphs-log-beam_neighbors_triangles-4-smart",
-    # "subgraphs-log-beam_neighbors_max-4-smart",
-    # "subgraphs-log-beam_neighbors_max_triangles-4-smart",
-    # "subgraphs-log_reverse-none-4-smart",
-    # "subgraphs-log_reverse-degree-4-smart",
-    # "subgraphs-log_reverse-degree_cycles-4-smart",
-    # "subgraphs-log_reverse-cycles-4-smart",
-    # "subgraphs-log_reverse-cycles_match_chunks-4-smart",
-    # "subgraphs-log_reverse-beam_neighbors-4-smart",
-    # "subgraphs-log_reverse-beam_neighbors_triangles-4-smart",
-    # "subgraphs-log_reverse-beam_neighbors_max-4-smart",
-    # "subgraphs-log_reverse-beam_neighbors_max_triangles-4-smart",
+    "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
+    for merge in [
+        # "linear",
+        "linear",
+        # "log_reverse",
+        # "sorted_bits",
+        # "sorted_size",
+        # "score",
+        # "recursion",
+    ]
+    for algo in [
+        # "none",
+        # "degree",
+        # "degree_cycles",
+        # "cycles",
+        # "cycles_match_chunks",
+        "neighbors",
+        # "neighbors_cycle",
+        # "neighbors_degree",
+        # "neighbors_degree_cycle",
+        # "neighbors_iterative",
+    ]
+    # for size in [4, 8]
+    for size in [6]
 ]
 NAC_RELABEL_STRATEGIES_LAMAN_FAST = [
-    "none",
-    # "random",
+    # "none",
+    "random",
     # "bfs",
-    "beam_degree",
+    # "beam_degree",
 ]
 
 
@@ -217,18 +205,18 @@ BENCH_ROUNDS_LAMAN_FAST = 4
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.timeout(240 * BENCH_ROUNDS_LAMAN_FAST)
+@pytest.mark.timeout(10 * BENCH_ROUNDS_LAMAN_FAST)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_LAMAN_FAST)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_LAMAN_FAST)
 @pytest.mark.parametrize(
     "dataset",
     [
-        # laman_medium_graphs[:32],
-        laman_larger_graphs[:16],
+        laman_medium_graphs[:32],
+        # laman_larger_graphs[:16],
     ],
     ids=[
-        # "laman_medium",
-        "laman_larger",
+        "laman_medium",
+        # "laman_larger",
     ],
 )
 def test_bench_NAC_colorings_laman_fast(
@@ -261,62 +249,33 @@ def test_bench_NAC_colorings_laman_fast(
     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_LAMAN_FAST, warmup_rounds=0)
 
 
+################################################################################
 NAC_ALGORITHMS_GENERAL_FAST = [
-    "subgraphs-linear-none-4-smart",
-    "subgraphs-linear-degree-4-smart",
-    "subgraphs-linear-degree_cycles-4-smart",
-    "subgraphs-linear-cycles-4-smart",
-    "subgraphs-linear-cycles_match_chunks-4-smart",
-    "subgraphs-linear-beam_neighbors-4-smart",
-    "subgraphs-linear-beam_neighbors_triangles-4-smart",
-    "subgraphs-linear-beam_neighbors_max-4-smart",
-    "subgraphs-linear-beam_neighbors_max_triangles-4-smart",
-    "subgraphs-log-none-4-smart",
-    "subgraphs-log-degree-4-smart",
-    "subgraphs-log-degree_cycles-4-smart",
-    "subgraphs-log-cycles-4-smart",
-    "subgraphs-log-cycles_match_chunks-4-smart",
-    "subgraphs-log-beam_neighbors-4-smart",
-    "subgraphs-log-beam_neighbors_triangles-4-smart",
-    "subgraphs-log-beam_neighbors_max-4-smart",
-    "subgraphs-log-beam_neighbors_max_triangles-4-smart",
-    "subgraphs-log_reverse-none-4-smart",
-    "subgraphs-log_reverse-degree-4-smart",
-    "subgraphs-log_reverse-degree_cycles-4-smart",
-    "subgraphs-log_reverse-cycles-4-smart",
-    "subgraphs-log_reverse-cycles_match_chunks-4-smart",
-    "subgraphs-log_reverse-beam_neighbors-4-smart",
-    "subgraphs-log_reverse-beam_neighbors_triangles-4-smart",
-    "subgraphs-log_reverse-beam_neighbors_max-4-smart",
-    "subgraphs-log_reverse-beam_neighbors_max_triangles-4-smart",
-    "subgraphs-sorted_bits-none-4-smart",
-    "subgraphs-sorted_bits-degree-4-smart",
-    "subgraphs-sorted_bits-degree_cycles-4-smart",
-    "subgraphs-sorted_bits-cycles-4-smart",
-    "subgraphs-sorted_bits-cycles_match_chunks-4-smart",
-    "subgraphs-sorted_bits-beam_neighbors-4-smart",
-    "subgraphs-sorted_bits-beam_neighbors_triangles-4-smart",
-    "subgraphs-sorted_bits-beam_neighbors_max-4-smart",
-    "subgraphs-sorted_bits-beam_neighbors_max_triangles-4-smart",
-    "subgraphs-recursion-none-4-smart",
-    "subgraphs-recursion-degree-4-smart",
-    "subgraphs-recursion-degree_cycles-4-smart",
-    "subgraphs-recursion-cycles-4-smart",
-    "subgraphs-recursion-cycles_match_chunks-4-smart",
-    "subgraphs-recursion-beam_neighbors-4-smart",
-    "subgraphs-recursion-beam_neighbors_triangles-4-smart",
-    "subgraphs-recursion-beam_neighbors_max-4-smart",
-    "subgraphs-recursion-beam_neighbors_max_triangles-4-smart",
-    "subgraphs-recursion_almost-none-4-smart",
-    "subgraphs-recursion_almost-degree-4-smart",
-    "subgraphs-recursion_almost-degree_cycles-4-smart",
-    "subgraphs-recursion_almost-cycles-4-smart",
-    "subgraphs-recursion_almost-cycles_match_chunks-4-smart",
-    "subgraphs-recursion_almost-beam_neighbors-4-smart",
-    "subgraphs-recursion_almost-beam_neighbors_triangles-4-smart",
-    "subgraphs-recursion_almost-beam_neighbors_max-4-smart",
-    "subgraphs-recursion_almost-beam_neighbors_max_triangles-4-smart",
-]
+    "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
+    for merge in [
+        # "linear",
+        "log",
+        # "log_reverse",
+        # "sorted_bits",
+        # "sorted_size",
+        # "score",
+        # "recursion",
+    ]
+    for algo in [
+        # "none",
+        # "degree",
+        # "degree_cycles",
+        # "cycles",
+        # "cycles_match_chunks",
+        "neighbors",
+        # "neighbors_cycle",
+        # "neighbors_degree",
+        # "neighbors_degree_cycle",
+        # "neighbors_iterative",
+    ]
+    for size in [6, 8, 10]
+] + []
+
 NAC_RELABEL_STRATEGIES_GENERAL_FAST = [
     # "none",
     # "random",
@@ -329,7 +288,7 @@ BENCH_ROUNDS_GENERAL_MEDIUM = 4
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.timeout(180 * BENCH_ROUNDS_GENERAL_MEDIUM)
+@pytest.mark.timeout(120 * BENCH_ROUNDS_GENERAL_MEDIUM)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_GENERAL_FAST)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_GENERAL_FAST)
 @pytest.mark.parametrize(
@@ -337,6 +296,11 @@ BENCH_ROUNDS_GENERAL_MEDIUM = 4
     [v for _, v in general_medium_graphs],
     ids=[k for k, _ in general_medium_graphs],
 )
+# @pytest.mark.parametrize(
+#     "dataset",
+#     [v for k, v in general_medium_graphs if k == "dense_medium"],
+#     ids=["idk"],
+# )
 @pytest.mark.parametrize("graph_cnt", [32])
 def test_bench_nac_colorings_general_medium(
     benchmark,
@@ -358,6 +322,7 @@ def test_bench_nac_colorings_general_medium(
         # for graph in tqdm(dataset):
 
         for graph in dataset:
+            # print(graph)
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
@@ -370,65 +335,55 @@ def test_bench_nac_colorings_general_medium(
     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_GENERAL_MEDIUM)
 
 
+################################################################################
 # pairs (algorithm, relabel)
 NAC_FASTEST_LAMAN = [
-    # smart is not working well here
-    ("subgraphs-linear-none-4", "none"),
-    ("subgraphs-linear-none-8", "none"),
-    ("subgraphs-linear-neighbors-6-smart", "beam_degree"),
-    ("subgraphs-linear-neighbors_cycles-6-smart", "beam_degree"),
-    ("subgraphs-linear-neighbors-8-smart", "beam_degree"),
-    ("subgraphs-linear-neighbors_cycles-8-smart", "beam_degree"),
-    # ("subgraphs-linear-degree_cycles-4", "beam_degree"),
-    # ("subgraphs-linear-cycles-4", "beam_degree"),
-    # ("subgraphs-linear-cycles_match_chunks-4", "beam_degree"),
-    # ("subgraphs-linear-beam_neighbors-4", "beam_degree"),
-    # ("subgraphs-linear-beam_neighbors_triangles-4", "beam_degree"),
-    # ("subgraphs-linear-beam_neighbors_max-4", "beam_degree"),
-    # ("subgraphs-linear-beam_neighbors_max_triangles-4", "beam_degree"),
-    # ("subgraphs-log-none-4-smart", "none"),
-    # ("subgraphs-log-beam_neighbors-4-smart", "beam_degree"),
-    # ("subgraphs-log-none-4", "none"),
-    # ("subgraphs-log-none-8", "none"),
-    # ("subgraphs-log-none-4", "beam_degree"),
-    # ("subgraphs-log-none-8", "beam_degree"),
-    # ("subgraphs-log-degree_cycles-8", "beam_degree"),
-    # ("subgraphs-log-cycles-8", "beam_degree"),
-    # ("subgraphs-log-cycles_match_chunks-8", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors-4", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors-8", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_triangles-4", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_triangles-8", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_max-4", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_max-8", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_max_triangles-4", "beam_degree"),
-    # ("subgraphs-log-beam_neighbors_max_triangles-8", "beam_degree"),
+    ("subgraphs-{}-{}-{}-smart".format(merge, algo, size), "random")
+    for merge in [
+        # "linear",
+        "log",
+        # "sorted_bits",
+    ]
+    for algo in [
+        # "cycles",
+        # "cycles_match_chunks",
+        "neighbors",
+        # "neighbors_cycle",
+        # "neighbors_degree",
+        # "neighbors_degree_cycle",
+        # "neighbors_iterative",
+    ]
+    # for size in [6, 8]
+    for size in [6]
+] + [
+    # ("subgraphs-linear-none-4", "none"),
+    # ("subgraphs-linear-none-8", "none"),
 ]
 
 BENCH_ROUNDS_LAMAN_LARGE = 4
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.timeout(360 * BENCH_ROUNDS_LAMAN_LARGE)
+@pytest.mark.timeout(15 * BENCH_ROUNDS_LAMAN_LARGE)
 @pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_LAMAN)
 @pytest.mark.parametrize(
     ("vertices_no", "graph_cnt", "first_n"),
     [
-        (16, 32, 512),
-        (17, 32, 512),
-        (18, 32, 512),
-        (19, 32, 512),
-        (20, 32, 512),
-        (21, 32, 256),
-        (22, 32, 256),
-        (23, 32, 256),
-        (24, 16, 256),
-        (25, 16, 256),
-        (26, 16, 128),
-        (27, 16, 128),
-        (28, 16, 64),
-        (29, 16, 64),
-        (30, 16, 64),
+        (16, 64, 1024),
+        (17, 64, 1024),
+        (18, 64, 1024),
+        (19, 64, 1024),
+        (20, 64, 1024),
+        (21, 64, 512),
+        (22, 64, 512),
+        (23, 64, 512),
+        (24, 32, 512),
+        (25, 32, 512),
+        (26, 32, 256),
+        (27, 32, 256),
+        (28, 32, 128),
+        (29, 32, 128),
+        (30, 32, 128),
     ],
 )
 def test_bench_NAC_colorings_laman_large_first_n(
@@ -476,53 +431,33 @@ def test_bench_NAC_colorings_laman_large_first_n(
     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_LAMAN_LARGE, warmup_rounds=0)
 
 
+################################################################################
 NAC_FASTEST_GENERAL = [
-    ("subgraphs-log-none-4", "none"),
-    ("subgraphs-log-none-8", "none"),
-    ("subgraphs-log-degree-4", "random"),
-    ("subgraphs-log-degree-8", "random"),
-    ("subgraphs-log-degree_cycles-4", "random"),
-    ("subgraphs-log-degree_cycles-8", "random"),
-    ("subgraphs-log-cycles-4", "random"),
-    ("subgraphs-log-cycles-8", "random"),
-    ("subgraphs-log-cycles_match_chunks-4", "random"),
-    ("subgraphs-log-cycles_match_chunks-8", "random"),
-    ("subgraphs-log-beam_neighbors-4", "random"),
-    ("subgraphs-log-beam_neighbors-8", "random"),
-    ("subgraphs-log-beam_neighbors_max-4", "random"),
-    ("subgraphs-log-beam_neighbors_max-8", "random"),
-    ("subgraphs-log-beam_neighbors_triangles-4", "random"),
-    ("subgraphs-log-beam_neighbors_triangles-8", "random"),
-    ("subgraphs-log-beam_neighbors_max_triangles-4", "random"),
-    ("subgraphs-log-beam_neighbors_max_triangles-8", "random"),
-    # ("subgraphs-log-none-4-smart", "none"),
-    # ("subgraphs-log-none-8-smart", "none"),
-    # ("subgraphs-log-degree-4-smart", "random"),
-    # ("subgraphs-log-degree-8-smart", "random"),
-    # ("subgraphs-log-degree_cycles-4-smart", "random"),
-    # ("subgraphs-log-degree_cycles-8-smart", "random"),
-    # ("subgraphs-log-cycles-4-smart", "random"),
-    # ("subgraphs-log-cycles-8-smart", "random"),
-    # ("subgraphs-log-cycles_match_chunks-4-smart", "random"),
-    # ("subgraphs-log-cycles_match_chunks-8-smart", "random"),
-    # ("subgraphs-log-bfs-4-smart", "random"),
-    # ("subgraphs-log-bfs-8-smart", "random"),
-    # ("subgraphs-log-beam_neighbors-4-smart", "random"),
-    # ("subgraphs-log-beam_neighbors-8-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_max-4-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_max-8-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_triangles-4-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_triangles-8-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_max_triangles-4-smart", "random"),
-    # ("subgraphs-log-beam_neighbors_max_triangles-8-smart", "random"),
-]
+    ("subgraphs-{}-{}-{}-smart".format(merge, algo, size), "random")
+    for merge in [
+        # "linear",
+        "log",
+        # "log_reverse",
+        # "sorted_bits",
+    ]
+    for algo in [
+        # "cycles_match_chunks",
+        "neighbors",
+        # "neighbors_cycle",
+        # "neighbors_degree",
+        # "neighbors_degree_cycle",
+        # "neighbors_iterative",
+    ]
+    # for size in [6, 8]
+    for size in [6]
+] + []
 
 
 BENCH_ROUNDS_GENERAL_LARGE = 3
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.timeout(180 * BENCH_ROUNDS_GENERAL_LARGE)
+@pytest.mark.timeout(120 * BENCH_ROUNDS_GENERAL_LARGE)
 @pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_GENERAL)
 @pytest.mark.parametrize(
     "dataset",
@@ -569,9 +504,77 @@ def test_bench_NAC_colorings_general_first_n(
     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_GENERAL_LARGE, warmup_rounds=0)
 
 
+################################################################################
+NAC_LAMAN_DEG_3_PLUS = [
+    "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
+    for merge in [
+        "linear",
+        "log",
+        "log_reverse",
+        "sorted_bits",
+        "sorted_size",
+        "score",
+        "recursion",
+    ]
+    for algo in [
+        "cycles_match_chunks",
+        "neighbors",
+        "neighbors_cycle",
+        "neighbors_degree",
+        "neighbors_degree_cycle",
+        "neighbors_iterative",
+    ]
+    for size in [6, 8]
+] + []
+NAC_LAMAN_DEG_3_PLUS = [
+    "subgraphs-log-neighbors-6-smart"
+]
+
+@pytest.mark.slow
+@pytest.mark.parametrize("algorithm", NAC_LAMAN_DEG_3_PLUS)
+@pytest.mark.parametrize(("vertex_no", "rounds"), [(9, 5), (10, 3)])
+# @pytest.mark.parametrize(("vertex_no", "rounds"), [(9, 1), (10, 1), (11, 1), (12, 1)])
+def test_NAC_coloring_laman_degree_3_plus(benchmark, algorithm: str, vertex_no: int, rounds: int):
+    from tqdm import tqdm
+    from pandas import DataFrame
+
+    stats = defaultdict(int)
+    rand = random.Random(42)
+    dataset = list(load_laman_degree_3_plus_all(vertex_no))
+
+    print()
+    def perform_test():
+        for graph in tqdm(dataset):
+            iterable = graph.NAC_colorings(
+                algorithm=algorithm,
+                relabel_strategy="none",
+                use_bridges_decomposition=False,
+                use_has_coloring_check=False,
+                seed=rand.randint(0, 2**32 - 1),
+            )
+            counter = itertools.count()
+            deque(zip(iterable, counter), maxlen=0)
+            coloring_no = next(counter) // 2
+            stats[coloring_no] += 1
+
+    benchmark.pedantic(perform_test, rounds=rounds, warmup_rounds=0)
+
+    data = np.array(list(stats.items()))
+    df = DataFrame(data, columns=["coloring_cnt", "graph_cnt"])
+    df.sort_values(by="coloring_cnt", inplace=True)
+    df["graph_cnt"] //= rounds
+    print(
+        f"Most colorings: {tuple(df.iloc[-1])}, Most common: {tuple(df.loc[df["graph_cnt"].idxmax()])} (coloring_cnt, graph_cnt)"
+    )
+    # print(df.tail(n=50))
+
+    df.to_csv("./benchmarks/results/laman_degree_3_plus_{}.csv".format(vertex_no))
+
+################################################################################
 @pytest.mark.slow
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
-@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+# @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+@pytest.mark.parametrize("relabel_strategy", ["random"])
 @pytest.mark.parametrize("graph", small_graphs[:SMALL_GRAPH_FUZZY_LIMIT])
 def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strategy: str):
     """
@@ -585,6 +588,7 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
         graph.NAC_colorings(
             algorithm="naive",
             remove_vertices_cnt=0,
+            use_chromatic_partitions=False,
             use_bridges_decomposition=False,
             relabel_strategy="none",
             use_has_coloring_check=False,
@@ -622,6 +626,7 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
     assert naive == tested
 
 
+################################################################################
 def test_wtf_is_going_on():
     import time
     from tqdm import tqdm
@@ -688,132 +693,6 @@ def test_wtf_is_going_on():
             algorithm="subgraphs-linear-none-4-smart",
             relabel_strategy="none",
         )
-
-        # test(
-        #     algorithm="subgraphs-log-none-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-log_reverse-none-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-min_max-none-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-score-none-4-smart",
-        #     relabel_strategy="none",
-        # )
-
-        test(
-            algorithm="subgraphs-linear-neighbors-4-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors-6-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors-8-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative-4-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative-6-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative-8-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative_cycle-4-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative_cycle-6-smart",
-            relabel_strategy="none",
-        )
-        test(
-            algorithm="subgraphs-linear-neighbors_iterative_cycle-8-smart",
-            relabel_strategy="none",
-        )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors-8-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors-13-smart",
-        #     relabel_strategy="none",
-        # )
-
-        # test(
-        #     algorithm="subgraphs-linear-neighbors-8-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors_cycle-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors_cycle-6-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors_cycle-8-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-linear-neighbors-6-smart",
-        #     relabel_strategy="none",
-        # )
-
-        # test(
-        #     algorithm="subgraphs-linear-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-
-        # test(
-        #     algorithm="subgraphs-linear-cycles_match_chunks-4",
-        #     relabel_strategy="none",
-        # )
-
-        # test(
-        #     algorithm="subgraphs-sorted_size-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-sorted_bits-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-log-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-log_reverse-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-min_max-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-score-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-dynamic-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
-        # test(
-        #     algorithm="subgraphs-recursion-beam_neighbors-4-smart",
-        #     relabel_strategy="none",
-        # )
 
         print(results)
         # [print() for _ in range(5)]

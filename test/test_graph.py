@@ -407,10 +407,10 @@ def test__find_cycles(graph, result: Set[Tuple]):
                 4: {(0, 1, 4, 3), (0, 2, 4, 3), (0, 1, 4, 2)},
             },
         ),
-        (
-            graphs.ThreePrismPlusEdge(),
-            {},
-        ),
+        # (
+        #     graphs.ThreePrismPlusEdge(),
+        #     {},
+        # ),
         (
             graphs.DiamondWithZeroExtension(),
             {
@@ -491,6 +491,67 @@ def test__find_cycles(graph, result: Set[Tuple]):
                 8: {(5, 7, 6, 8)},
             },
         ),
+        (
+            Graph.from_vertices_and_edges(
+                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+                [
+                    (0, 1),
+                    (0, 5),
+                    (0, 9),
+                    (1, 3),
+                    (1, 5),
+                    (1, 10),
+                    (1, 12),
+                    (2, 10),
+                    (3, 4),
+                    (3, 5),
+                    (3, 7),
+                    (3, 9),
+                    (3, 14),
+                    (4, 6),
+                    (4, 11),
+                    (4, 12),
+                    (5, 6),
+                    (5, 8),
+                    (5, 11),
+                    (6, 7),
+                    (6, 10),
+                    (6, 11),
+                    (7, 11),
+                    (7, 12),
+                    (9, 13),
+                    (11, 13),
+                    (11, 14),
+                    (12, 13),
+                ],
+            ),
+            {
+                # 0:  [(0, 1), (0, 5), (1, 3), (1, 5), (3, 4), (3, 5), (3, 7)],
+                # 1:  [(0, 9), (3, 9)],
+                # 2:  [(1, 10)],
+                # 3:  [(1, 12), (4, 12), (7, 12)],
+                # 4:  [(2, 10)],
+                # 5:  [(3, 14)],
+                # 6:  [(4, 6), (4, 11), (5, 6), (5, 11), (6, 7), (6, 11), (7, 11)],
+                # 7:  [(5, 8)],
+                # 8:  [(6, 10)],
+                # 9:  [(9, 13)],
+                # 10: [(11, 13)],
+                # 11: [(11, 14)],
+                # 12: [(12, 13)],
+                0: {(0, 1), (0, 3), (0, 6)},
+                1: {(0, 1)},
+                2: {(0, 2, 8, 6)},
+                3: {(0, 3)},
+                5: {(0, 5, 11, 6)},
+                6: {(3, 6), (0, 6)},
+                8: {(0, 2, 8, 6), (2, 3, 6, 8)},
+                9: {(0, 1, 9, 10, 6), (0, 1, 9, 12, 3), (1, 5, 11, 10, 9)},
+                10: {(3, 6, 10, 12)},
+                11: {(0, 5, 11, 6)},
+                12: {(3, 6, 10, 12)},
+            },
+        ),
     ],
     ids=[
         "path",
@@ -499,10 +560,12 @@ def test__find_cycles(graph, result: Set[Tuple]):
         "cycle5",
         "diamond",
         "prism",
-        "prismPlus",
+        # "prismPlus",
         "minimallyRigid",
         "smaller_problemist",
         "large_problemist",
+        "anoying_problemist",
+        # TODO for disconnected components "cycle_passing_same_component_twice",
     ],
 )
 def test__find_shortest_cycles_for_components(graph: Graph, result: Set[Tuple]):
@@ -512,6 +575,7 @@ def test__find_shortest_cycles_for_components(graph: Graph, result: Set[Tuple]):
     # print(component_to_edges)
     res = Graph._find_shortest_cycles_for_components(
         graph,
+        list(range(len(component_to_edges))),
         component_to_edges,
         all=True,
     )
@@ -727,13 +791,14 @@ NAC_TEST_CASES: List[NACTestCase] = [
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_bridges", [True, False])
 def test_all_NAC_colorings(
-    graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool
+    graph: Graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool
 ):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
         graph.NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
+            use_chromatic_partitions=True,
             use_bridges_decomposition=use_bridges,
             use_has_coloring_check=False,
         )

@@ -2,6 +2,7 @@ from collections import defaultdict
 import itertools
 import os
 import random
+import re
 import sys
 import urllib.request
 from enum import Enum
@@ -18,9 +19,10 @@ class GraphFamily(Enum):
     LAMAN = (1245517, "LamanGraphs")
 
 
-DOWNLOAD_DIR = "./benchmarks/graphs_store"
-LAMAN_DIR = "./benchmarks/graphs_store/nauty-laman"
-GENERAL_DIR = "./benchmarks/graphs_store/general-graphs"
+STORE_DIR = "./benchmarks/graphs_store"
+LAMAN_DIR = f"{STORE_DIR}/nauty-laman/general"
+LAMAN_DEGREE_3_PLUS_DIR = f"{STORE_DIR}/nauty-laman/degree_3_plus"
+GENERAL_DIR = f"{STORE_DIR}/general-graphs"
 
 
 def download_small_graphs(family: GraphFamily, size: str) -> None:
@@ -29,8 +31,8 @@ def download_small_graphs(family: GraphFamily, size: str) -> None:
     )
 
     name = family.value[1] + " " + size
-    path = "{}/{}.zip".format(DOWNLOAD_DIR, name)
-    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    path = "{}/{}.zip".format(STORE_DIR, name)
+    os.makedirs(STORE_DIR, exist_ok=True)
     if not os.path.exists(path):
         print("Downloading {} dataset...".format(name), file=sys.stderr)
         urllib.request.urlretrieve(url, filename="{}.tmp".format(path))
@@ -38,7 +40,7 @@ def download_small_graphs(family: GraphFamily, size: str) -> None:
 
         print("Extracting {} dataset...".format(name), file=sys.stderr)
         with zipfile.ZipFile(path, "r") as zip_ref:
-            zip_ref.extractall(os.path.join(DOWNLOAD_DIR, name))
+            zip_ref.extractall(os.path.join(STORE_DIR, name))
 
 
 configurations = [
@@ -63,7 +65,7 @@ def load_small_graph(family: GraphFamily, size: str, limit: int | None):
     download_small_graphs(family, size)
 
     name = family.value[1] + " " + size
-    dir = os.path.join(DOWNLOAD_DIR, name)
+    dir = os.path.join(STORE_DIR, name)
 
     graphs: List[Graph] = []
     for file in os.listdir(dir):
@@ -96,11 +98,13 @@ def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph
 
     return graphs
 
+
 def _filter_triangle_only_laman_graphs(graphs) -> filter:
     return filter(
         lambda g: len(Graph._find_triangle_components(g)[1]) > 1,
         graphs,
     )
+
 
 def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Graph]:
 
@@ -118,6 +122,55 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Gr
         random.Random(42).shuffle(graphs)
 
     return _filter_triangle_only_laman_graphs(graphs)
+
+
+def load_laman_degree_3_plus(shuffle: bool = True) -> Iterable[Graph]:
+    return load_laman_graphs(dir = LAMAN_DEGREE_3_PLUS_DIR, shuffle=shuffle)
+
+
+LAMAN_DEGREE_3_PLUS_ALL_DIR = f"{STORE_DIR}/laman_degree_3_plus"
+LAMAN_DEGREE_3_PLUS_ALL_FILENAME = "D3LamanGraphs{}.m"
+
+def load_laman_degree_3_plus_all(
+    vertices_no: int, limit: int | None = None
+) -> Iterable[Graph]:
+    path = os.path.join(
+        LAMAN_DEGREE_3_PLUS_ALL_DIR, LAMAN_DEGREE_3_PLUS_ALL_FILENAME.format(vertices_no)
+    )
+
+    graph_no = 0
+    if limit == None:
+        limit = -1  # Will never end
+
+    with open(path) as file:
+        for line in file:
+            for integer in re.finditer("(\\d+)", line):
+                yield Graph.from_int(int(integer.group()))
+
+                graph_no += 1
+                if graph_no == limit:
+                    return
+
+
+def _convert_g6_to_int(from_path: str, to_path: str):
+    """
+    This function was used for the routine above to commonize sources
+    """
+    with open(from_path, mode="rb") as input_file, open(
+        to_path, mode="w"
+    ) as output_file:
+        output_file.write("{")
+        is_first = True
+        for line in input_file:
+            line = line.strip()
+            if not len(line):
+                continue
+            graph = Graph(nx.from_graph6_bytes(line))
+            if not is_first:
+                output_file.write(",\n")
+                is_first = False
+            output_file.write(str(graph.to_int()))
+        output_file.write("}")
 
 
 def load_general_graphs(
@@ -192,8 +245,7 @@ def load_general_graphs(
 #         Size of the subsets.
 
 
-
-def load_small_generated_graphs( limit: int = 128) -> Dict[str, List[Graph]]:
+def load_small_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
     graphs: Dict[str, List[Graph]] = {}
 
     rand = random.Random(42)
@@ -214,6 +266,7 @@ def load_small_generated_graphs( limit: int = 128) -> Dict[str, List[Graph]]:
         graphs[key] = data
 
     return graphs
+
 
 def load_medium_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
     graphs: Dict[str, List[Graph]] = {}
@@ -239,6 +292,7 @@ def load_medium_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
         graphs[key] = data
 
     return graphs
+
 
 def load_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
     graphs: Dict[str, List[Graph]] = {}

@@ -17,8 +17,17 @@ if [[ ! -d "${OUTPUT_DIR}" ]]; then
     mkdir -p "${OUTPUT_DIR}"
 fi
 
-for n in {5..30} # 32 40 64 my computer cannot generate more in reasonable time
+echo Generation Laman graphs...
+for n in {5..30}
 do
-    "$EXECUTABLE" $n -K2 | head -n 128 > "${OUTPUT_DIR}/laman_${n}.g6"
+    # Laman graphs (may be spanned by a triangle component)
+    "$EXECUTABLE" $n -K2 | head -n 128 > "${OUTPUT_DIR}/general/laman_${n}.g6"
+done
+
+echo Generation Laman graphs with min degree 3...
+for n in {6..17}
+do
+    # Laman graphs with min degree 3
+    "$EXECUTABLE" $n -K2 -d3 | head -n 128 > "${OUTPUT_DIR}/deg_3_plus/laman_deg_3_plus${n}.g6"
 done
 
