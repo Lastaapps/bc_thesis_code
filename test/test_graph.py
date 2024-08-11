@@ -789,9 +789,13 @@ NAC_TEST_CASES: List[NACTestCase] = [
 )
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
-@pytest.mark.parametrize("use_bridges", [True, False])
+@pytest.mark.parametrize("use_decompositions", [True, False])
 def test_all_NAC_colorings(
-    graph: Graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool
+    graph: Graph,
+    colorings_no: int,
+    algorithm: str,
+    relabel_strategy: str,
+    use_decompositions: bool,
 ):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
@@ -799,7 +803,7 @@ def test_all_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_chromatic_partitions=True,
-            use_bridges_decomposition=use_bridges,
+            use_decompositions=use_decompositions,
             use_has_coloring_check=False,
         )
     )
@@ -918,16 +922,20 @@ def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColori
 )
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
-@pytest.mark.parametrize("use_bridges", [True, False])
+@pytest.mark.parametrize("use_decompositions", [True, False])
 def test_all_cartesian_NAC_colorings(
-    graph, colorings_no: int, algorithm: str, relabel_strategy: str, use_bridges: bool
+    graph,
+    colorings_no: int,
+    algorithm: str,
+    relabel_strategy: str,
+    use_decompositions: bool,
 ):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
         graph.cartesian_NAC_colorings(
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            use_bridges_decomposition=use_bridges,
+            use_decompositions_decomposition=use_decompositions,
             use_has_coloring_check=False,
         )
     )

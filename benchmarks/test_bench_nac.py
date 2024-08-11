@@ -128,8 +128,8 @@ BENCH_ROUNDS_SMALL = 3
 
 @pytest.mark.timeout(60 * BENCH_ROUNDS_SMALL)
 @pytest.mark.nac_benchmark
-# @pytest.mark.parametrize("bridges", [True, False])
-@pytest.mark.parametrize("bridges", [True])
+# @pytest.mark.parametrize("use_decompositions", [True, False])
+@pytest.mark.parametrize("use_decompositions", [True])
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ BENCH_ROUNDS_SMALL = 3
 def test_bench_NAC_colorings_small(
     benchmark,
     algorithm: str,
-    bridges: bool,
+    use_decompositions: bool,
     relabel_strategy: str,
     dataset: List[Graph],
 ):
@@ -156,7 +156,7 @@ def test_bench_NAC_colorings_small(
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
-                use_bridges_decomposition=bridges,
+                use_decompositions=use_decompositions,
                 use_has_coloring_check=False,
                 relabel_strategy=relabel_strategy,
                 seed=rand.randint(0, 2**32 - 1),
@@ -240,7 +240,7 @@ def test_bench_NAC_colorings_laman_fast(
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
-                use_bridges_decomposition=True,
+                use_decompositions=True,
                 use_has_coloring_check=False,
                 seed=rand.randint(0, 2**32 - 1),
             ):
@@ -326,7 +326,7 @@ def test_bench_nac_colorings_general_medium(
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy=relabel_strategy,
-                use_bridges_decomposition=True,
+                use_decompositions=True,
                 use_has_coloring_check=False,
                 seed=rand.randint(0, 2**32 - 1),
             ):
@@ -393,7 +393,7 @@ def test_bench_NAC_colorings_laman_large_first_n(
     vertices_no: int,
     graph_cnt: int,
     first_n: int,
-    bridges: bool = True,
+    use_decompositions: bool = True,
 ):
     """
     Measures the time to find first 32 NAC colorings of the graph given if they
@@ -418,7 +418,7 @@ def test_bench_NAC_colorings_laman_large_first_n(
                 graph.NAC_colorings(
                     algorithm=algorithm,
                     relabel_strategy=relabel_strategy,
-                    use_bridges_decomposition=bridges,
+                    use_decompositions=use_decompositions,
                     use_has_coloring_check=False,
                     seed=rand.randint(0, 2**32 - 1),
                 ),
@@ -471,7 +471,7 @@ def test_bench_NAC_colorings_general_first_n(
     algorithm: str,
     relabel_strategy: str,
     first_n: int,
-    bridges: bool = True,
+    use_decompositions: bool = True,
 ):
     """
     Measures the time to find first 32 NAC colorings of the graph given if they
@@ -491,7 +491,7 @@ def test_bench_NAC_colorings_general_first_n(
                 graph.NAC_colorings(
                     algorithm=algorithm,
                     relabel_strategy=relabel_strategy,
-                    use_bridges_decomposition=bridges,
+                    use_decompositions=use_decompositions,
                     use_has_coloring_check=False,
                     seed=rand.randint(0, 2**32 - 1),
                 ),
@@ -526,15 +526,16 @@ NAC_LAMAN_DEG_3_PLUS = [
     ]
     for size in [6, 8]
 ] + []
-NAC_LAMAN_DEG_3_PLUS = [
-    "subgraphs-log-neighbors-6-smart"
-]
+NAC_LAMAN_DEG_3_PLUS = ["subgraphs-log-neighbors-6-smart"]
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("algorithm", NAC_LAMAN_DEG_3_PLUS)
 @pytest.mark.parametrize(("vertex_no", "rounds"), [(9, 5), (10, 3)])
 # @pytest.mark.parametrize(("vertex_no", "rounds"), [(9, 1), (10, 1), (11, 1), (12, 1)])
-def test_NAC_coloring_laman_degree_3_plus(benchmark, algorithm: str, vertex_no: int, rounds: int):
+def test_NAC_coloring_laman_degree_3_plus(
+    benchmark, algorithm: str, vertex_no: int, rounds: int
+):
     from tqdm import tqdm
     from pandas import DataFrame
 
@@ -543,12 +544,13 @@ def test_NAC_coloring_laman_degree_3_plus(benchmark, algorithm: str, vertex_no: 
     dataset = list(load_laman_degree_3_plus_all(vertex_no))
 
     print()
+
     def perform_test():
         for graph in tqdm(dataset):
             iterable = graph.NAC_colorings(
                 algorithm=algorithm,
                 relabel_strategy="none",
-                use_bridges_decomposition=False,
+                use_decompositions=False,
                 use_has_coloring_check=False,
                 seed=rand.randint(0, 2**32 - 1),
             )
@@ -570,6 +572,7 @@ def test_NAC_coloring_laman_degree_3_plus(benchmark, algorithm: str, vertex_no: 
 
     df.to_csv("./benchmarks/results/laman_degree_3_plus_{}.csv".format(vertex_no))
 
+
 ################################################################################
 @pytest.mark.slow
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
@@ -589,7 +592,7 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
             algorithm="naive",
             remove_vertices_cnt=0,
             use_chromatic_partitions=False,
-            use_bridges_decomposition=False,
+            use_decompositions=False,
             relabel_strategy="none",
             use_has_coloring_check=False,
         )
@@ -665,7 +668,7 @@ def test_wtf_is_going_on():
         def test(
             algorithm: str = "subgraphs",
             relabel_strategy: str = "none",
-            use_bridges_decomposition: bool = True,
+            use_decompositions: bool = True,
         ):
             print(f"Test {algorithm} {relabel_strategy}")
             start = time.time()
@@ -675,7 +678,7 @@ def test_wtf_is_going_on():
                 graph.NAC_colorings(
                     algorithm=algorithm,
                     relabel_strategy=relabel_strategy,
-                    use_bridges_decomposition=use_bridges_decomposition,
+                    use_decompositions=use_decompositions,
                     use_has_coloring_check=False,
                     seed=seed,
                 ),

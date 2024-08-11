@@ -90,6 +90,7 @@ def print_stats():
         print(f"Level: {key:2d} - {s:.8f} -> {l}")
     statistics_storage.clear()
 
+
 graphviz_colors = [
     "red",
     "green",
@@ -105,6 +106,8 @@ graphviz_colors = [
     "silver",
     "gold",
 ]
+
+
 def graphviz_components(
     name: str,
     component_to_edges: Collection[Collection[Edge]],
@@ -116,17 +119,25 @@ def graphviz_components(
         for edge in component:
             my_graph.add_edges_from(
                 [
-                    (*edge, {"color": graphviz_colors[i % len(graphviz_colors)], "style": "filled", "label": i})
+                    (
+                        *edge,
+                        {
+                            "color": graphviz_colors[i % len(graphviz_colors)],
+                            "style": "filled",
+                            "label": i,
+                        },
+                    )
                 ]
             )
 
     return nx.nx_agraph.to_agraph(my_graph)
 
+
 def graphviz_graph(
-        name: str,
-        component_to_edges: List[List[Edge]],
-        chunk_sizes: List[int],
-        vertices: List[int],
+    name: str,
+    component_to_edges: List[List[Edge]],
+    chunk_sizes: List[int],
+    vertices: List[int],
 ) -> str:
     my_graph = nx.Graph()
     my_graph.name = name
@@ -138,19 +149,26 @@ def graphviz_graph(
         for v in local_vertices:
             my_graph.add_edges_from(
                 [
-                    (*e, {"color": graphviz_colors[i % len(graphviz_colors)], "style": "filled"})
+                    (
+                        *e,
+                        {
+                            "color": graphviz_colors[i % len(graphviz_colors)],
+                            "style": "filled",
+                        },
+                    )
                     for e in component_to_edges[v]
                 ]
             )
 
     return nx.nx_agraph.to_agraph(my_graph)
 
+
 def graphviz_t_graph(
-        t_graph: nx.Graph,
-        name: str,
-        component_to_edges: List[List[Edge]],
-        chunk_sizes: List[int],
-        vertices: List[int],
+    t_graph: nx.Graph,
+    name: str,
+    component_to_edges: List[List[Edge]],
+    chunk_sizes: List[int],
+    vertices: List[int],
 ) -> str:
     my_t_graph = nx.Graph()
     my_t_graph.name = name
@@ -161,7 +179,15 @@ def graphviz_t_graph(
         offset += chunk_size
         for v in local_vertices:
             my_t_graph.add_nodes_from(
-                [(v, {"color": graphviz_colors[i % len(graphviz_colors)], "style": "filled"})]
+                [
+                    (
+                        v,
+                        {
+                            "color": graphviz_colors[i % len(graphviz_colors)],
+                            "style": "filled",
+                        },
+                    )
+                ]
             )
     my_t_graph.add_edges_from(t_graph.edges)
     my_t_graph = nx.relabel_nodes(
@@ -1258,7 +1284,7 @@ class Graph(nx.Graph):
                 self.NAC_colorings(
                     algorithm=algorithm,
                     # we already checked for bridges
-                    use_bridges_decomposition=False,
+                    use_decompositions=False,
                     use_has_coloring_check=False,
                 )
             ),
@@ -1297,7 +1323,7 @@ class Graph(nx.Graph):
         return next(
             self.NAC_colorings(
                 algorithm=algorithm,
-                use_bridges_decomposition=False,
+                use_decompositions=False,
             ),
             None,
         )
@@ -1306,13 +1332,12 @@ class Graph(nx.Graph):
     def _fake_triangle_components(
         graph: nx.Graph,
     ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
-        edge_to_component:Dict[Edge, int] = {}
+        edge_to_component: Dict[Edge, int] = {}
         component_to_edges: List[List[Edge]] = []
         for i, e in enumerate(graph.edges):
             edge_to_component[e] = i
             component_to_edges.append([e])
         return edge_to_component, component_to_edges
-
 
     @staticmethod
     def _find_triangle_components(
@@ -1350,7 +1375,6 @@ class Graph(nx.Graph):
             for w in intersection:
                 components.join((u, v), (w, v))
                 components.join((u, v), (w, u))
-
 
         # Checks for edges & triangles over component
         # This MUST be run before search for squares of other search
@@ -2339,7 +2363,7 @@ class Graph(nx.Graph):
                 if start_with_cycle:
                     cycles = Graph._find_shortest_cycles(
                         graph,
-            list(t_graph.nodes),
+                        list(t_graph.nodes),
                         component_to_edges,
                         all=True,
                     )
@@ -3038,9 +3062,17 @@ class Graph(nx.Graph):
 
         if NAC_PRINT_SWITCH:
             print("-" * 80)
-            print(graphviz_graph(order_strategy, component_to_edges, chunk_sizes, vertices))
+            print(
+                graphviz_graph(
+                    order_strategy, component_to_edges, chunk_sizes, vertices
+                )
+            )
             print("-" * 80)
-            print(graphviz_t_graph(t_graph, order_strategy, component_to_edges, chunk_sizes, vertices))
+            print(
+                graphviz_t_graph(
+                    t_graph, order_strategy, component_to_edges, chunk_sizes, vertices
+                )
+            )
 
             print("-" * 80)
             print(f"Vertices no:  {nx.number_of_nodes(graph)}")
@@ -3147,9 +3179,7 @@ class Graph(nx.Graph):
                     (list(i), m) for i, m in all_epochs
                 ]
 
-                all_epochs = sorted(
-                    all_epochs, key=lambda x: len(x[0]), reverse=True
-                )
+                all_epochs = sorted(all_epochs, key=lambda x: len(x[0]), reverse=True)
 
                 while len(all_epochs) > 1:
                     iterable, mask = colorings_merge_wrapper(
@@ -3493,7 +3523,7 @@ class Graph(nx.Graph):
             yield b, r
 
     @staticmethod
-    def _NAC_colorings_with_bridges(
+    def _NAC_colorings_from_bridges(
         processor: Callable[[nx.Graph], Iterable[NACColoring]],
         graph: nx.Graph,
         copy: bool = True,
@@ -3536,6 +3566,25 @@ class Graph(nx.Graph):
         colorings.append(
             Graph._NAC_colorings_for_single_edges(bridges, include_non_surjective=True),
         )
+
+        iterator = reduce(Graph._NAC_colorings_cross_product, colorings)
+
+        # Skip initial invalid coloring that are not surjective
+        iterator = filter(lambda x: len(x[0]) * len(x[1]) != 0, iterator)
+
+        return iterator
+
+    @staticmethod
+    def _NAC_colorings_from_articulation_points(
+        processor: Callable[[nx.Graph], Iterable[NACColoring]],
+        graph: nx.Graph,
+    ) -> Iterable[NACColoring]:
+        colorings: List[Iterable[NACColoring]] = []
+        for component in nx.components.biconnected_components(graph):
+            subgraph = nx.induced_subgraph(graph, component)
+            iterable = processor(subgraph)
+            iterable = Graph._NAC_colorings_with_non_surjective(subgraph, iterable)
+            colorings.append(iterable)
 
         iterator = reduce(Graph._NAC_colorings_cross_product, colorings)
 
@@ -3979,7 +4028,7 @@ class Graph(nx.Graph):
         self,
         algorithm: str,
         relabel_strategy: str,
-        use_bridges_decomposition: bool,
+        use_decompositions: bool,
         is_cartesian: bool,
         use_chromatic_partitions: bool,
         remove_vertices_cnt: int,
@@ -4030,7 +4079,9 @@ class Graph(nx.Graph):
                     is_cartesian_NAC_coloring=is_cartesian,
                 )
             else:
-                edge_to_component, component_to_edge = Graph._fake_triangle_components(graph)
+                edge_to_component, component_to_edge = Graph._fake_triangle_components(
+                    graph
+                )
             t_graph = Graph._create_T_graph_from_components(graph, edge_to_component)
 
             algorithm_parts = list(algorithm.split("-"))
@@ -4127,9 +4178,13 @@ class Graph(nx.Graph):
                 processor, lambda p, g: Graph._NAC_colorings_without_vertex(p, g, None)
             )
 
-        if use_bridges_decomposition:
+        if use_decompositions:
+            # processor = apply_processor(
+            #     processor, lambda p, g: Graph._NAC_colorings_from_bridges(p, g)
+            # )
             processor = apply_processor(
-                processor, lambda p, g: Graph._NAC_colorings_with_bridges(p, g)
+                processor,
+                lambda p, g: Graph._NAC_colorings_from_articulation_points(p, g),
             )
 
         processor = apply_processor(
@@ -4147,7 +4202,7 @@ class Graph(nx.Graph):
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
         use_chromatic_partitions: bool = True,
-        use_bridges_decomposition: bool = True,
+        use_decompositions: bool = True,
         remove_vertices_cnt: int = 0,
         use_has_coloring_check: bool = True,
         seed: int | None = None,
@@ -4177,7 +4232,7 @@ class Graph(nx.Graph):
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_chromatic_partitions=use_chromatic_partitions,
-            use_bridges_decomposition=use_bridges_decomposition,
+            use_decompositions=use_decompositions,
             is_cartesian=False,
             remove_vertices_cnt=remove_vertices_cnt,
             use_has_coloring_check=use_has_coloring_check,
@@ -4190,7 +4245,7 @@ class Graph(nx.Graph):
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
         use_chromatic_partitions: bool = True,
-        use_bridges_decomposition: bool = True,
+        use_decompositions: bool = True,
         use_has_coloring_check: bool = True,
         seed: int | None = None,
     ) -> Iterable[NACColoring]:
@@ -4221,7 +4276,7 @@ class Graph(nx.Graph):
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_chromatic_partitions=use_chromatic_partitions,
-            use_bridges_decomposition=use_bridges_decomposition,
+            use_decompositions=use_decompositions,
             is_cartesian=True,
             remove_vertices_cnt=0,
             use_has_coloring_check=use_has_coloring_check,
