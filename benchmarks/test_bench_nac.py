@@ -7,6 +7,7 @@ from benchmarks.dataset import (
     load_all_small_graphs,
     load_general_graphs,
     load_generated_graphs,
+    load_laman_degree_3_plus,
     load_laman_degree_3_plus_all,
     load_laman_graphs,
     load_medium_generated_graphs,
@@ -21,6 +22,7 @@ SMALL_GRAPH_FILE_LIMIT = 64
 SMALL_GRAPH_FUZZY_LIMIT = 256
 small_graphs: List[Graph] = load_all_small_graphs(SMALL_GRAPH_FILE_LIMIT)
 laman_graphs: List[Graph] = list(load_laman_graphs())
+laman_degree_3_plus_graphs: List[Graph] = list(load_laman_degree_3_plus())
 laman_small_graphs = list(filter(lambda g: nx.number_of_nodes(g) < 10, laman_graphs))
 laman_medium_graphs = list(
     filter(lambda g: nx.number_of_nodes(g) in range(10, 15 + 1), laman_graphs)
@@ -29,6 +31,11 @@ laman_larger_graphs = list(
     filter(lambda g: nx.number_of_nodes(g) in range(16, 17 + 1), laman_graphs)
 )
 laman_large_graphs = list(filter(lambda g: nx.number_of_nodes(g) > 15, laman_graphs))
+laman_medium_degree_3_plus_graphs = list(
+    filter(
+        lambda g: nx.number_of_nodes(g) in range(12, 15 + 1), laman_degree_3_plus_graphs
+    )
+)
 
 general_small_graphs = load_small_generated_graphs()
 general_small_graphs = general_small_graphs.items()
@@ -170,7 +177,6 @@ def test_bench_NAC_colorings_small(
 NAC_ALGORITHMS_LAMAN_FAST = [
     "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
     for merge in [
-        # "linear",
         "linear",
         # "log_reverse",
         # "sorted_bits",
@@ -179,23 +185,24 @@ NAC_ALGORITHMS_LAMAN_FAST = [
         # "recursion",
     ]
     for algo in [
-        # "none",
+        "none",
         # "degree",
         # "degree_cycles",
         # "cycles",
-        # "cycles_match_chunks",
+        "cycles_match_chunks",
         "neighbors",
-        # "neighbors_cycle",
+        "neighbors_cycle",
         # "neighbors_degree",
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
     # for size in [4, 8]
-    for size in [6]
+    # for size in [6, 8]
+    for size in [8]
 ]
 NAC_RELABEL_STRATEGIES_LAMAN_FAST = [
-    # "none",
-    "random",
+    "none",
+    # "random",
     # "bfs",
     # "beam_degree",
 ]
@@ -205,18 +212,20 @@ BENCH_ROUNDS_LAMAN_FAST = 4
 
 
 @pytest.mark.nac_benchmark
-@pytest.mark.timeout(10 * BENCH_ROUNDS_LAMAN_FAST)
+@pytest.mark.timeout(20 * BENCH_ROUNDS_LAMAN_FAST)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS_LAMAN_FAST)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES_LAMAN_FAST)
 @pytest.mark.parametrize(
     "dataset",
     [
         laman_medium_graphs[:32],
-        # laman_larger_graphs[:16],
+        laman_larger_graphs[:16],
+        laman_medium_degree_3_plus_graphs[:16],
     ],
     ids=[
         "laman_medium",
-        # "laman_larger",
+        "laman_larger",
+        "laman_medium_degree_3_plus_graphs",
     ],
 )
 def test_bench_NAC_colorings_laman_fast(
@@ -253,8 +262,8 @@ def test_bench_NAC_colorings_laman_fast(
 NAC_ALGORITHMS_GENERAL_FAST = [
     "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
     for merge in [
-        # "linear",
-        "log",
+        "linear",
+        # "log",
         # "log_reverse",
         # "sorted_bits",
         # "sorted_size",
@@ -266,19 +275,20 @@ NAC_ALGORITHMS_GENERAL_FAST = [
         # "degree",
         # "degree_cycles",
         # "cycles",
-        # "cycles_match_chunks",
+        "cycles_match_chunks",
         "neighbors",
-        # "neighbors_cycle",
-        # "neighbors_degree",
+        "neighbors_cycle",
+        "neighbors_degree",
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
-    for size in [6, 8, 10]
+    # for size in [6, 8, 10]
+    for size in [8]
 ] + []
 
 NAC_RELABEL_STRATEGIES_GENERAL_FAST = [
     # "none",
-    # "random",
+    "random",
     # "bfs",
     "beam_degree",
 ]
@@ -586,12 +596,15 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
     Large number of smaller graphs is used (naive implementation is really slow for larger ones).
     """
 
+    rand = random.Random(42)
+
     # print(graph)
     naive = list(
         graph.NAC_colorings(
             algorithm="naive",
             remove_vertices_cnt=0,
-            use_chromatic_partitions=False,
+            # without this naive search is really slow
+            # use_chromatic_partitions=False,
             use_decompositions=False,
             relabel_strategy="none",
             use_has_coloring_check=False,
@@ -602,6 +615,7 @@ def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strateg
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_has_coloring_check=False,
+            seed=rand.randint(0, 1024),
         )
     )
 

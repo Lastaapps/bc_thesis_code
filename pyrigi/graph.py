@@ -1557,7 +1557,7 @@ class Graph(nx.Graph):
             yield (coloring[1], coloring[0])
 
     @staticmethod
-    def _find_cycles(
+    def _find_cycles_in_T_graph(
         graph: nx.Graph,
         t_graph: nx.Graph,
         component_to_edges: List[List[Edge]],
@@ -1715,26 +1715,58 @@ class Graph(nx.Graph):
         return found_cycles
 
     @staticmethod
-    def _find_shortest_cycles(
+    def _find_cycles(
         graph: nx.Graph,
-        subgraph_components: List[int],
+        subgraph_components: Set[int],
         component_to_edges: List[Set[Tuple[int, int]]],
         all: bool = False,
+    ) -> Set[Tuple[int, ...]]:
+        match 2:
+            case 0:
+                return set()
+            case 1:
+                return Graph._find_shortest_cycles(
+                    graph, subgraph_components, component_to_edges, all
+                )
+            case 2:
+                return Graph._find_useful_cycles(
+                    graph, subgraph_components, component_to_edges
+                )
+            case 3:
+                res = Graph._find_shortest_cycles(
+                    graph, subgraph_components, component_to_edges, all
+                ) | Graph._find_useful_cycles(
+                    graph, subgraph_components, component_to_edges
+                )
+                res = list(sorted(res, key=lambda x: len(x)))[
+                    : 2 * graph.number_of_nodes()
+                ]
+                return set(res)
+
+    @staticmethod
+    def _find_shortest_cycles(
+        graph: nx.Graph,
+        subgraph_components: Set[int],
+        component_to_edges: List[Set[Tuple[int, int]]],
+        all: bool = False,
+        per_class_limit: int = 1024,
     ) -> Set[Tuple[int, ...]]:
         cycles = Graph._find_shortest_cycles_for_components(
             graph=graph,
             subgraph_components=subgraph_components,
             component_to_edges=component_to_edges,
             all=all,
+            per_class_limit=per_class_limit,
         )
         return {c for comp_cycles in cycles.values() for c in comp_cycles}
 
     @staticmethod
     def _find_shortest_cycles_for_components(
         graph: nx.Graph,
-        subgraph_components: List[int],
+        subgraph_components: Set[int],
         component_to_edges: List[Set[Tuple[int, int]]],
         all: bool = False,
+        per_class_limit: int = 1024,
     ) -> Dict[int, Set[Tuple[int, ...]]]:
         """
         For each edge finds one/all of the shortest cycles it lays on
@@ -1932,7 +1964,131 @@ class Graph(nx.Graph):
                 continue
             bfs(component)
 
-        return found_cycles
+        # return found_cycles
+
+        limited = {}
+        for key, value in found_cycles.items():
+            limited[key] = set(
+                list(sorted(value, key=lambda x: len(x)))[:per_class_limit]
+            )
+        return limited
+
+    @staticmethod
+    def _find_useful_cycles(
+        graph: nx.Graph,
+        subgraph_components: Set[int],
+        component_to_edges: List[Set[Tuple[int, int]]],
+        per_class_limit: int = 2,
+    ) -> Set[Tuple[int, ...]]:
+        cycles = Graph._find_useful_cycles_for_components(
+            graph=graph,
+            subgraph_components=subgraph_components,
+            component_to_edges=component_to_edges,
+            per_class_limit=per_class_limit,
+        )
+        return {c for comp_cycles in cycles.values() for c in comp_cycles}
+
+    @staticmethod
+    def _find_useful_cycles_for_components(
+        graph: nx.Graph,
+        subgraph_components: Set[int],
+        component_to_edges: List[Set[Tuple[int, int]]],
+        per_class_limit: int = 2,
+    ) -> Dict[int, Set[Tuple[int, ...]]]:
+        """
+        Not all the returned cycles are guaranteed to be actual cycles as
+        this may create cycles that enter and exit a component at the same vertex.
+        """
+        comp_no = len(component_to_edges)
+        vertex_to_components = [set() for _ in range(max(graph.nodes) + 1)]
+        for comp_id, comp in enumerate(component_to_edges):
+            if comp_id not in subgraph_components:
+                continue
+            for u, v in comp:
+                vertex_to_components[u].add(comp_id)
+                vertex_to_components[v].add(comp_id)
+        neighboring_components = [set() for _ in range(comp_no)]
+
+        found_cycles: Dict[int, Set[Tuple[int, ...]]] = defaultdict(set)
+
+        for v in graph.nodes:
+            for i in vertex_to_components[v]:
+                for j in vertex_to_components[v]:
+                    if i != j:
+                        neighboring_components[i].add(j)
+
+        def insert_cycle(comp_id: int, cycle: Tuple[int, ...]):
+            # in case one component was used more times
+            if len(set(cycle)) != len(cycle):
+                return
+
+            # find the smallest element index
+            smallest = 0
+            for i, e in enumerate(cycle):
+                if e < cycle[smallest]:
+                    smallest = i
+
+            # makes sure that the element following the smallest one
+            # is greater than the one preceding it
+            if cycle[smallest - 1] < cycle[(smallest + 1) % len(cycle)]:
+                cycle = list(reversed(cycle))
+                smallest = len(cycle) - smallest - 1
+
+            # rotates the list so the smallest element is first
+            cycle = cycle[smallest:] + cycle[:smallest]
+
+            # print(f"Inserting [{comp_id}] -> {cycle}")
+            found_cycles[comp_id].add(tuple(cycle))
+
+        # print()
+        # print(f"{subgraph_components=}")
+        # print(f"{component_to_edges=}")
+        # print(f"{vertex_to_components=}")
+        # print(f"{neighboring_components=}")
+
+        for u, v in graph.edges:
+            # print(f"{u=} {v=}")
+            u_comps = vertex_to_components[u]
+            v_comps = vertex_to_components[v]
+
+            # remove shared components
+            intersection = u_comps.intersection(v_comps)
+            u_comps = u_comps - intersection
+            v_comps = v_comps - intersection
+            # print(f"{u_comps=} {v_comps=} <-> {intersection=}")
+            assert len(intersection) <= 1
+            if len(intersection) == 0:
+                continue
+
+            for u_comp in u_comps:
+                # triangles
+                for n in neighboring_components[u_comp].intersection(v_comps):
+                    for i in intersection:
+                        insert_cycle(i, (i, u_comp, n))
+
+                for v_comp in v_comps:
+                    # squares
+                    u_comp_neigh = neighboring_components[u_comp]
+                    v_comp_neigh = neighboring_components[v_comp]
+                    # print(f"{u_comp_neigh=} {v_comp_neigh=}")
+                    res = u_comp_neigh.intersection(v_comp_neigh) - intersection
+                    for i in intersection:
+                        for r in res:
+                            insert_cycle(i, (i, u_comp, r, v_comp))
+
+                    # pentagons
+                    for r in u_comp_neigh - set([u_comp]):
+                        for t in neighboring_components[r].intersection(v_comp_neigh):
+                            for i in intersection:
+                                insert_cycle(i, (i, u_comp, r, t, v_comp))
+
+        limited = {}
+        for key, value in found_cycles.items():
+            limited[key] = set(
+                list(sorted(value, key=lambda x: len(x)))[:per_class_limit]
+            )
+
+        return limited
 
     @staticmethod
     def _create_bitmask_for_t_graph_cycle(
@@ -2060,9 +2216,9 @@ class Graph(nx.Graph):
         vertices.sort()
 
         # find some small cycles for state filtering
-        cycles = Graph._find_shortest_cycles(
+        cycles = Graph._find_cycles(
             graph,
-            list(t_graph.nodes),
+            set(t_graph.nodes),
             component_to_edges,
             all=use_all_cycles,
         )
@@ -2361,9 +2517,9 @@ class Graph(nx.Graph):
 
             if is_random_component_required[chunk_index]:
                 if start_with_cycle:
-                    cycles = Graph._find_shortest_cycles(
+                    cycles = Graph._find_cycles(
                         graph,
-                        list(t_graph.nodes),
+                        set(t_graph.nodes),
                         component_to_edges,
                         all=True,
                     )
@@ -2641,9 +2797,9 @@ class Graph(nx.Graph):
         For each vertex we find all the cycles that contain it
         Finds all the shortest cycles in the graph
         """
-        cycles = Graph._find_shortest_cycles(
+        cycles = Graph._find_cycles(
             graph,
-            list(t_graph.nodes),
+            set(t_graph.nodes),
             component_to_edges,
             all=True,
         )
@@ -2695,9 +2851,9 @@ class Graph(nx.Graph):
                 local_vertices.append(v)
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_shortest_cycles(
+        local_cycles = Graph._find_cycles(
             graph,
-            list(local_t_graph.nodes),
+            set(local_t_graph.nodes),
             component_to_edges,
         )
 
@@ -2762,6 +2918,39 @@ class Graph(nx.Graph):
         chunk_size: int,
         offset: int,
     ) -> Iterable[int]:
+        match 1:
+            case 0:
+                return Graph._subgraph_colorings_cycles_generator(
+                    graph,
+                    t_graph,
+                    component_to_edges,
+                    check_selected_NAC_coloring,
+                    vertices,
+                    chunk_size,
+                    offset,
+                )
+            case 1:
+                return Graph._subgraph_colorings_removal_generator(
+                    graph,
+                    t_graph,
+                    component_to_edges,
+                    check_selected_NAC_coloring,
+                    vertices,
+                    chunk_size,
+                    offset,
+                )
+
+    @staticmethod
+    @NAC_statistics_generator
+    def _subgraph_colorings_cycles_generator(
+        graph: Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        vertices: List[int],
+        chunk_size: int,
+        offset: int,
+    ) -> Iterable[int]:
         """
         iterate all the coloring variants
         division by 2 is used as the problem is symmetrical
@@ -2771,9 +2960,9 @@ class Graph(nx.Graph):
         # print(f"Local vertices: {local_vertices}")
 
         local_t_graph = Graph(nx.induced_subgraph(t_graph, local_vertices))
-        local_cycles = Graph._find_shortest_cycles(
+        local_cycles = Graph._find_cycles(
             graph,
-            list(local_t_graph.nodes),
+            set(local_t_graph.nodes),
             component_to_edges,
         )
 
@@ -2805,6 +2994,126 @@ class Graph(nx.Graph):
 
             counter += 1
             yield mask << offset
+
+        if NAC_PRINT_SWITCH:
+            print(f"Base yielded: {counter}")
+
+    @staticmethod
+    @NAC_statistics_generator
+    def _subgraph_colorings_removal_generator(
+        graph: Graph,
+        t_graph: nx.Graph,
+        component_to_edges: List[List[Edge]],
+        check_selected_NAC_coloring: Callable[[Graph, NACColoring], bool],
+        partitions: List[int],
+        chunk_size: int,
+        offset: int,
+    ) -> Iterable[int]:
+        """
+        iterate all the coloring variants
+        division by 2 is used as the problem is symmetrical
+        """
+
+        # TODO assert for cartesian NAC coloring
+
+        local_partitions: List[int] = partitions[offset : offset + chunk_size]
+        local_edges = [
+            edge for comp_id in local_partitions for edge in component_to_edges[comp_id]
+        ]
+        graph = nx.edge_subgraph(graph, local_edges)
+
+        def processor(graph: nx.Graph) -> Iterable[NACColoring]:
+            # print(f"graph={Graph(graph)}")
+            # return list(Graph._NAC_colorings_without_vertex(processor, graph, None))
+            return Graph._NAC_colorings_without_vertex(processor, graph, None)
+
+        nodes_iter = iter(local_partitions)
+        # This makes sure no symmetric colorings are produced
+        disabled_comp = next(nodes_iter)
+        edge_map = defaultdict(int)
+        disabled_edge = component_to_edges[disabled_comp][0]
+        edge_map[(disabled_edge[0], disabled_edge[1])] = len(component_to_edges) + 1
+        edge_map[(disabled_edge[1], disabled_edge[0])] = len(component_to_edges) + 1
+
+        for comp_id in nodes_iter:
+            edge = component_to_edges[comp_id][0]
+            edge_map[(edge[0], edge[1])] = local_partitions.index(comp_id) + 1
+            edge_map[(edge[1], edge[0])] = local_partitions.index(comp_id) + 1
+
+        # print()
+        # print(f"{component_to_edges=}")
+        # print(f"{partitions=} {offset=} {chunk_size=}")
+        # print(f"{edge_map=}")
+        # produced = set()
+        # print("Accepted", bin(0))
+        # all_ones = 2**len(local_partitions) - 1
+
+        counter = 0
+        yield 0
+        for red, blue in processor(graph):
+            # TODO swith red and blue if blue is smaller
+            # print(f"{red=} {blue=}")
+            mask = 0
+            invalid_coloring_found = False
+            for edge in red:
+                partition_ind = edge_map[edge]
+                if partition_ind == 0:
+                    continue
+                mask |= 1 << partition_ind
+                partition_ind -= 1
+                partition_ind = (partition_ind < len(local_partitions)) * partition_ind
+
+                # make sure all the edges of each partition share the same component
+                partition_id = local_partitions[partition_ind]
+                for partiotion_edge in component_to_edges[partition_id]:
+                    if (
+                        partiotion_edge not in red
+                        and (partiotion_edge[1], partiotion_edge[0]) not in red
+                    ):
+                        invalid_coloring_found = True
+                        # print(f"Invalid red  coloring {partition_ind=}({edge_map[edge]-1}) -> {partition_id=}")
+                        break
+                if invalid_coloring_found:
+                    break
+
+            for edge in blue:
+                partition_ind = edge_map[edge]
+                if partition_ind == 0:
+                    continue
+                partition_ind -= 1
+                partition_ind = (partition_ind < len(local_partitions)) * partition_ind
+
+                # make sure all the edges of each partition share the same component
+                partition_id = local_partitions[partition_ind]
+                for partiotion_edge in component_to_edges[partition_id]:
+                    if (
+                        partiotion_edge not in blue
+                        and (partiotion_edge[1], partiotion_edge[0]) not in blue
+                    ):
+                        invalid_coloring_found = True
+                        # print(f"Invalid blue coloring {partition_ind=}({edge_map[edge]-1}) -> {partition_id=}")
+                        break
+                if invalid_coloring_found:
+                    break
+            if invalid_coloring_found:
+                continue
+
+            mask >>= 1
+            if mask & (1 << len(component_to_edges)):
+                continue
+            counter += 1
+            mask <<= offset
+
+            # print("Accepted", bin(mask))
+            # coloring = Graph._coloring_from_mask(
+            #     local_partitions, mask >> offset, component_to_edges
+            # )
+            # print(f"{coloring=}")
+            # if mask in produced:
+            #     assert False
+            # produced.add(mask)
+
+            yield mask
 
         if NAC_PRINT_SWITCH:
             print(f"Base yielded: {counter}")
@@ -3445,6 +3754,7 @@ class Graph(nx.Graph):
         assert expected_subgraph_mask == all_epochs[0][1]
 
         for mask in all_epochs[0][0]:
+            # print(f"Got mask={bin(mask)}")
             if mask == 0 or mask.bit_count() == len(vertices):
                 continue
 
@@ -4016,7 +4326,7 @@ class Graph(nx.Graph):
                     coloring[1] + current_edges[1],
                 )
                 if len(to_emit[0]) * len(to_emit[1]) > 0:
-                    # print(f"{to_emit=}")
+                    # print(f"{graph.number_of_nodes()} -> {to_emit=}")
                     # assert Graph(graph).is_NAC_coloring(to_emit)
 
                     yield to_emit
