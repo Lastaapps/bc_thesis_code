@@ -56,46 +56,13 @@ NAC_ALGORITHMS = [
     "naive",
     "cycles-True",
     "cycles-False",
-    "subgraphs-log-none-4",
-    "subgraphs-linear-random-4",
-    "subgraphs-log-degree-4",
-    "subgraphs-log-degree_cycles-4",
-    "subgraphs-log-cycles-4",
-    "subgraphs-log-cycles_match_chunks-4",
-    "subgraphs-log-components_biggest-4",
-    "subgraphs-log-components_spredded-4",
     "subgraphs-linear-none-4",
-    "subgraphs-linear-degree-4",
-    "subgraphs-linear-degree_cycles-4",
     "subgraphs-linear-cycles-4",
     "subgraphs-linear-cycles_match_chunks-4",
-    "subgraphs-linear-components_biggest-4",
-    "subgraphs-linear-components_spredded-4",
-    "subgraphs-log-bfs-4",
-    "subgraphs-log-beam_neighbors-4",
-    "subgraphs-log-beam_neighbors_triangles-4",
-    "subgraphs-log-beam_neighbors_max-4",
-    "subgraphs-log-beam_neighbors_max_triangles-4",
-    "subgraphs-log-none-4-smart",
-    "subgraphs-linear-random-4-smart",
-    "subgraphs-log-degree-4-smart",
-    "subgraphs-log-degree_cycles-4-smart",
-    "subgraphs-log-cycles-4-smart",
-    "subgraphs-log-cycles_match_chunks-4-smart",
-    "subgraphs-log-components_biggest-4-smart",
-    "subgraphs-log-components_spredded-4-smart",
-    "subgraphs-linear-none-4-smart",
-    "subgraphs-linear-degree-4-smart",
-    "subgraphs-linear-degree_cycles-4-smart",
-    "subgraphs-linear-cycles-4-smart",
-    "subgraphs-linear-cycles_match_chunks-4-smart",
-    "subgraphs-linear-components_biggest-4-smart",
-    "subgraphs-linear-components_spredded-4-smart",
-    "subgraphs-log-bfs-4-smart",
-    "subgraphs-log-beam_neighbors-4-smart",
-    "subgraphs-log-beam_neighbors_triangles-4-smart",
-    "subgraphs-log-beam_neighbors_max-4-smart",
-    "subgraphs-log-beam_neighbors_max_triangles-4-smart",
+    "subgraphs-linear-neighbors-4",
+    "subgraphs-linear-neighbors_cycles-4",
+    "subgraphs-linear-neighbors_degree-4",
+    "subgraphs-linear-neighbors_iterative-4",
 ]
 NAC_RELABEL_STRATEGIES = [
     "none",
@@ -109,8 +76,8 @@ NAC_RELABEL_STRATEGIES = [
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize(
     "dataset",
-    [small_graphs[:32], laman_small_graphs[:32]]
-    + [v[:32] for _, v in general_small_graphs],
+    [small_graphs[:64], laman_small_graphs[:64]]
+    + [v[:64] for _, v in general_small_graphs],
     ids=["small", "laman_small"] + [k for k, _ in general_small_graphs],
 )
 def test_bench_single_NAC_colorings(
@@ -130,25 +97,59 @@ def test_bench_single_NAC_colorings(
     benchmark.pedantic(perform_test, warmup_rounds=0)
 
 
+
+################################################################################
 BENCH_ROUNDS_SMALL = 3
 
 
+# @pytest.mark.timeout(60 * BENCH_ROUNDS_SMALL)
+# @pytest.mark.nac_benchmark
+# @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+# @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+# @pytest.mark.parametrize(
+#     "dataset",
+#     [small_graphs[:128], laman_small_graphs[:64]]
+#     + [v[:64] for _, v in general_small_graphs],
+#     ids=["small", "laman_small"] + [k for k, _ in general_small_graphs],
+# )
+# def test_bench_NAC_colorings_small(
+#     benchmark,
+#     algorithm: str,
+#     relabel_strategy: str,
+#     dataset: List[Graph],
+# ):
+#     """
+#     Measures the time to find all the NAC colorings of the graph given if any
+#     exists. This can also get slow really quickly for some algorithms.
+#     """
+#     rand = random.Random(42)
+
+#     def perform_test():
+
+#         for graph in dataset:
+#             for _ in graph.NAC_colorings(
+#                 algorithm=algorithm,
+#                 use_decompositions=True,
+#                 use_has_coloring_check=False,
+#                 relabel_strategy=relabel_strategy,
+#                 seed=rand.randint(0, 2**32 - 1),
+#             ):
+#                 pass
+
+#     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_SMALL, warmup_rounds=0)
+
 @pytest.mark.timeout(60 * BENCH_ROUNDS_SMALL)
 @pytest.mark.nac_benchmark
-# @pytest.mark.parametrize("use_decompositions", [True, False])
-@pytest.mark.parametrize("use_decompositions", [True])
-@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize(
     "dataset",
-    [small_graphs[:128], laman_small_graphs[:64]]
-    + [v[:32] for _, v in general_small_graphs],
-    ids=["small", "laman_small"] + [k for k, _ in general_small_graphs],
+    [laman_medium_graphs[:64]],
+    ids=["laman_medium"],
 )
 def test_bench_NAC_colorings_small(
     benchmark,
     algorithm: str,
-    use_decompositions: bool,
     relabel_strategy: str,
     dataset: List[Graph],
 ):
@@ -163,7 +164,7 @@ def test_bench_NAC_colorings_small(
         for graph in dataset:
             for _ in graph.NAC_colorings(
                 algorithm=algorithm,
-                use_decompositions=use_decompositions,
+                use_decompositions=True,
                 use_has_coloring_check=False,
                 relabel_strategy=relabel_strategy,
                 seed=rand.randint(0, 2**32 - 1),
@@ -178,37 +179,34 @@ NAC_ALGORITHMS_LAMAN_FAST = [
     "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
     for merge in [
         "linear",
+        "log",
         # "log_reverse",
-        # "sorted_bits",
+        "sorted_bits",
         # "sorted_size",
-        # "score",
-        # "recursion",
+        "score",
+        "recursion",
     ]
     for algo in [
         "none",
-        # "degree",
-        # "degree_cycles",
         # "cycles",
         "cycles_match_chunks",
         "neighbors",
         "neighbors_cycle",
-        # "neighbors_degree",
+        "neighbors_degree",
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
-    # for size in [4, 8]
-    # for size in [6, 8]
-    for size in [8]
+    for size in [4, 6, 8]
 ]
 NAC_RELABEL_STRATEGIES_LAMAN_FAST = [
     "none",
-    # "random",
-    # "bfs",
+    "random",
+    "bfs",
     # "beam_degree",
 ]
 
 
-BENCH_ROUNDS_LAMAN_FAST = 4
+BENCH_ROUNDS_LAMAN_FAST = 3
 
 
 @pytest.mark.nac_benchmark
@@ -218,9 +216,9 @@ BENCH_ROUNDS_LAMAN_FAST = 4
 @pytest.mark.parametrize(
     "dataset",
     [
-        laman_medium_graphs[:32],
-        laman_larger_graphs[:16],
-        laman_medium_degree_3_plus_graphs[:16],
+        laman_medium_graphs[:64],
+        laman_larger_graphs[:32],
+        laman_medium_degree_3_plus_graphs[:32],
     ],
     ids=[
         "laman_medium",
@@ -263,17 +261,15 @@ NAC_ALGORITHMS_GENERAL_FAST = [
     "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
     for merge in [
         "linear",
-        # "log",
+        "log",
         # "log_reverse",
-        # "sorted_bits",
+        "sorted_bits",
         # "sorted_size",
-        # "score",
-        # "recursion",
+        "score",
+        "recursion",
     ]
     for algo in [
-        # "none",
-        # "degree",
-        # "degree_cycles",
+        "none",
         # "cycles",
         "cycles_match_chunks",
         "neighbors",
@@ -282,19 +278,18 @@ NAC_ALGORITHMS_GENERAL_FAST = [
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
-    # for size in [6, 8, 10]
-    for size in [8]
+    for size in [4, 6, 8]
 ] + []
 
 NAC_RELABEL_STRATEGIES_GENERAL_FAST = [
     # "none",
     "random",
-    # "bfs",
-    "beam_degree",
+    "bfs",
+    # "beam_degree",
 ]
 
 
-BENCH_ROUNDS_GENERAL_MEDIUM = 4
+BENCH_ROUNDS_GENERAL_MEDIUM = 3
 
 
 @pytest.mark.nac_benchmark
@@ -306,13 +301,8 @@ BENCH_ROUNDS_GENERAL_MEDIUM = 4
     [v for _, v in general_medium_graphs],
     ids=[k for k, _ in general_medium_graphs],
 )
-# @pytest.mark.parametrize(
-#     "dataset",
-#     [v for k, v in general_medium_graphs if k == "dense_medium"],
-#     ids=["idk"],
-# )
 @pytest.mark.parametrize("graph_cnt", [32])
-def test_bench_nac_colorings_general_medium(
+def test_bench_NAC_colorings_general_medium(
     benchmark,
     algorithm: str,
     relabel_strategy: str,
@@ -348,34 +338,33 @@ def test_bench_nac_colorings_general_medium(
 ################################################################################
 # pairs (algorithm, relabel)
 NAC_FASTEST_LAMAN = [
-    ("subgraphs-{}-{}-{}-smart".format(merge, algo, size), "random")
+    ("random", "subgraphs-{}-{}-{}-smart".format(merge, algo, size))
     for merge in [
-        # "linear",
+        "linear",
         "log",
-        # "sorted_bits",
+        "sorted_bits",
     ]
     for algo in [
         # "cycles",
-        # "cycles_match_chunks",
+        "cycles_match_chunks",
         "neighbors",
-        # "neighbors_cycle",
-        # "neighbors_degree",
+        "neighbors_cycle",
+        "neighbors_degree",
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
-    # for size in [6, 8]
-    for size in [6]
+    for size in [6, 8]
 ] + [
-    # ("subgraphs-linear-none-4", "none"),
-    # ("subgraphs-linear-none-8", "none"),
+    ("subgraphs-linear-none-6", "none"),
+    ("subgraphs-linear-none-8", "none"),
 ]
 
-BENCH_ROUNDS_LAMAN_LARGE = 4
+BENCH_ROUNDS_LAMAN_LARGE = 3
 
 
 @pytest.mark.nac_benchmark
 @pytest.mark.timeout(15 * BENCH_ROUNDS_LAMAN_LARGE)
-@pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_LAMAN)
+@pytest.mark.parametrize(("relabel_strategy", "algorithm"), NAC_FASTEST_LAMAN)
 @pytest.mark.parametrize(
     ("vertices_no", "graph_cnt", "first_n"),
     [
@@ -443,23 +432,23 @@ def test_bench_NAC_colorings_laman_large_first_n(
 
 ################################################################################
 NAC_FASTEST_GENERAL = [
-    ("subgraphs-{}-{}-{}-smart".format(merge, algo, size), "random")
+    ("random", "subgraphs-{}-{}-{}-smart".format(merge, algo, size))
     for merge in [
-        # "linear",
+        "linear",
         "log",
-        # "log_reverse",
-        # "sorted_bits",
+        "log_reverse",
+        "sorted_bits",
     ]
     for algo in [
-        # "cycles_match_chunks",
+        # "cycles",
+        "cycles_match_chunks",
         "neighbors",
-        # "neighbors_cycle",
-        # "neighbors_degree",
+        "neighbors_cycle",
+        "neighbors_degree",
         # "neighbors_degree_cycle",
         # "neighbors_iterative",
     ]
-    # for size in [6, 8]
-    for size in [6]
+    for size in [6, 8]
 ] + []
 
 
@@ -468,7 +457,7 @@ BENCH_ROUNDS_GENERAL_LARGE = 3
 
 @pytest.mark.nac_benchmark
 @pytest.mark.timeout(120 * BENCH_ROUNDS_GENERAL_LARGE)
-@pytest.mark.parametrize(("algorithm", "relabel_strategy"), NAC_FASTEST_GENERAL)
+@pytest.mark.parametrize(("relabel_strategy", "algorithm"), NAC_FASTEST_GENERAL)
 @pytest.mark.parametrize(
     "dataset",
     [v[:32] for _, v in general_graphs],
@@ -589,7 +578,7 @@ def test_NAC_coloring_laman_degree_3_plus(
 # @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("relabel_strategy", ["random"])
 @pytest.mark.parametrize("graph", small_graphs[:SMALL_GRAPH_FUZZY_LIMIT])
-def test_NAC_coloring_small_graphs(algorithm: str, graph: Graph, relabel_strategy: str):
+def test_NAC_coloring_fuzzy_small_graphs(algorithm: str, graph: Graph, relabel_strategy: str):
     """
     Checks algorithm validity against the naive implementation
     (that is hopefully correct) and checks that outputs are the same.

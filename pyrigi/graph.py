@@ -3249,7 +3249,7 @@ class Graph(nx.Graph):
                         seed=seed,
                     )
                 )
-            case "neighbors_cycle":
+            case "neighbors_cycle" | "neighbors_cycles":
                 vertices = process(
                     lambda g, l: Graph._subgraphs_strategy_neighbors(
                         graph=graph,
@@ -3988,7 +3988,7 @@ class Graph(nx.Graph):
         if strategy == "none":
             # this is correct, but harmless (for now)
             # return graph if not copy else nx.Graph(graph)
-            if vertices == list(range(graph.number_of_nodes())):
+            if set(vertices) == set(range(graph.number_of_nodes())):
                 return processor(graph)
 
             # make all the nodes names in range 0..<n
@@ -4060,7 +4060,6 @@ class Graph(nx.Graph):
             return
 
         if vertex is None:
-            # vertex = max(graph.degree, key=lambda vd: vd[1])[0]
             vertex = min(graph.degree, key=lambda vd: vd[1])[0]
 
         subgraph = nx.Graph(graph)
