@@ -2,7 +2,7 @@ from collections import defaultdict, deque
 import numpy as np
 import itertools
 import random
-from typing import List
+from typing import Container, Dict, Iterable, List
 from benchmarks.dataset import (
     load_all_small_graphs,
     load_general_graphs,
@@ -36,6 +36,7 @@ laman_medium_degree_3_plus_graphs = list(
         lambda g: nx.number_of_nodes(g) in range(12, 15 + 1), laman_degree_3_plus_graphs
     )
 )
+
 
 general_small_graphs = load_small_generated_graphs()
 general_small_graphs = general_small_graphs.items()
@@ -97,7 +98,6 @@ def test_bench_single_NAC_colorings(
     benchmark.pedantic(perform_test, warmup_rounds=0)
 
 
-
 ################################################################################
 BENCH_ROUNDS_SMALL = 3
 
@@ -137,6 +137,7 @@ BENCH_ROUNDS_SMALL = 3
 #                 pass
 
 #     benchmark.pedantic(perform_test, rounds=BENCH_ROUNDS_SMALL, warmup_rounds=0)
+
 
 @pytest.mark.timeout(60 * BENCH_ROUNDS_SMALL)
 @pytest.mark.nac_benchmark
@@ -573,12 +574,16 @@ def test_NAC_coloring_laman_degree_3_plus(
 
 
 ################################################################################
+# Fuzzy tests
+################################################################################
 @pytest.mark.slow
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 # @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("relabel_strategy", ["random"])
 @pytest.mark.parametrize("graph", small_graphs[:SMALL_GRAPH_FUZZY_LIMIT])
-def test_NAC_coloring_fuzzy_small_graphs(algorithm: str, graph: Graph, relabel_strategy: str):
+def test_NAC_coloring_fuzzy_small_graphs(
+    algorithm: str, graph: Graph, relabel_strategy: str
+):
     """
     Checks algorithm validity against the naive implementation
     (that is hopefully correct) and checks that outputs are the same.
