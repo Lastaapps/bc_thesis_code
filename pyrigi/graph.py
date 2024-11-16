@@ -3461,7 +3461,6 @@ class Graph(nx.Graph):
             )
             offset += chunk_size
 
-        # TODO find why removing 1 vertex helped
         match merge_strategy:
             case "linear":
                 res: Tuple[Iterable[int], int] = all_epochs[0]
@@ -3746,6 +3745,33 @@ class Graph(nx.Graph):
                     # all_epochs.pop(best_pair[1])
                     all_epochs[best_pair[0]] = (list(iterable), mask)
 
+            case "shared_vertices":
+                def graph_to_vertices(allow_mask: int) -> Set[int]:
+                    graph_vertices: Set[int] = set()
+                    for i, edges in enumerate(component_to_edges):
+                        address = 1 << i
+
+                        if address & allow_mask == 0:
+                            continue
+
+                        for u, v in edges:
+                            graph_vertices.add(u)
+                            graph_vertices.add(v)
+                    return graph_vertices
+
+                best = (0, 0, 0)
+                while(len(all_epochs) > 1):
+                    subgraph_vertices : List[Set[int]] = [graph_to_vertices(allow_mask) for _, allow_mask in all_epochs]
+                    for i in range(0, len(subgraph_vertices)):
+                        for j in range(i+1, len(subgraph_vertices)):
+                            vert1 = subgraph_vertices[i]
+                            vert2 = subgraph_vertices[j]
+                            vertex_no = len(vert1.intersection(vert2))
+                            if (vertex_no > best[0]):
+                                best = (vertex_no, i, j)
+                    res = colorings_merge_wrapper(all_epochs[best[1]], all_epochs[best[2]])
+                    all_epochs[best[1]] = res
+                    all_epochs.pop(best[2])
             case _:
                 raise ValueError(f"Unknown merge strategy: {merge_strategy}")
 

@@ -41,8 +41,8 @@ laman_grouped_classes = group_by_monochomatic_classes_no(laman_graphs)
 laman_degree_3_plus_grouped_classes = group_by_monochomatic_classes_no(
     laman_degree_3_plus_graphs
 )
-# print(sorted([(y, len(x)) for y, x in laman_grouped_classes.items()]))
-# print(sorted([(y, len(x)) for y, x in laman_degree_3_plus_grouped_classes.items()]))
+print("Laman mon. classes groups:", sorted([(y, len(x)) for y, x in laman_grouped_classes.items()]))
+print("Laman with deg >= 3 mon. classes groups:", sorted([(y, len(x)) for y, x in laman_degree_3_plus_grouped_classes.items()]))
 
 
 ################################################################################
@@ -139,8 +139,8 @@ class TestLamanAll:
         # for the monochromatic classes counts bellow
         for size in [3, 4, 5]
     ] + [
-        # ("subgraphs-linear-none-6", "none"),
-        # ("subgraphs-linear-none-8", "none"),
+        # ("none", "subgraphs-linear-none-6"),
+        # ("none", "subgraphs-linear-none-8"),
     ]
     RELABLE_STRATEGIES = [
         "none",
@@ -215,8 +215,8 @@ class TestLamanFirstN:
         ]
         for size in [3, 4, 5, 6, 7]
     ] + [
-        # ("subgraphs-linear-none-6", "none"),
-        # ("subgraphs-linear-none-8", "none"),
+        # ("none", "subgraphs-linear-none-6"),
+        # ("none", "subgraphs-linear-none-8"),
     ]
 
     BENCH_ROUNDS = 1
@@ -295,8 +295,8 @@ class TestLamanDeg3PlusAll:
         # for the monochromatic classes counts bellow
         for size in [3, 4, 5]
     ] + [
-        # ("subgraphs-linear-none-6", "none"),
-        # ("subgraphs-linear-none-8", "none"),
+        # ("none", "subgraphs-linear-none-6"),
+        # ("none", "subgraphs-linear-none-8"),
     ]
     RELABLE_STRATEGIES = [
         "none",
