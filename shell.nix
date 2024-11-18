@@ -20,6 +20,8 @@ pkgs.mkShell {
         tqdm
         urllib3
 
+        black
+
         # notebook
         # ipython
         # jupyter

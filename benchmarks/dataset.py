@@ -8,7 +8,7 @@ import urllib.request
 from enum import Enum
 import networkx as nx
 import zipfile
-from typing import Dict, Iterable, List, Literal
+from typing import Dict, Iterable, List, Literal, Set
 
 from pyrigi.graph import Graph
 
@@ -125,17 +125,19 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Gr
 
 
 def load_laman_degree_3_plus(shuffle: bool = True) -> Iterable[Graph]:
-    return load_laman_graphs(dir = LAMAN_DEGREE_3_PLUS_DIR, shuffle=shuffle)
+    return load_laman_graphs(dir=LAMAN_DEGREE_3_PLUS_DIR, shuffle=shuffle)
 
 
 LAMAN_DEGREE_3_PLUS_ALL_DIR = f"{STORE_DIR}/laman_degree_3_plus"
 LAMAN_DEGREE_3_PLUS_ALL_FILENAME = "D3LamanGraphs{}.m"
 
+
 def load_laman_degree_3_plus_all(
     vertices_no: int, limit: int | None = None
 ) -> Iterable[Graph]:
     path = os.path.join(
-        LAMAN_DEGREE_3_PLUS_ALL_DIR, LAMAN_DEGREE_3_PLUS_ALL_FILENAME.format(vertices_no)
+        LAMAN_DEGREE_3_PLUS_ALL_DIR,
+        LAMAN_DEGREE_3_PLUS_ALL_FILENAME.format(vertices_no),
     )
 
     graph_no = 0
@@ -332,4 +334,46 @@ def load_generated_graphs(limit: int = 128) -> Dict[str, List[Graph]]:
         rand.shuffle(data)
         graphs[key] = data
 
+    return graphs
+
+
+################################################################################
+# The new code for the new tests, it may contain duplicate code
+################################################################################
+def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
+    return load_general_graphs("hard")["no_3,4_cycles"]
+
+
+def generate_sparse_graphs(
+    nodes_l: int,
+    nodes_h: int,
+    count: int = 64,
+    seed: int | None = 42,
+    p: float = 0.1,
+) -> List[Graph]:
+    graphs: List[Graph] = list()
+    rand = random.Random(seed)
+
+    for n in range(nodes_l, nodes_h + 1):
+        for _ in range(count):
+            graphs.append(Graph(nx.fast_gnp_random_graph(n, p, rand.randint(0, 2**32))))
+    rand.shuffle(graphs)
+    return graphs
+
+
+# does not make sense as dense graphs form a single monochromatic class
+def generate_dense_graphs(
+    nodes_l: int,
+    nodes_h: int,
+    count: int = 64,
+    seed: int | None = 42,
+    p: float = 0.8,
+) -> List[Graph]:
+    graphs: List[Graph] = list()
+    rand = random.Random(seed)
+
+    for n in range(nodes_l, nodes_h + 1):
+        for _ in range(count):
+            graphs.append(Graph(nx.gnp_random_graph(n, p, rand.randint(0, 2**32))))
+    rand.shuffle(graphs)
     return graphs

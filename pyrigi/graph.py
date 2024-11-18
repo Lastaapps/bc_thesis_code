@@ -3469,6 +3469,9 @@ class Graph(nx.Graph):
                 all_epochs = [res]
 
             case "sorted_bits":
+                """
+                Similar to linear, but sorts the subgraphs by size first
+                """
                 all_epochs = sorted(
                     all_epochs, key=lambda x: x[1].bit_count(), reverse=True
                 )
@@ -3482,6 +3485,10 @@ class Graph(nx.Graph):
                     all_epochs[-1] = (iterable, mask)
 
             case "sorted_size":
+                """
+                Sorts the subgraphs by number of their NAC colorings
+                and merges them linearly from the smallest to the biggest
+                """
                 # Joins the subgraphs like a tree
                 all_epochs: List[Tuple[List[int], int]] = [
                     (list(i), m) for i, m in all_epochs
@@ -3540,7 +3547,16 @@ class Graph(nx.Graph):
                     all_epochs = next_all_epochs
 
             case "score":
-                # Joins the subgraphs like a tree
+                """
+                This approach forbids the online version of the algorithm
+
+                Iterations are run until the original graph is restored.
+                In each iteration a score is computed and the pair with
+                the best score is chosen.
+                Score tries to mimic the work required to join the subgraphs.
+                Which is the product of # of colorings on both the subgraphs
+                times the size of the resulting subgraph.
+                """
                 all_epochs: List[Tuple[List[int], int]] = [
                     (list(i), m) for i, m in all_epochs
                 ]
@@ -3759,8 +3775,8 @@ class Graph(nx.Graph):
                             graph_vertices.add(v)
                     return graph_vertices
 
-                best = (0, 0, 0)
                 while(len(all_epochs) > 1):
+                    best = (0, 0, 0)
                     subgraph_vertices : List[Set[int]] = [graph_to_vertices(allow_mask) for _, allow_mask in all_epochs]
                     for i in range(0, len(subgraph_vertices)):
                         for j in range(i+1, len(subgraph_vertices)):
