@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
-from pyrigi.data_type import Edge, NACColoring
 from pyrigi.graph import Graph
 import pyrigi.graphDB as graphs
 from pyrigi.exception import LoopError

@@ -55,7 +55,19 @@ def ThreePrismPlusEdge():
 def ThreePrismPlusTriangleOnSide():
     """Return the 3-prism graph where there is extra triangle on one of the connecting edges."""
     return Graph(
-        [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5), (0, 3), (1, 4), (2, 5), (0, 6), (3, 6)]
+        [
+            (0, 1),
+            (1, 2),
+            (0, 2),
+            (3, 4),
+            (4, 5),
+            (3, 5),
+            (0, 3),
+            (1, 4),
+            (2, 5),
+            (0, 6),
+            (3, 6),
+        ]
     )
 
 
@@ -90,17 +102,16 @@ def SquareGrid2D(w: int, h: int):
     4-5-6-7
     ----------
     """
-    G = Graph.from_vertices(range(w*h))
+    G = Graph.from_vertices(range(w * h))
     for r in range(h):
         offset = r * w
         for c in range(offset, offset + w - 1):
-            G.add_edge(c, c+1)
+            G.add_edge(c, c + 1)
 
         if r == 0:
             continue
 
         for c in range(offset, offset + w):
-            G.add_edge(c-w, c)
+            G.add_edge(c - w, c)
 
     return G
-

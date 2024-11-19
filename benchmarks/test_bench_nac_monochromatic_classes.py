@@ -256,7 +256,7 @@ class TestLamanAll:
         # for the monochromatic classes counts bellow
         for size in [3, 4, 5]
     ] + [
-            # ("none", "subgraphs-linear-none-4"),
+        # ("none", "subgraphs-linear-none-4"),
     ]
     RELABLE_STRATEGIES = [
         "none",
@@ -332,7 +332,7 @@ class TestLamanLarge:
         # for the monochromatic classes counts bellow
         for size in [3, 4, 5, 6]
     ] + [
-            # ("none", "subgraphs-linear-none-4"),
+        # ("none", "subgraphs-linear-none-4"),
     ]
     RELABLE_STRATEGIES = [
         "none",
@@ -823,11 +823,11 @@ class TestNo3Nor4CyclesFirstN:
     @pytest.mark.parametrize(
         ("components_no", "graph_cnt", "first_n"),
         [
-            (16, 3,  1024),
-            (18, 7,  1024),
-            (28, 22, 512), # 3 it/s
+            (16, 3, 1024),
+            (18, 7, 1024),
+            (28, 22, 512),  # 3 it/s
             (31, 14, 512),
-            (57, 6,  128),
+            (57, 6, 128),
             (87, 12, 64),
         ],
     )
@@ -885,7 +885,7 @@ class TestSparseAll:
         # for the monochromatic classes counts bellow
         for size in [3, 4, 5]
     ] + [
-            # ("none", "subgraphs-linear-none-4"),
+        # ("none", "subgraphs-linear-none-4"),
     ]
     RELABLE_STRATEGIES = [
         "none",

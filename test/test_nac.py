@@ -1,9 +1,12 @@
+from pyrigi.nac import NACColoring, Edge
+
 from dataclasses import dataclass
 from typing import List, Optional, Set, Tuple
-from pyrigi.data_type import Edge, NACColoring
-from pyrigi.graph import Graph
 import pyrigi.graphDB as graphs
+from pyrigi import Graph
 import networkx as nx
+
+import pyrigi.nac as nac
 
 import pytest
 
@@ -36,9 +39,11 @@ import pytest
         "minimallyRigid",
     ],
 )
-def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
-    assert result == (graph.single_NAC_coloring() is not None)
-    assert result == graph.has_NAC_coloring()
+def test_sinlge_and_has_NAC_coloring(graph: nx.Graph, result: bool):
+    assert result == (nac.single_NAC_coloring(graph) is not None)
+    assert result == nac.has_NAC_coloring(
+        graph,
+    )
 
 
 @pytest.mark.nac_test
@@ -146,9 +151,9 @@ def test_sinlge_and_has_NAC_coloring(graph: Graph, result: bool):
         "large_problemist",
     ],
 )
-def test__find_cycles_in_T_graph(graph, result: Set[Tuple]):
-    res = Graph._find_cycles_in_T_graph(
-        Graph(),
+def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
+    res = nac.find_cycles_in_T_graph(
+        nx.Graph(),
         graph,
         [],
         from_angle_preserving_components=False,
@@ -447,12 +452,12 @@ def test__find_cycles_in_T_graph(graph, result: Set[Tuple]):
         # TODO for disconnected components "cycle_passing_same_component_twice",
     ],
 )
-def test__find_useful_cycles_for_components(graph: Graph, result: Set[Tuple]):
-    _, component_to_edges = Graph._find_triangle_components(graph)
+def test__find_useful_cycles_for_components(graph: nx.Graph, result: Set[Tuple]):
+    _, component_to_edges = nac.find_triangle_components(graph)
     # print()
     # print(graph)
     # print(component_to_edges)
-    res = Graph._find_useful_cycles_for_components(
+    res = nac.find_useful_cycles_for_components(
         graph,
         set(range(len(component_to_edges))),
         component_to_edges,
@@ -660,12 +665,12 @@ def test__find_useful_cycles_for_components(graph: Graph, result: Set[Tuple]):
         # TODO for disconnected components "cycle_passing_same_component_twice",
     ],
 )
-def test__find_shortest_cycles_for_components(graph: Graph, result: Set[Tuple]):
-    _, component_to_edges = Graph._find_triangle_components(graph)
+def test__find_shortest_cycles_for_components(graph: nx.Graph, result: Set[Tuple]):
+    _, component_to_edges = nac.find_triangle_components(graph)
     # print()
     # print(graph)
     # print(component_to_edges)
-    res = Graph._find_shortest_cycles_for_components(
+    res = nac.find_shortest_cycles_for_components(
         graph,
         set(range(len(component_to_edges))),
         component_to_edges,
@@ -741,7 +746,7 @@ class NACTestCase:
     """
 
     name: str
-    graph: Graph
+    graph: nx.Graph
     no_normal: int | None
     no_cartesian: int | None
 
@@ -929,7 +934,7 @@ NAC_TEST_CASES: List[NACTestCase] = [
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_decompositions", [True, False])
 def test_all_NAC_colorings(
-    graph: Graph,
+    graph: nx.Graph,
     colorings_no: int,
     algorithm: str,
     relabel_strategy: str,
@@ -939,7 +944,8 @@ def test_all_NAC_colorings(
     # print(nx.nx_agraph.to_agraph(graph))
 
     coloring_list = list(
-        graph.NAC_colorings(
+        nac.NAC_colorings(
+            graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_chromatic_partitions=True,
@@ -963,7 +969,7 @@ def test_all_NAC_colorings(
     assert colorings_no == len(coloring_list)
 
     for coloring in coloring_list:
-        assert graph.is_NAC_coloring(coloring)
+        assert nac.is_NAC_coloring(graph, coloring)
 
 
 @pytest.mark.nac_test
@@ -1001,10 +1007,12 @@ def test_all_NAC_colorings(
         # TODO more tests
     ],
 )
-def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool):
+def test_is_NAC_coloring(
+    graph: nx.Graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool
+):
     red, blue = coloring
-    assert graph.is_NAC_coloring((red, blue)) == result
-    assert graph.is_NAC_coloring((blue, red)) == result
+    assert nac.is_NAC_coloring(graph, (red, blue)) == result
+    assert nac.is_NAC_coloring(graph, (blue, red)) == result
 
 
 @pytest.mark.nac_test
@@ -1035,9 +1043,9 @@ def test_is_NAC_coloring(graph, coloring: Tuple[Set[Edge], Set[Edge]], result: b
     ],
     ids=["NAC_but_not_now", "path-2", "triangle_with_dangling", "nice_stable_cut"],
 )
-def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColoring]):
-    res1 = Graph._check_for_simple_stable_cut(graph, certificate=False)
-    res2 = Graph._check_for_simple_stable_cut(graph, certificate=True)
+def test__check_for_simple_stable_cut(graph: nx.Graph, coloring: Optional[NACColoring]):
+    res1 = nac._check_for_simple_stable_cut(graph, certificate=False)
+    res2 = nac._check_for_simple_stable_cut(graph, certificate=True)
 
     if coloring is None:
         assert res1 is None
@@ -1046,8 +1054,8 @@ def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColori
 
     assert res1 is not None
 
-    coloring = Graph.canonical_NAC_coloring(coloring)
-    res2 = Graph.canonical_NAC_coloring(res2)
+    coloring = nac.canonical_NAC_coloring(coloring)
+    res2 = nac.canonical_NAC_coloring(res2)
     assert coloring == res2
 
 
@@ -1064,7 +1072,9 @@ def test__check_for_simple_stable_cut(graph: Graph, coloring: Optional[NACColori
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_decompositions", [True, False])
-@pytest.mark.skip("Cartesian NAC coloring is slightly broken and I don't care at the moment")
+@pytest.mark.skip(
+    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
+)
 def test_all_cartesian_NAC_colorings(
     graph,
     colorings_no: int,
@@ -1074,7 +1084,8 @@ def test_all_cartesian_NAC_colorings(
 ):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
-        graph.cartesian_NAC_colorings(
+        nac.cartesian_NAC_colorings(
+            graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
             use_decompositions_decomposition=use_decompositions,
@@ -1085,7 +1096,7 @@ def test_all_cartesian_NAC_colorings(
     # print(f"{coloring_list=}")
 
     no_duplicates = {
-        Graph.canonical_NAC_coloring(coloring, including_red_blue_order=False)
+        nac.canonical_NAC_coloring(coloring, including_red_blue_order=False)
         for coloring in coloring_list
     }
     assert len(coloring_list) == len(no_duplicates)
@@ -1096,8 +1107,8 @@ def test_all_cartesian_NAC_colorings(
     assert colorings_no == len(coloring_list)
 
     for coloring in coloring_list:
-        assert graph.is_NAC_coloring(coloring)
-        assert graph.is_cartesian_NAC_coloring(coloring)
+        assert nac.is_NAC_coloring(graph, coloring)
+        assert nac.is_cartesian_NAC_coloring(graph, coloring)
 
 
 @pytest.mark.nac_test
@@ -1136,17 +1147,19 @@ def test_all_cartesian_NAC_colorings(
         ),
     ],
 )
-@pytest.mark.skip("Cartesian NAC coloring is slightly broken and I don't care at the moment")
+@pytest.mark.skip(
+    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
+)
 def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
-    graph, coloring: Tuple[Set[Edge], Set[Edge]]
+    graph: nx.Graph, coloring: Tuple[Set[Edge], Set[Edge]]
 ):
     """
     Cartesian NAC coloring is also NAC coloring. So if we pass invalid coloring,
     cartesian NAC coloring result should be also negative.
     """
     red, blue = coloring
-    assert graph.is_cartesian_NAC_coloring((red, blue)) == False
-    assert graph.is_cartesian_NAC_coloring((blue, red)) == False
+    assert nac.is_cartesian_NAC_coloring(graph, (red, blue)) == False
+    assert nac.is_cartesian_NAC_coloring(graph, (blue, red)) == False
 
 
 @pytest.mark.nac_test
@@ -1188,10 +1201,12 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
         # TODO more tests
     ],
 )
-@pytest.mark.skip("Cartesian NAC coloring is slightly broken and I don't care at the moment")
+@pytest.mark.skip(
+    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
+)
 def test_is_cartesian_NAC_coloring(
-    graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool
+    graph: nx.Graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool
 ):
     red, blue = coloring
-    assert graph.is_cartesian_NAC_coloring((red, blue)) == result
-    assert graph.is_cartesian_NAC_coloring((blue, red)) == result
+    assert nac.is_cartesian_NAC_coloring(graph, (red, blue)) == result
+    assert nac.is_cartesian_NAC_coloring(graph, (blue, red)) == result

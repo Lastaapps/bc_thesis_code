@@ -1,6 +1,7 @@
 from itertools import product
 from typing import Iterator, Tuple
 
+
 def lazy_product[T, R](iter1: Iterator[T], iter2: Iterator[R]) -> Iterator[Tuple[T, R]]:
     """
     Alternative for itertools.product that exhausts bot the iterators in parallel.
