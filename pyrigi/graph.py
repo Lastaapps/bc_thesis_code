@@ -856,7 +856,7 @@ class Graph(nx.Graph):
         but the certificate may not be created,
         so some additional tricks are used the performance may be improved.
         """
-        return has_NAC_coloring(self)
+        return has_cartesian_NAC_coloring(self)
 
     def single_cartesian_NAC_coloring(
         self,

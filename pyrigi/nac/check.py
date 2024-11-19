@@ -2,42 +2,13 @@
 The module checks if the coloring given is a NAC coloring
 """
 
-from __future__ import annotations
-
-from collections import defaultdict, deque
-from copy import deepcopy
-from functools import reduce
-from itertools import combinations
-import itertools
-import random
-from typing import (
-    Callable,
-    Collection,
-    Deque,
-    Iterable,
-    List,
-    Any,
-    Literal,
-    Sequence,
-    Union,
-    Tuple,
-    Optional,
-    Dict,
-    Set,
-)
+from collections import defaultdict
+from typing import *
 
 import networkx as nx
-from sympy import Matrix
-import math
 import numpy as np
-import time
 
-from pyrigi.datastructures.union_find import UnionFind
 from pyrigi.nac.data_type import NACColoring, Edge
-from pyrigi.misc import doc_category, generate_category_tables
-from pyrigi.exception import LoopError
-from pyrigi.util.lazy_product import lazy_product
-from pyrigi.util.repetable_iterator import RepeatableIterator
 
 from pyrigi.nac.existence import check_NAC_constrains
 from pyrigi.nac.util import NiceGraph
