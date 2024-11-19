@@ -1,5 +1,5 @@
 <p align="center">
-<img src="assets/icon.jpg" width="260">
+<img src="https://github.com/PyRigi/PyRigi/blob/main/assets/icon.jpg" alt="Pyrigi Logo" width="260">
 </p>
 
 [![PyRigi documentation](https://img.shields.io/badge/PyRigi-Documentation-blue?style=plastic&link=pyrigi.github.io%2FPyRigi%2F%20)](https://pyrigi.github.io/PyRigi/)
@@ -19,14 +19,19 @@ We acknowledge these and all the other open-source projects upon which PyRigi is
 
 ## Installation and usage
 
-We have not reached a stable version yet.
-Hence, the current usage is to clone/download the package
-from [this GitHub repository](https://github.com/pyRigi/PyRigi).
-In the root folder of the package, it can be used by
+We have not reached a stable version yet,
+but the latest version requiring at least Python 3.10
+can be installed by
+```
+pip install pyrigi
+```
+Then it can be used by
 ```python
 from pyrigi import Graph, Framework
 ```
-In the future, we will enable installation via `pip`.
+
+Alternatively, one can clone/download the package
+from [this GitHub repository](https://github.com/pyRigi/PyRigi).
 
 ## Documentation
 

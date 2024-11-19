@@ -7,4 +7,4 @@ and bar-and-joint frameworks.
 
 from pyrigi.graph import Graph
 from pyrigi.framework import Framework
-import pyrigi.nac
+from pyrigi.graph_drawer import GraphDrawer

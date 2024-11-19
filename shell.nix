@@ -1,54 +1,54 @@
-# TODO convert to flake
-{
-  pkgs ? import <nixpkgs> { },
-}:
+let
+  pkgs = import <nixpkgs> { };
+in
 pkgs.mkShell {
   name = "PyRigi shell";
 
-  packages = [
-    (pkgs.python312.withPackages (
-      python-pkgs: with python-pkgs; [
-        pandas
-        numpy
-        matplotlib
-        scipy
-        sympy
-        networkx
-        pytest
-        pytest-benchmark
-        pytest-timeout
-        tqdm
-        urllib3
+  packages =
+    (with pkgs; [ python312 ])
+    ++ (with pkgs.python312Packages; [
+      pip
+      black
 
-        black
+      # numpy & matplotlib needs special C system libraries
+      numpy
+      matplotlib
+      pandas
+      scipy
+      sympy
+    ]);
 
-        # notebook
-        # ipython
-        # jupyter
-      ]
-    ))
-    (pkgs.python311.withPackages (
-      python-pkgs: with python-pkgs; [
-        # these do not support python 3.12 yet
-        notebook
-        ipython
-        jupyter
+  shellHook = ''
+    if [ ! -d .venv ]; then
+      python3 -m venv .venv
+    fi
+    source ./.venv/bin/activate
 
-        pandas
-        numpy
-        matplotlib
-        scipy
-        sympy
-        networkx
-        pytest
-        pytest-benchmark
-        pytest-timeout
-        tqdm
-        urllib3
-      ]
-    ))
-    pkgs.jupyter-all
-  ];
+    # pandas~=2.2.0 \
+    # numpy~=2.1.0 \
+    # scipy~=1.14.0 \
+    # sympy~=1.13.0 \
+    # matplotlib~=3.9.0 \
 
-  shellHook = '''';
+    pip install \
+    \
+    networkx~=3.4.0 \
+    \
+    pytest~=8.3.0 \
+    pytest-benchmark~=5.1.0 \
+    pytest-timeout~=2.3.0 \
+    \
+    tqdm~=4.67.0 \
+    urllib3~=2.2.0 \
+    distinctipy~=1.3.0 \
+    \
+    ipywidgets~=8.1.0 \
+    ipycanvas~=0.13.0 \
+    ipyevents~=2.0.0 \
+    \
+    notebook~=7.2.0 \
+    ipython~=8.29.0 \
+    ipykernel~=6.29.0 \
+    jupyterlab~=4.2.0 \
+  '';
 }
