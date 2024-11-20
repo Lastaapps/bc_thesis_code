@@ -1,3 +1,4 @@
+# TODO migrate to flake/develop.nix
 let
   pkgs = import <nixpkgs> { };
 in
@@ -8,29 +9,28 @@ pkgs.mkShell {
     (with pkgs; [ python312 ])
     ++ (with pkgs.python312Packages; [
       pip
+      virtualenv
       black
-
-      # numpy & matplotlib needs special C system libraries
-      numpy
-      matplotlib
-      pandas
-      scipy
-      sympy
     ]);
 
   shellHook = ''
+    # https://nixos.wiki/wiki/Packaging/Quirks_and_Caveats
+    # fixes libstdc++ issues and libgl.so issues
+    LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib/:$LD_LIBRARY_PATH
+
     if [ ! -d .venv ]; then
       python3 -m venv .venv
     fi
     source ./.venv/bin/activate
 
-    # pandas~=2.2.0 \
-    # numpy~=2.1.0 \
-    # scipy~=1.14.0 \
-    # sympy~=1.13.0 \
-    # matplotlib~=3.9.0 \
 
     pip install \
+    \
+    pandas~=2.2.0 \
+    numpy~=2.1.0 \
+    scipy~=1.14.0 \
+    sympy~=1.13.0 \
+    matplotlib~=3.9.0 \
     \
     networkx~=3.4.0 \
     \
