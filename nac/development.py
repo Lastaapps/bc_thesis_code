@@ -3,11 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import *
 
-
 import networkx as nx
 import time
 
-from pyrigi.nac.data_type import Edge
+from nac.data_type import Edge
 
 statistics_storage: Dict[int, List[Any]] = defaultdict(list)
 

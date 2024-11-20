@@ -8,24 +8,23 @@ import networkx as nx
 import math
 import numpy as np
 
-from pyrigi.datastructures.union_find import UnionFind
-from pyrigi.util.repetable_iterator import RepeatableIterator
+from nac.util.union_find import UnionFind
+from nac.util.repetable_iterator import RepeatableIterator
 
-
-from pyrigi.nac.data_type import NACColoring, Edge
-from pyrigi.nac.monochromatic_classes import (
+from nac.data_type import NACColoring, Edge
+from nac.monochromatic_classes import (
     find_triangle_components,
     fake_triangle_components,
     create_T_graph_from_components,
 )
-from pyrigi.nac.existence import has_NAC_coloring_checks, check_NAC_constrains
-from pyrigi.nac.check import _is_cartesian_NAC_coloring_impl, _is_NAC_coloring_impl
-from pyrigi.nac.development import (
+from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
+from nac.check import _is_cartesian_NAC_coloring_impl, _is_NAC_coloring_impl
+from nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
     NAC_statistics_colorings_merge_wrapper,
 )
-from pyrigi.nac.util import NiceGraph
+from nac.util import NiceGraph
 
 
 def _coloring_from_mask(

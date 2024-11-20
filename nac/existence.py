@@ -2,9 +2,9 @@ from typing import *
 
 import networkx as nx
 
-from pyrigi.exception import LoopError
-from pyrigi.nac.data_type import NACColoring
-from pyrigi.nac.monochromatic_classes import find_triangle_components
+from nac.exception import LoopError
+from nac.data_type import NACColoring
+from nac.monochromatic_classes import find_triangle_components
 
 
 def check_NAC_constrains(self: nx.Graph) -> bool:

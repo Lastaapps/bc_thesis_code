@@ -1,5 +1,12 @@
+"""
+This module is used for loading and generating graphs for benchmarks
+Currently the middle part is not used.
+The top part processes Laman and Redundantly-Rigid Graphs.
+The middle part generates and loads some not as interesting graph classes
+The bottom part generates sparse graphs of the given size.
+"""
+
 from collections import defaultdict
-import itertools
 import os
 import random
 import re
@@ -8,9 +15,10 @@ import urllib.request
 from enum import Enum
 import networkx as nx
 import zipfile
-from typing import Dict, Iterable, List, Literal, Set
+from typing import *
 
-from pyrigi.graph import Graph
+import networkx as nx
+from nac.util import NiceGraph as Graph
 
 
 class GraphFamily(Enum):
@@ -344,6 +352,12 @@ def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
     return load_general_graphs("hard")["no_3,4_cycles"]
 
 
+def _filter_non_connected(graphs: Iterable[Graph]) -> Iterable[Graph]:
+    for graph in graphs:
+        if nx.is_connected(graph):
+            yield graph
+
+
 def generate_sparse_graphs(
     nodes_l: int,
     nodes_h: int,
@@ -357,6 +371,7 @@ def generate_sparse_graphs(
     for n in range(nodes_l, nodes_h + 1):
         for _ in range(count):
             graphs.append(Graph(nx.fast_gnp_random_graph(n, p, rand.randint(0, 2**32))))
+    graphs = list(_filter_non_connected(graphs))
     rand.shuffle(graphs)
     return graphs
 
@@ -375,5 +390,6 @@ def generate_dense_graphs(
     for n in range(nodes_l, nodes_h + 1):
         for _ in range(count):
             graphs.append(Graph(nx.gnp_random_graph(n, p, rand.randint(0, 2**32))))
+    graphs = list(_filter_non_connected(graphs))
     rand.shuffle(graphs)
     return graphs

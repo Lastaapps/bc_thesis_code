@@ -1,4 +1,4 @@
-from pyrigi.nac import NACColoring, Edge
+from nac import NACColoring, Edge
 
 from dataclasses import dataclass
 from typing import List, Optional, Set, Tuple
@@ -6,7 +6,7 @@ import pyrigi.graphDB as graphs
 from pyrigi import Graph
 import networkx as nx
 
-import pyrigi.nac as nac
+import nac as nac
 
 import pytest
 

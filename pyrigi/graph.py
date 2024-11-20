@@ -15,14 +15,14 @@ import math
 import distinctipy
 
 from pyrigi.data_type import Vertex, Edge, Point
-from pyrigi.nac.data_type import NACColoring
 from pyrigi.misc import doc_category, generate_category_tables
 from pyrigi.exception import LoopError
 import pyrigi._pebble_digraph
 
-from pyrigi.nac import has_NAC_coloring, single_NAC_coloring
-from pyrigi.nac import has_cartesian_NAC_coloring, single_cartesian_NAC_coloring
-from pyrigi.nac import NAC_colorings_impl, cartesian_NAC_colorings
+from nac import NACColoring
+from nac import has_NAC_coloring, single_NAC_coloring
+from nac import has_cartesian_NAC_coloring, single_cartesian_NAC_coloring
+from nac import NAC_colorings_impl, cartesian_NAC_colorings
 
 
 class Graph(nx.Graph):

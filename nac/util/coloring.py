@@ -1,10 +1,6 @@
 from typing import *
 
-import networkx as nx
-
-from pyrigi.nac.data_type import NACColoring
-
-from pyrigi.nac.data_type import Edge
+from nac.data_type import NACColoring, Edge
 
 
 def canonical_NAC_coloring(
@@ -30,12 +26,3 @@ def canonical_NAC_coloring(
         red, blue = blue, red
 
     return red, blue
-
-
-class NiceGraph(nx.Graph):
-    def __str__(self) -> str:
-        return graph_str(self)
-
-
-def graph_str(graph: nx.Graph) -> str:
-    return f"Graph (|V|={graph.number_of_nodes()},|E|={graph.number_of_edges()}) ({list(graph.nodes)} {list(graph.edges)})"

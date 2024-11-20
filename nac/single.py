@@ -1,43 +1,13 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
-from copy import deepcopy
-from functools import reduce
-from itertools import combinations
-import itertools
-import random
-from typing import (
-    Callable,
-    Collection,
-    Deque,
-    Iterable,
-    List,
-    Any,
-    Literal,
-    Sequence,
-    Union,
-    Tuple,
-    Optional,
-    Dict,
-    Set,
-)
+from typing import *
 
 import networkx as nx
-from sympy import Matrix
-import math
-import numpy as np
-import time
 
-from pyrigi.datastructures.union_find import UnionFind
-from pyrigi.misc import doc_category, generate_category_tables
-from pyrigi.exception import LoopError
-from pyrigi.nac.data_type import NACColoring
-from pyrigi.util.lazy_product import lazy_product
-from pyrigi.util.repetable_iterator import RepeatableIterator
-from pyrigi.nac.monochromatic_classes import find_triangle_components
+from nac.data_type import NACColoring
 
-from pyrigi.nac.search import NAC_colorings
-from pyrigi.nac.existence import (
+from nac.search import NAC_colorings
+from nac.existence import (
     check_NAC_constrains,
     _check_for_simple_stable_cut,
     _can_have_flexible_labeling,

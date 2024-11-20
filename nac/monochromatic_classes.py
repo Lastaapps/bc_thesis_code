@@ -2,8 +2,8 @@ from collections import defaultdict
 from typing import *
 import networkx as nx
 
-from pyrigi.datastructures.union_find import UnionFind
-from pyrigi.nac.data_type import Edge
+from nac.util.union_find import UnionFind
+from nac.data_type import Edge
 
 
 # TODO NAC rename to monochromatic

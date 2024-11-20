@@ -8,10 +8,10 @@ from typing import *
 import networkx as nx
 import numpy as np
 
-from pyrigi.nac.data_type import NACColoring, Edge
+from nac.data_type import NACColoring, Edge
 
-from pyrigi.nac.existence import check_NAC_constrains
-from pyrigi.nac.util import NiceGraph
+from nac.existence import check_NAC_constrains
+from nac.util import NiceGraph
 
 
 def _check_for_almost_red_cycles(

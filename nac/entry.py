@@ -2,10 +2,10 @@ from typing import *
 
 import networkx as nx
 
-from pyrigi.nac.data_type import NACColoring
-from pyrigi.nac.search import NAC_colorings_impl
-from pyrigi.nac.single import has_NAC_coloring_impl, single_NAC_coloring_impl
-from pyrigi.nac.single import (
+from nac.data_type import NACColoring
+from nac.search import NAC_colorings_impl
+from nac.single import has_NAC_coloring_impl, single_NAC_coloring_impl
+from nac.single import (
     has_cartesian_NAC_coloring_impl,
     single_cartesian_NAC_coloring_impl,
 )
