@@ -18,6 +18,7 @@ import zipfile
 from typing import *
 
 import networkx as nx
+import nac
 from nac.util import NiceGraph as Graph
 
 
@@ -109,7 +110,7 @@ def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph
 
 def _filter_triangle_only_laman_graphs(graphs) -> filter:
     return filter(
-        lambda g: len(Graph._find_triangle_components(g)[1]) > 1,
+        lambda g: len(nac.find_triangle_components(g)[1]) > 1,
         graphs,
     )
 

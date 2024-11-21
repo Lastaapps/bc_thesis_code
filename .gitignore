@@ -16,3 +16,6 @@
 poetry.lock
 .venv
 venv
+
+# TODO remove later
+!NAC_search.ipynb
