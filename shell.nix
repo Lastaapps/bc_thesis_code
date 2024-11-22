@@ -6,7 +6,10 @@ pkgs.mkShell {
   name = "PyRigi shell";
 
   packages =
-    (with pkgs; [ python312 ])
+    (with pkgs; [
+      python312
+      graphviz
+    ])
     ++ (with pkgs.python312Packages; [
       pip
       virtualenv
@@ -33,6 +36,7 @@ pkgs.mkShell {
     matplotlib~=3.9.0 \
     \
     networkx~=3.4.0 \
+    pygraphviz==1.14 \
     \
     pytest~=8.3.0 \
     pytest-benchmark~=5.1.0 \

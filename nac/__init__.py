@@ -25,4 +25,5 @@ from nac.existence import (
 from nac.check import (
     is_NAC_coloring,
     is_cartesian_NAC_coloring,
+    NAC_check_called,
 )

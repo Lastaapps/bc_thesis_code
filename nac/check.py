@@ -13,6 +13,19 @@ from nac.data_type import NACColoring, Edge
 from nac.existence import check_NAC_constrains
 from nac.util import NiceGraph
 
+# how many times was the method called
+_NAC_CHECK_CALLED = 0
+# how many times was the method called with non-trivial input
+_NAC_CHECK_PERFORMED = 0
+
+def _NAC_check_called_reset():
+    global _NAC_CHECK_CALLED
+    global _NAC_CHECK_PERFORMED
+    _NAC_CHECK_CALLED = 0
+    _NAC_CHECK_PERFORMED = 0
+
+def NAC_check_called() -> Tuple[int, int]:
+    return (_NAC_CHECK_CALLED, _NAC_CHECK_PERFORMED)
 
 def _check_for_almost_red_cycles(
     G: nx.Graph,
@@ -55,6 +68,9 @@ def _is_NAC_coloring_impl(
 
     (TODO format)
     """
+    global _NAC_CHECK_PERFORMED
+    _NAC_CHECK_PERFORMED += 1
+
     red, blue = coloring
 
     # TODO NAC reimplement graph vertices caching
@@ -97,6 +113,9 @@ def is_NAC_coloring(
     """
     red: Collection[Edge]
     blue: Collection[Edge]
+    
+    global _NAC_CHECK_CALLED
+    _NAC_CHECK_CALLED += 1
 
     if type(coloring) == dict:
         red, blue = coloring["red"], coloring["blue"]

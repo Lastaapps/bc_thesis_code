@@ -18,7 +18,7 @@ from nac.monochromatic_classes import (
     create_T_graph_from_components,
 )
 from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
-from nac.check import _is_cartesian_NAC_coloring_impl, _is_NAC_coloring_impl
+from nac.check import _is_cartesian_NAC_coloring_impl, _is_NAC_coloring_impl, _NAC_check_called_reset
 from nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
@@ -2877,6 +2877,8 @@ def NAC_colorings_impl(
     use_has_coloring_check: bool,  # I disable the check in tests
     seed: int | None,
 ) -> Iterable[NACColoring]:
+    _NAC_check_called_reset()
+
     if not check_NAC_constrains(self):
         return []
 
