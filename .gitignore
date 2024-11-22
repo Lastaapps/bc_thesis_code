@@ -19,3 +19,4 @@ venv
 
 # TODO remove later
 !NAC_search.ipynb
+!NAC_benchmark.ipynb
