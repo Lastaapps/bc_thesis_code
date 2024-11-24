@@ -30,6 +30,7 @@ class GraphFamily(Enum):
 
 STORE_DIR = "./benchmarks/graphs_store"
 LAMAN_DIR = f"{STORE_DIR}/nauty-laman/general"
+LAMAN_RANDOM_DIR = f"{STORE_DIR}/laman-random"
 LAMAN_DEGREE_3_PLUS_DIR = f"{STORE_DIR}/nauty-laman/degree_3_plus"
 GENERAL_DIR = f"{STORE_DIR}/general-graphs"
 
@@ -132,6 +133,8 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Gr
 
     return _filter_triangle_only_laman_graphs(graphs)
 
+def load_laman_random_graphs(shuffle: bool = True) -> Iterable[Graph]:
+    return load_laman_graphs(dir=LAMAN_RANDOM_DIR, shuffle=shuffle)
 
 def load_laman_degree_3_plus(shuffle: bool = True) -> Iterable[Graph]:
     return load_laman_graphs(dir=LAMAN_DEGREE_3_PLUS_DIR, shuffle=shuffle)
@@ -358,6 +361,35 @@ def _filter_non_connected(graphs: Iterable[Graph]) -> Iterable[Graph]:
         if nx.is_connected(graph):
             yield graph
 
+def generate_laman_graphs(
+    nodes_l: int,
+    nodes_h: int,
+    count: int = 64,
+    min_degree: int|None = None,
+    seed: int | None = 42,
+) -> List[nx.Graph]:
+    graphs: List[nx.Graph] = list()
+    rand = random.Random(seed)
+    import pyrigi.graph
+
+    for n in range(nodes_l, nodes_h + 1):
+        found = 0
+        while found < count:
+            graph = pyrigi.Graph(nx.gnm_random_graph(n, 2*n-3, rand.randint(0, 2**32)))
+            if min_degree is not None:
+                if next((1 for d in nx.degree(graph) if d < min_degree), None) is not None:
+                    continue
+            if not graph.is_min_rigid():
+                continue
+            if not nx.is_connected(graph):
+                continue
+            if len(nac.find_triangle_components(graph)[1]) == 1:
+                continue
+
+            graphs.append(graph)
+            found += 1
+    rand.shuffle(graphs)
+    return graphs
 
 def generate_sparse_graphs(
     nodes_l: int,
