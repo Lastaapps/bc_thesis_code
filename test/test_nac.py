@@ -152,7 +152,7 @@ def test_sinlge_and_has_NAC_coloring(graph: nx.Graph, result: bool):
     ],
 )
 def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
-    res = nac.find_cycles_in_T_graph(
+    res = nac._find_cycles_in_T_graph(
         nx.Graph(),
         graph,
         [],
@@ -453,11 +453,11 @@ def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
     ],
 )
 def test__find_useful_cycles_for_components(graph: nx.Graph, result: Set[Tuple]):
-    _, component_to_edges = nac.find_triangle_components(graph)
+    _, component_to_edges = nac.find_monochromatic_classes(graph)
     # print()
     # print(graph)
     # print(component_to_edges)
-    res = nac.find_useful_cycles_for_components(
+    res = nac._find_useful_cycles_for_components(
         graph,
         set(range(len(component_to_edges))),
         component_to_edges,
@@ -666,11 +666,11 @@ def test__find_useful_cycles_for_components(graph: nx.Graph, result: Set[Tuple])
     ],
 )
 def test__find_shortest_cycles_for_components(graph: nx.Graph, result: Set[Tuple]):
-    _, component_to_edges = nac.find_triangle_components(graph)
+    _, component_to_edges = nac.find_monochromatic_classes(graph)
     # print()
     # print(graph)
     # print(component_to_edges)
-    res = nac.find_shortest_cycles_for_components(
+    res = nac._find_shortest_cycles_for_components(
         graph,
         set(range(len(component_to_edges))),
         component_to_edges,

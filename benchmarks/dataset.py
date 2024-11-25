@@ -111,7 +111,7 @@ def load_all_small_graphs(limit: int | None, shuffle: bool = True) -> List[Graph
 
 def _filter_triangle_only_laman_graphs(graphs) -> filter:
     return filter(
-        lambda g: len(nac.find_triangle_components(g)[1]) > 1,
+        lambda g: len(nac.find_monochromatic_classes(g)[1]) > 1,
         graphs,
     )
 
@@ -383,7 +383,7 @@ def generate_laman_graphs(
                 continue
             if not nx.is_connected(graph):
                 continue
-            if len(nac.find_triangle_components(graph)[1]) == 1:
+            if len(nac.find_monochromatic_classes(graph)[1]) == 1:
                 continue
 
             graphs.append(graph)

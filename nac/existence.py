@@ -4,7 +4,7 @@ import networkx as nx
 
 from nac.exception import LoopError
 from nac.data_type import NACColoring
-from nac.monochromatic_classes import find_triangle_components
+from nac.monochromatic_classes import find_monochromatic_classes
 
 
 def check_NAC_constrains(self: nx.Graph) -> bool:
@@ -80,7 +80,7 @@ def _check_is_min_rigid_and_NAC_coloring_exists(
     # if not graph.is_min_rigid(dim=2):
     #     return None
 
-    _, components_to_edges = find_triangle_components(graph)
+    _, components_to_edges = find_monochromatic_classes(graph)
     return len(components_to_edges) != 1
 
 
@@ -111,7 +111,7 @@ def _check_for_simple_stable_cut(
         (not None) if certificate is not needed (False)
         or the found coloring if it is requested (True).
     """
-    _, component_to_edge = find_triangle_components(graph)
+    _, component_to_edge = find_monochromatic_classes(graph)
     verticies_outside_triangle_components: Set[int] = set(
         # make sure we filter out isolated vertices
         u

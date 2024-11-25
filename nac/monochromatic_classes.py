@@ -6,8 +6,7 @@ from nac.util.union_find import UnionFind
 from nac.data_type import Edge
 
 
-# TODO NAC rename to monochromatic
-def fake_triangle_components(
+def trivial_monochromatic_classes(
     graph: nx.Graph,
 ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
     edge_to_component: Dict[Edge, int] = {}
@@ -18,7 +17,7 @@ def fake_triangle_components(
     return edge_to_component, component_to_edges
 
 
-def find_triangle_components(
+def find_monochromatic_classes(
     graph: nx.Graph,
     use_triangles_over_component: bool = True,
     is_cartesian_NAC_coloring: bool = False,
