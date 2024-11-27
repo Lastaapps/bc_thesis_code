@@ -704,6 +704,7 @@ NAC_ALGORITHMS = [
                 "dynamic",
                 "recursion",
                 "shared_vertices",
+                "promising_cycles",
             ]
             for algo in [
                 "none",

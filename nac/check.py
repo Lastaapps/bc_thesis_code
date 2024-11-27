@@ -17,14 +17,17 @@ from nac.util import NiceGraph
 _NAC_CHECK_IS_NAC_COLORING = 0
 _NAC_CHECK_CYCLE_MASK = 0
 
+
 def _NAC_check_called_reset():
     global _NAC_CHECK_IS_NAC_COLORING
     global _NAC_CHECK_CYCLE_MASK
     _NAC_CHECK_IS_NAC_COLORING = 0
     _NAC_CHECK_CYCLE_MASK = 0
 
+
 def NAC_check_called() -> Tuple[int, int]:
     return (_NAC_CHECK_IS_NAC_COLORING, _NAC_CHECK_CYCLE_MASK)
+
 
 def _check_for_almost_red_cycles(
     G: nx.Graph,
@@ -112,9 +115,6 @@ def is_NAC_coloring(
     """
     red: Collection[Edge]
     blue: Collection[Edge]
-    
-    global _NAC_CHECK_CALLED
-    _NAC_CHECK_CALLED += 1
 
     if type(coloring) == dict:
         red, blue = coloring["red"], coloring["blue"]

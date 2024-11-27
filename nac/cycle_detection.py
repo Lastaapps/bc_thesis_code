@@ -5,6 +5,7 @@ import networkx as nx
 
 from nac.data_type import Edge
 
+
 # obsolete, left for legacy reasons
 def _find_cycles_in_T_graph(
     graph: nx.Graph,
@@ -528,5 +529,3 @@ def _find_useful_cycles_for_components(
         limited[key] = set(list(sorted(value, key=lambda x: len(x)))[:per_class_limit])
 
     return limited
-
-

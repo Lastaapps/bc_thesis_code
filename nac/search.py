@@ -1,4 +1,5 @@
 from collections import defaultdict, deque
+from queue import PriorityQueue
 from functools import reduce
 import itertools
 import random
@@ -19,7 +20,6 @@ from nac.monochromatic_classes import (
 )
 from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
 from nac.check import (
-    NAC_check_called,
     _is_cartesian_NAC_coloring_impl,
     _is_NAC_coloring_impl,
     _NAC_check_called_reset,
@@ -35,6 +35,7 @@ from nac.util import NiceGraph
 
 from nac.cycle_detection import find_cycles
 import nac.check
+
 
 def _coloring_from_mask(
     vertices: List[int],
@@ -1775,6 +1776,147 @@ def _NAC_colorings_subgraphs(
                 res = colorings_merge_wrapper(all_epochs[best[1]], all_epochs[best[2]])
                 all_epochs[best[1]] = res
                 all_epochs.pop(best[2])
+
+        case "promising_cycles":
+            """
+            This strategy looks for edges that when added
+            to a subgraph can cause a cycle.
+            We try to maximize the number of cycles.
+            If the number of cycles match, we try the following strategies:
+            - if components share a vertex, they get higher priority
+            - graph pairs with lower number of monochromatic components get higher priority
+            - the number of common vertices
+            - unspecified
+            """
+
+            def mask_to_graph(allow_mask: int) -> Tuple[List[Edge], List[Set[int]]]:
+                """
+                Creates a graph for the monochromatic classes given by the mask
+                """
+                graph = nx.Graph()
+                for i, edges in enumerate(component_to_edges):
+                    address = 1 << i
+
+                    if address & allow_mask == 0:
+                        continue
+
+                    graph.add_edges_from(edges)
+                return list(graph.edges), list(nx.connected_components(graph))
+
+            def find_potential_cycles(
+                edges: List[Edge], components: List[Set[int]]
+            ) -> int:
+                """
+                Counts the number of edges that may create an almost cycle
+                in the other subgraph.
+                """
+                cycles: int = 0
+                for u, v in edges:
+                    for comp in components:
+                        u_in_comp = u in comp
+                        v_in_comp = v in comp
+                        cycles += u_in_comp and v_in_comp
+
+                return cycles
+
+            def find_shared_vertices(
+                components1: List[Set[int]], components2: List[Set[int]]
+            ) -> int:
+                """
+                Counts the number of edges that may create an almost cycle
+                in the other subgraph.
+                """
+                if sum(len(c) for c in components1) < sum(len(c) for c in components2):
+                    components1, components2 = components2, components1
+
+                count: int = 0
+                for s1 in components1:
+                    for u in s1:
+                        for s2 in components2:
+                            if u in s2:
+                                count += 1
+                                break
+
+                return count
+
+            # maps from subgraph (mask) to it's decomposition
+            mapped_graphs: Dict[int, Tuple[List[Edge], List[Set[int]]]] = {}
+
+            # set merged graphs
+            class QueueItem(NamedTuple):
+                score: Tuple[int, int, int, int]
+                mask_1: int
+                mask_2: int
+
+            queue: PriorityQueue[QueueItem] = PriorityQueue()
+
+            def on_new_graph(
+                mask: int,
+                graph_props: Tuple[List[Edge], List[Set[int]]],
+                checks_limit: int | None = None,
+            ):
+                """
+                Schedules new events in the priority queue for a new graph
+                """
+                if checks_limit is None:
+                    checks_limit = len(all_epochs)
+                for existing in all_epochs[:checks_limit]:
+                    other_mask = existing[1]
+                    other_props = mapped_graphs[other_mask]
+
+                    cycles1 = find_potential_cycles(graph_props[0], other_props[1])
+                    cycles2 = find_potential_cycles(other_props[0], graph_props[1])
+
+                    shared_vertices = find_shared_vertices(
+                        graph_props[1], other_props[1]
+                    )
+
+                    # +1 minimize, -1 maximize
+                    score = (
+                        -1 * (cycles1 + cycles2),
+                        -1 * (shared_vertices > 0),
+                        +1 * (mask.bit_count() + other_mask.bit_count()),
+                        -1 * shared_vertices,
+                    )
+                    queue.put(QueueItem(score, existing[1], mask))
+                    assert other_mask != mask
+
+            # add base subgraphs to the related data structures
+            for i, mask in enumerate(all_epochs):
+                _, mask = mask
+
+                # create a graph representation
+                graph_props = mask_to_graph(mask)
+                mapped_graphs[mask] = graph_props
+
+                on_new_graph(mask, graph_props, checks_limit=i)
+
+            while not queue.empty():
+                _, mask1, mask2 = queue.get()
+                # skip subgraphs that are already handled
+                if mask1 not in mapped_graphs or mask2 not in mapped_graphs:
+                    continue
+
+                # find indices in all_epochs and apply
+                ind1: int = next(
+                    filter(lambda x: x[1][1] == mask1, enumerate(all_epochs))
+                )[0]
+                ind2: int = next(
+                    filter(lambda x: x[1][1] == mask2, enumerate(all_epochs))
+                )[0]
+                res = colorings_merge_wrapper(all_epochs[ind1], all_epochs[ind2])
+
+                # register the new graph
+                mask = res[1]
+                graph_props = mask_to_graph(mask)
+                mapped_graphs[mask] = graph_props
+                on_new_graph(mask, graph_props)
+
+                # remove old graphs
+                mapped_graphs.pop(all_epochs[ind1][1])
+                mapped_graphs.pop(all_epochs[ind2][1])
+                all_epochs[ind1] = res
+                all_epochs.pop(ind2)
         case _:
             raise ValueError(f"Unknown merge strategy: {merge_strategy}")
 
