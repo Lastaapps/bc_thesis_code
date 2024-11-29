@@ -1,3 +1,8 @@
+"""
+This module holds functions related to questions if a graph has a NAC coloring
+with optional certificate.
+"""
+
 from __future__ import annotations
 
 from typing import *

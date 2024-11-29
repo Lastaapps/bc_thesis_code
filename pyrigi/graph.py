@@ -22,7 +22,7 @@ import pyrigi._pebble_digraph
 from nac import NACColoring
 from nac import has_NAC_coloring, single_NAC_coloring
 from nac import has_cartesian_NAC_coloring, single_cartesian_NAC_coloring
-from nac import NAC_colorings_impl, cartesian_NAC_colorings
+import nac
 
 
 class Graph(nx.Graph):
@@ -1952,7 +1952,7 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        return NAC_colorings_impl(
+        return nac.NAC_colorings(
             self,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
@@ -1995,7 +1995,7 @@ class Graph(nx.Graph):
 
         TODO example
         """
-        return cartesian_NAC_colorings(
+        return nac.cartesian_NAC_colorings(
             self,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,

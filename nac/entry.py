@@ -1,3 +1,7 @@
+"""
+This module holds the nac module main API, that should stay stable over time.
+"""
+
 from typing import *
 
 import networkx as nx

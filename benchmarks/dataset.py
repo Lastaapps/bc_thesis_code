@@ -11,6 +11,7 @@ import os
 import random
 import re
 import sys
+import math
 import urllib.request
 from enum import Enum
 import networkx as nx
@@ -28,11 +29,12 @@ class GraphFamily(Enum):
     LAMAN = (1245517, "LamanGraphs")
 
 
-STORE_DIR = "./benchmarks/graphs_store"
-LAMAN_DIR = f"{STORE_DIR}/nauty-laman/general"
-LAMAN_RANDOM_DIR = f"{STORE_DIR}/laman-random"
-LAMAN_DEGREE_3_PLUS_DIR = f"{STORE_DIR}/nauty-laman/degree_3_plus"
-GENERAL_DIR = f"{STORE_DIR}/general-graphs"
+STORE_DIR = os.path.join("benchmarks", "graphs_store")
+LAMAN_DIR_NAUTY = os.path.join(STORE_DIR, "nauty-laman")
+LAMAN_DIR = os.path.join(LAMAN_DIR_NAUTY, "general")
+LAMAN_RANDOM_DIR = os.path.join(STORE_DIR, "laman-random")
+LAMAN_DEGREE_3_PLUS_DIR = os.path.join(LAMAN_DIR_NAUTY, "degree_3_plus")
+GENERAL_DIR = os.path.join(STORE_DIR, "general-graphs")
 
 
 def download_small_graphs(family: GraphFamily, size: str) -> None:
@@ -133,20 +135,37 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Gr
 
     return _filter_triangle_only_laman_graphs(graphs)
 
+
 def load_laman_random_graphs(shuffle: bool = True) -> Iterable[Graph]:
     return load_laman_graphs(dir=LAMAN_RANDOM_DIR, shuffle=shuffle)
+
 
 def load_laman_degree_3_plus(shuffle: bool = True) -> Iterable[Graph]:
     return load_laman_graphs(dir=LAMAN_DEGREE_3_PLUS_DIR, shuffle=shuffle)
 
 
-LAMAN_DEGREE_3_PLUS_ALL_DIR = f"{STORE_DIR}/laman_degree_3_plus"
+LAMAN_ALL_DIR = os.path.join(LAMAN_DIR_NAUTY, "general_all")
+LAMAN_ALL_FILENAME = "laman_{}.g6"
+LAMAN_DEGREE_3_PLUS_ALL_DIR = os.path.join(STORE_DIR, "laman_degree_3_plus")
 LAMAN_DEGREE_3_PLUS_ALL_FILENAME = "D3LamanGraphs{}.m"
+
+
+def load_laman_all(
+    vertices_no: int,
+    DIR: str = LAMAN_ALL_DIR,
+    FILENAME: str | None = None,
+) -> Iterable[nx.Graph]:
+    if FILENAME is None:
+        FILENAME = LAMAN_ALL_FILENAME.format(vertices_no)
+    path = os.path.join(DIR, FILENAME)
+    return nx.read_graph6(path)
 
 
 def load_laman_degree_3_plus_all(
     vertices_no: int, limit: int | None = None
-) -> Iterable[Graph]:
+) -> Iterable[nx.Graph]:
+    import pyrigi
+
     path = os.path.join(
         LAMAN_DEGREE_3_PLUS_ALL_DIR,
         LAMAN_DEGREE_3_PLUS_ALL_FILENAME.format(vertices_no),
@@ -159,7 +178,7 @@ def load_laman_degree_3_plus_all(
     with open(path) as file:
         for line in file:
             for integer in re.finditer("(\\d+)", line):
-                yield Graph.from_int(int(integer.group()))
+                yield pyrigi.Graph.from_int(int(integer.group()))
 
                 graph_no += 1
                 if graph_no == limit:
@@ -361,11 +380,12 @@ def _filter_non_connected(graphs: Iterable[Graph]) -> Iterable[Graph]:
         if nx.is_connected(graph):
             yield graph
 
+
 def generate_laman_graphs(
     nodes_l: int,
     nodes_h: int,
     count: int = 64,
-    min_degree: int|None = None,
+    min_degree: int | None = None,
     seed: int | None = 42,
 ) -> List[nx.Graph]:
     graphs: List[nx.Graph] = list()
@@ -375,13 +395,18 @@ def generate_laman_graphs(
     for n in range(nodes_l, nodes_h + 1):
         found = 0
         while found < count:
-            graph = pyrigi.Graph(nx.gnm_random_graph(n, 2*n-3, rand.randint(0, 2**32)))
+            graph = pyrigi.Graph(
+                nx.gnm_random_graph(n, 2 * n - 3, rand.randint(0, 2**32))
+            )
             if min_degree is not None:
-                if next((1 for d in nx.degree(graph) if d < min_degree), None) is not None:
+                if (
+                    next((1 for d in nx.degree(graph) if d < min_degree), None)
+                    is not None
+                ):
                     continue
-            if not graph.is_min_rigid():
-                continue
             if not nx.is_connected(graph):
+                continue
+            if not graph.is_min_rigid():
                 continue
             if len(nac.find_monochromatic_classes(graph)[1]) == 1:
                 continue
@@ -390,6 +415,7 @@ def generate_laman_graphs(
             found += 1
     rand.shuffle(graphs)
     return graphs
+
 
 def generate_sparse_graphs(
     nodes_l: int,
@@ -426,3 +452,75 @@ def generate_dense_graphs(
     graphs = list(_filter_non_connected(graphs))
     rand.shuffle(graphs)
     return graphs
+
+
+def generate_NAC_critical_graphs(
+    nodes_l: int,
+    nodes_h: int,
+    count: int | None = None,
+    seed: int | None = 42,
+    log_base: float = math.e,
+) -> Iterable[nx.Graph]:
+    """
+    Generates sparse graphs that should have likely few NAC colorings
+    or no NAC colorings what so ever
+    """
+    rand = random.Random(seed)
+
+    # this formula comes from a related
+    # and still unpublished work of related authors
+    # it should lead to graphs that either have
+    # no NAC-coloring or have just few
+
+    i = 0
+    while i < (count or 2**30):
+        n = rand.randint(nodes_l, nodes_h)
+        p = 0.95 * (2 * math.log(n, log_base) / (n * n)) ** (1 / 3)
+
+        while True:
+            graph = Graph(nx.fast_gnp_random_graph(n, p, rand.randint(0, 2**32)))
+            if not nx.is_connected(graph):
+                continue
+
+            i += 1
+            yield graph
+            break
+
+
+def generate_globally_rigid_graphs(
+    nodes_l: int,
+    nodes_h: int,
+    count: int | None = None,
+    seed: int | None = 42,
+    log_base: float = math.e,
+) -> Iterable[nx.Graph]:
+    """
+    Generates sparse graphs that should have likely few NAC colorings
+    or no NAC colorings what so ever
+    """
+    import pyrigi
+
+    rand = random.Random(seed)
+
+    # this formula comes from a related
+    # and still unpublished work of related authors
+    # it should lead to graphs that either have
+    # no NAC-coloring or have just few
+
+    i = 0
+    while i < (count or 2**30):
+        n = rand.randint(nodes_l, nodes_h)
+        p = (2 * math.log(n, log_base) / (n * n)) ** (1 / 3)
+
+        while True:
+            graph = pyrigi.Graph(nx.fast_gnp_random_graph(n, p, rand.randint(0, 2**32)))
+            if not nx.is_connected(graph):
+                continue
+            if len(nac.find_monochromatic_classes(graph)[1]) == 1:
+                continue
+            if not graph.is_globally_rigid():
+                continue
+
+            i += 1
+            yield graph
+            break

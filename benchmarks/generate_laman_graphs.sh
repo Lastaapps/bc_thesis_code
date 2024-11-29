@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This script generates laman graphs using nauty and nauty laman plugin:
 # https://pallini.di.uniroma1.it/
@@ -16,6 +16,18 @@ fi
 if [[ ! -d "${OUTPUT_DIR}" ]]; then
     mkdir -p "${OUTPUT_DIR}"
 fi
+for SUBDIR in general_all general degree_3_plus; do
+    if [[ ! -d "${OUTPUT_DIR}/${SUBDIR}" ]]; then
+        mkdir -p "${OUTPUT_DIR}/${SUBDIR}"
+    fi
+done
+
+echo Generation all Laman graphs...
+for n in {7..12}
+do
+    # Laman graphs (may be spanned by a triangle component)
+    "$EXECUTABLE" "$n" -K2 > "${OUTPUT_DIR}/general_all/laman_${n}.g6"
+done
 
 echo Generation Laman graphs...
 for n in {5..30}
@@ -28,6 +40,6 @@ echo Generation Laman graphs with min degree 3...
 for n in {6..17}
 do
     # Laman graphs with min degree 3
-    "$EXECUTABLE" $n -K2 -d3 | head -n 128 > "${OUTPUT_DIR}/deg_3_plus/laman_deg_3_plus${n}.g6"
+    "$EXECUTABLE" $n -K2 -d3 | head -n 128 > "${OUTPUT_DIR}/degree_3_plus/laman_deg_3_plus${n}.g6"
 done
 

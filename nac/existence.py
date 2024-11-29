@@ -1,3 +1,7 @@
+"""
+This modules is responsible for checking if an edge coloring is a NAC_coloring
+"""
+
 from typing import *
 
 import networkx as nx

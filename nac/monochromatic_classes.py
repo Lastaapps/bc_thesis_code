@@ -1,3 +1,8 @@
+"""
+This module is responsible for finding monochromatic classes or
+triangle components.
+"""
+
 from collections import defaultdict
 from typing import *
 import networkx as nx

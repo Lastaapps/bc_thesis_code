@@ -1,3 +1,7 @@
+"""
+This module holds some utility functions for development
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict

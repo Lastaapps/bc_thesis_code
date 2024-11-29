@@ -1,3 +1,7 @@
+"""
+This module handles all the variants of cycle detection
+"""
+
 from collections import defaultdict, deque
 from typing import *
 

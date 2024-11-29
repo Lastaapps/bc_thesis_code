@@ -280,15 +280,17 @@ def _NAC_colorings_cycles(
         yield (coloring[1], coloring[0])
 
 
-# ensures components that are later joined are next to each other
-# increasing the chance of NAC colorings being dismissed sooner
-
-
 def _split_and_find(
     local_graph: nx.Graph,
     local_chunk_sizes: List[int],
     search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
 ) -> List[int]:
+    """
+    # Smart split
+
+    Ensures components that are later joined are next to each other
+    increasing the chance of NAC colorings being dismissed sooner
+    """
     if len(local_chunk_sizes) <= 2:
         return search_func(local_graph, local_chunk_sizes)
 
@@ -475,6 +477,37 @@ def _subgraphs_strategy_neighbors(
     use_degree: bool,
     seed: int | None,
 ) -> List[int]:
+    """
+    Params
+    ------
+        graph:
+            TODO subgraph of the original graph that the algorithm operates on
+        t_graph:
+            holds monochromatic components TODO
+        components_to_edges:
+            mapping giving for a component id
+            (a vertex in t_graph) list of edges of the component
+        chunk_sizes:
+            target sizes of resulting subgraphs
+        iterative:
+            tries to add component to a subgraph,
+            but starts with the next one instead of adding cycles.
+            A cycles is added after a round is finished in the next round.
+            Rounds run until all the subgraphs are full.
+        start_with_cycle:
+            a monochromatic cycle is added to each subgraph at start
+            then normal process continues
+        use_degree:
+
+        seed:
+            seeds internal pseudo random generator
+
+        for each component
+    """
+    # 'Component' stands for monochromatic classes as for legacy naming
+
+    # t_graph is just a peace of legacy code that we did not optimize away yet
+    # here it serves only as a set of monochromatic components to consider
     t_graph = nx.Graph(t_graph)
     ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
@@ -484,10 +517,8 @@ def _subgraphs_strategy_neighbors(
     edge_to_components: Dict[Tuple[int, int], int] = {
         e: comp_id for comp_id, comp in enumerate(component_to_edges) for e in comp
     }
-    # print(f"{component_to_edges=}")
 
     # start algo and fill a chunk
-    # profit
     while t_graph.number_of_nodes() > 0:
         # TODO connected components
         # TODO run algorithm per component, not per vertex
@@ -495,6 +526,9 @@ def _subgraphs_strategy_neighbors(
         #      the chunk is almost full
 
         component_ids = list(t_graph.nodes)
+        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
+        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
+        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
         rand = random.Random(seed)
         rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
 
@@ -506,24 +540,30 @@ def _subgraphs_strategy_neighbors(
             for v in e
             if comp_id in component_ids
         }
-        # print(f"{component_ids=}")
-        # print(f"{local_vertices=}")
 
+        # represents index of the chosen subgraph
         chunk_index = min(
             range(len(ordered_vertices_groups)),
             key=lambda x: len(ordered_vertices_groups[x]) / chunk_sizes[x],
         )
+        # list to add monochromatic class to
         target = ordered_vertices_groups[chunk_index]
-        # print(f"Open target {chunk_index}, {len(target)}/{chunk_sizes[chunk_index]}")
 
+        # components already added to the subgraph
+        added_components: Set[int]
+
+        # if subgraph is still empty, we add a random monochromatic class to it
         if is_random_component_required[chunk_index]:
             if start_with_cycle:
+                # we find all the cycles of reasonable length in the graph
                 cycles = find_cycles(
                     graph,
                     set(t_graph.nodes),
                     component_to_edges,
                     all=True,
                 )
+
+                # we find all the cycles with the shortest length
                 shortest: List[Tuple[int, ...]] = []
                 shortest_len = 2**42
                 for cycle in cycles:
@@ -551,11 +591,15 @@ def _subgraphs_strategy_neighbors(
         else:
             added_components = set()
 
+        # vertices of the already chosen components
         used_vertices = {
             v for comp in target for e in component_to_edges[comp] for v in e
         }
+
+        # vertices queue of vertices to search trough
         opened: Set[int] = set()
 
+        # add all the neighbors of the vertices of the already used components
         for v in used_vertices:
             for u in graph.neighbors(v):
                 if u in used_vertices:
@@ -564,6 +608,8 @@ def _subgraphs_strategy_neighbors(
                     continue
                 opened.add(u)
 
+        # goes trough the opened vertices and searches for cycles
+        # until we run out or vertices, fill a subgraph or reach iteration limit
         iteration_no = 0
         while (
             opened
@@ -572,6 +618,7 @@ def _subgraphs_strategy_neighbors(
         ):
             comp_added = False
 
+            # compute score or each vertex, using or not using vertex degrees
             if not use_degree:
                 values = [
                     (u, len(used_vertices.intersection(graph.neighbors(u))))
@@ -590,43 +637,50 @@ def _subgraphs_strategy_neighbors(
                     for u in opened
                 ]
 
-            # TODO handle maybe
+            # shuffling seams to decrease the performance
             # rand.shuffle(values)
 
-            # print(f"{values=}")
+            # chooses a vertex with the highest score
             best_vertex = max(values, key=lambda x: x[1])[0]
-            # print(f"Choosen {best_vertex}")
+
+            # we take the common neighborhood of already used vertices and the chosen vertex
             for neighbor in used_vertices.intersection(graph.neighbors(best_vertex)):
+                # vertex is not part of the current subgraph
                 if neighbor not in local_vertices:
-                    # print("X: Non-local")
                     continue
 
+                # component of the edge incident to the best vertex
+                # and the chosen vertex
                 comp_id: int = edge_to_components.get(
                     (best_vertex, neighbor),
                     edge_to_components.get((neighbor, best_vertex), None),
                 )
+                # the edge is part of another component
                 if comp_id not in component_ids:
-                    # print("X: Invalid component")
                     continue
+                # the component of the edge was already added
                 if comp_id in added_components:
-                    # print("X: Already added")
                     continue
 
-                # print(f"Adding component ({best_vertex} -- {neighbor}) {comp_id} -> {component_to_edges[comp_id]}")
+                # we can add the component of the edge
                 added_components.add(comp_id)
                 target.append(comp_id)
                 comp_added = True
 
+                # Checks if the cycles can continue
+                # subgraph is full
                 if len(target) >= chunk_sizes[chunk_index]:
-                    # print("Chunk is full")
                     break
 
+                # add new vertices to the used vertices so they can be used
+                # in a next iteration
                 new_vertices: Set[int] = {
                     v for e in component_to_edges[comp_id] for v in e
                 }
                 used_vertices |= new_vertices
                 opened -= new_vertices
 
+                # open neighbors of the newly added vertices
                 for v in new_vertices:
                     for u in graph.neighbors(v):
                         if u in used_vertices:
@@ -634,6 +688,7 @@ def _subgraphs_strategy_neighbors(
                         if u not in local_vertices:
                             continue
                         opened.add(u)
+
             if comp_added:
                 iteration_no += 1
             else:
@@ -1120,9 +1175,9 @@ def _NAC_colorings_subgraphs(
     get_subgraphs_together: bool = True,
     merge_strategy: (
         str | Literal["linear", "log", "log_reverse", "min_max", "weight"]
-    ) = "log",
+    ) = "linear",
     preferred_chunk_size: int | None = None,
-    order_strategy: str = "none",
+    order_strategy: str = "neighbors_degree",
 ) -> Iterable[NACColoring]:
     """
     This version of the algorithm splits the graphs into subgraphs,
@@ -1132,11 +1187,7 @@ def _NAC_colorings_subgraphs(
     """
     # These values are taken from benchmarks as (almost) optimal
     if preferred_chunk_size is None:
-        # preferred_chunk_size = round(0.08 * t_graph.number_of_nodes() + 5.5)
-        preferred_chunk_size = round(
-            np.log(t_graph.number_of_nodes()) / np.log(1 + 1 / 2)
-        )
-        preferred_chunk_size = max(int(preferred_chunk_size), 4)
+        preferred_chunk_size = 5 if t_graph.number_of_nodes() < 12 else 6
 
     preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
     assert preferred_chunk_size >= 1

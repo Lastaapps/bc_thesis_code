@@ -1,3 +1,7 @@
+"""
+Tests for all the NAC coloring search related functions
+"""
+
 from nac import NACColoring, Edge
 
 from dataclasses import dataclass
