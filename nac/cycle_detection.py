@@ -442,10 +442,15 @@ def _find_useful_cycles_for_components(
     per_class_limit: int = 2,
 ) -> Dict[int, Set[Tuple[int, ...]]]:
     """
+    For each edge finds all the cycles among monochromatic classes
+    of length at most five (length is the number of classes it spans).
+
     Not all the returned cycles are guaranteed to be actual cycles as
     this may create cycles that enter and exit a component at the same vertex.
     """
     comp_no = len(component_to_edges)
+
+    # creates mapping from vertex to set of monochromatic classes if is in
     vertex_to_components = [set() for _ in range(max(graph.nodes) + 1)]
     for comp_id, comp in enumerate(component_to_edges):
         if comp_id not in subgraph_components:
@@ -457,6 +462,8 @@ def _find_useful_cycles_for_components(
 
     found_cycles: Dict[int, Set[Tuple[int, ...]]] = defaultdict(set)
 
+    # create a graph where vertices are monochromatic classes an there's
+    # an edge if the monochromatic classes share a vertex
     for v in graph.nodes:
         for i in vertex_to_components[v]:
             for j in vertex_to_components[v]:
@@ -464,6 +471,14 @@ def _find_useful_cycles_for_components(
                     neighboring_components[i].add(j)
 
     def insert_cycle(comp_id: int, cycle: Tuple[int, ...]):
+        """
+        Makes sure a cycles is inserted in canonical form to prevent
+        having the same cycle more times.
+
+        The canonical form is that the first id is the smallest component
+        number in the cycle and the second one is the lower of the neighbors
+        in the cycle.
+        """
         # in case one component was used more times
         if len(set(cycle)) != len(cycle):
             return
@@ -493,7 +508,6 @@ def _find_useful_cycles_for_components(
     # print(f"{neighboring_components=}")
 
     for u, v in graph.edges:
-        # print(f"{u=} {v=}")
         u_comps = vertex_to_components[u]
         v_comps = vertex_to_components[v]
 
@@ -501,7 +515,6 @@ def _find_useful_cycles_for_components(
         intersection = u_comps.intersection(v_comps)
         u_comps = u_comps - intersection
         v_comps = v_comps - intersection
-        # print(f"{u_comps=} {v_comps=} <-> {intersection=}")
         assert len(intersection) <= 1
         if len(intersection) == 0:
             continue

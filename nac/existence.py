@@ -80,12 +80,20 @@ def _check_is_min_rigid_and_NAC_coloring_exists(
         False if we are sure there is none.
         None if we cannot decide (the graph is not min_rigid)
     """
-    # TODO NAC
+
+    # this call requires pyrigi, which is for this purpose not used
+
+    return None
+
     # if not graph.is_min_rigid(dim=2):
+    #     # flexible -> has NAC
+
+    # TODO NAC
+    # _, components_to_edges = find_monochromatic_classes(graph)
+    # if not graph.is_min_rigid(dim=2) and len(components_to_edges) > 1:
     #     return None
 
-    _, components_to_edges = find_monochromatic_classes(graph)
-    return len(components_to_edges) != 1
+    # return len(components_to_edges) != 1
 
 
 def _check_for_simple_stable_cut(

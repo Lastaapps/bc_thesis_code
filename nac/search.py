@@ -6,6 +6,7 @@ import random
 from typing import *
 
 import networkx as nx
+from networkx.algorithms.community import kernighan_lin_bisection
 import math
 import numpy as np
 
@@ -526,9 +527,6 @@ def _subgraphs_strategy_neighbors(
         #      the chunk is almost full
 
         component_ids = list(t_graph.nodes)
-        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
-        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
-        # TODO this is wrong, aaaaaaaaaaaaaaaaaaaaaaaa
         rand = random.Random(seed)
         rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
 
@@ -702,7 +700,7 @@ def _subgraphs_strategy_neighbors(
     return [v for group in ordered_vertices_groups for v in group]
 
 
-def _wrong_subgraphs_strategy_beam_neighbors(
+def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
     t_graph: nx.Graph,
     chunk_sizes: Sequence[int],
     start_with_triangles: bool,
@@ -782,7 +780,7 @@ def _wrong_subgraphs_strategy_beam_neighbors(
     return [v for group in ordered_vertices_groups for v in group]
 
 
-def _wrong_subgraphs_strategy_components(
+def _subgraphs_strategy_components_deprecated(
     t_graph: nx.Graph,
     chunk_sizes: Sequence[int],
     start_from_biggest_component: bool,
@@ -823,6 +821,91 @@ def _wrong_subgraphs_strategy_components(
         ordered_vertices.append(v)
 
     return ordered_vertices
+
+def _subgraphs_strategy_kernighan_lin(
+    t_graph: nx.Graph,
+    preferred_chunk_size: int,
+    seed: int,
+    weight_key: str | None = None,
+) -> List[List[int]]:
+    rand = random.Random(seed)
+
+    def do_split(t_subgraph: nx.Graph) -> List[List[int]]:
+        if t_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
+            return [list(t_subgraph.nodes)]
+
+        a, b = kernighan_lin_bisection(
+            t_graph,
+            weight=weight_key,
+            seed=rand.randint(0, 2**30),
+        )
+
+        # subgraphs may be empty
+        if len(a) == 0 or len(b) == 0:
+            return [list(a | b)]
+
+        a = nx.induced_subgraph(t_subgraph, a)
+        b = nx.induced_subgraph(t_subgraph, b)
+
+        return do_split(a) + do_split(b)
+
+    return do_split(t_graph)
+
+def _subgraphs_strategy_cuts(
+    t_graph: nx.Graph,
+    preferred_chunk_size: int,
+    seed: int,
+) -> List[List[int]]:
+    rand = random.Random(seed)
+
+    def do_split(t_subgraph: nx.Graph) -> List[List[int]]:
+        # required as induced subgraphs are frozen
+        t_subgraph=NiceGraph(t_subgraph)
+
+        if t_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
+            return [list(t_subgraph.nodes)]
+
+        # choose all the vertices
+        vert_deg = list(t_subgraph.degree)
+        first_deg = max(d for _, d in vert_deg)
+        second_deg = max((d for _, d in vert_deg if d != first_deg), default=first_deg)
+        perspective = [v for v, d in vert_deg if d == first_deg or d == second_deg]
+
+        # n/2 iterations are fun as result of s->t and t->s may differ
+        the_best_cut: Tuple[Set[int], Set[int]] = (set(t_subgraph.nodes), set())
+        for s in range(len(perspective)):
+            for t in range(len(perspective)):
+                if s == t:
+                    continue
+                cut_edges = nx.algorithms.connectivity.minimum_st_edge_cut(
+                    t_subgraph, perspective[s], perspective[t],
+                )
+                t_subgraph.remove_edges_from(cut_edges)
+
+                # there may be multiple if the graph is disconnected
+                components = nx.connected_components(t_subgraph)
+                component = next(components)
+
+                score = np.abs(2*len(component) - t_subgraph.number_of_nodes())
+                curr_score = np.abs(len(the_best_cut[0]) - len(the_best_cut[1]))
+
+                # choose the partitioning with the most balanced halves
+                # and the randomness is also to super correct here...
+                if score < curr_score or (score == curr_score and rand.randint(0,int(np.sqrt(len(perspective)))) == 0):
+                    the_best_cut = (component, set(v for comp in components for v in comp))
+                t_subgraph.add_edges_from(cut_edges)
+
+        a, b = the_best_cut
+        # subgraphs may be empty
+        if len(a) == 0 or len(b) == 0:
+            return [list(a | b)]
+
+        a = nx.induced_subgraph(t_subgraph, a)
+        b = nx.induced_subgraph(t_subgraph, b)
+
+        return do_split(a) + do_split(b)
+
+    return do_split(t_graph)
 
 
 def _degree_ordered_nodes(graph: nx.Graph) -> List[int]:
@@ -1358,7 +1441,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors(
+                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=False,
@@ -1367,7 +1450,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_max":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors(
+                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=False,
@@ -1376,7 +1459,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_triangles":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors(
+                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=True,
@@ -1385,7 +1468,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_max_triangles":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors(
+                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=True,
@@ -1394,16 +1477,34 @@ def _NAC_colorings_subgraphs(
             )
         case "components_biggest":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_components(
+                lambda g, l: _subgraphs_strategy_components_deprecated(
                     g, l, start_from_biggest_component=True
                 )
             )
         case "components_spredded":
             vertices = process(
-                lambda g, l: _wrong_subgraphs_strategy_components(
+                lambda g, l: _subgraphs_strategy_components_deprecated(
                     g, l, start_from_biggest_component=False
                 )
             )
+        case "kernighan_lin":
+            subgraph_classes = _subgraphs_strategy_kernighan_lin(
+                t_graph=t_graph,
+                preferred_chunk_size=preferred_chunk_size,
+                seed=seed,
+            )
+            # TODO refactor later
+            chunk_sizes = [len(subgraph) for subgraph in subgraph_classes]
+            vertices = [v for subgraph in subgraph_classes for v in subgraph]
+        case "cuts":
+            subgraph_classes = _subgraphs_strategy_cuts(
+                t_graph=t_graph,
+                preferred_chunk_size=preferred_chunk_size,
+                seed=seed,
+            )
+            # TODO refactor later
+            chunk_sizes = [len(subgraph) for subgraph in subgraph_classes]
+            vertices = [v for subgraph in subgraph_classes for v in subgraph]
         case _:
             raise ValueError(
                 f"Unknown strategy: {order_strategy}, supported: none, degree, degree_cycles, cycles, cycles_match_chunks, bfs, beam_neighbors, components_biggest, components_spredded"
@@ -1798,7 +1899,6 @@ def _NAC_colorings_subgraphs(
                 all_epochs[best_pair[0]] = (list(iterable), mask)
 
         case "shared_vertices":
-
             def graph_to_vertices(allow_mask: int) -> Set[int]:
                 graph_vertices: Set[int] = set()
                 for i, edges in enumerate(component_to_edges):
@@ -1813,7 +1913,7 @@ def _NAC_colorings_subgraphs(
                 return graph_vertices
 
             while len(all_epochs) > 1:
-                best = (0, 0, 0)
+                best = (0, 0, 1)
                 subgraph_vertices: List[Set[int]] = [
                     graph_to_vertices(allow_mask) for _, allow_mask in all_epochs
                 ]
@@ -1825,6 +1925,7 @@ def _NAC_colorings_subgraphs(
                         if vertex_no > best[0]:
                             best = (vertex_no, i, j)
                 res = colorings_merge_wrapper(all_epochs[best[1]], all_epochs[best[2]])
+
                 all_epochs[best[1]] = res
                 all_epochs.pop(best[2])
 
