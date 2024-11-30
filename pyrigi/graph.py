@@ -19,7 +19,7 @@ from pyrigi.misc import doc_category, generate_category_tables
 from pyrigi.exception import LoopError
 import pyrigi._pebble_digraph
 
-from nac import NACColoring
+from nac import NACColoring, MonochromaticClassType
 from nac import has_NAC_coloring, single_NAC_coloring
 from nac import has_cartesian_NAC_coloring, single_cartesian_NAC_coloring
 import nac
@@ -1925,7 +1925,7 @@ class Graph(nx.Graph):
         self,
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
-        use_chromatic_partitions: bool = True,
+        monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
         use_decompositions: bool = True,
         remove_vertices_cnt: int = 0,
         use_has_coloring_check: bool = True,
@@ -1956,7 +1956,8 @@ class Graph(nx.Graph):
             self,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            use_chromatic_partitions=use_chromatic_partitions,
+            monochromatic_class_type=monochromatic_class_type,
+            remove_vertices_cnt=remove_vertices_cnt,
             use_decompositions=use_decompositions,
             use_has_coloring_check=use_has_coloring_check,
             seed=seed,
@@ -1967,7 +1968,7 @@ class Graph(nx.Graph):
         self,
         algorithm: str = "subgraphs",
         relabel_strategy: str = "none",
-        use_chromatic_partitions: bool = True,
+        monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
         use_decompositions: bool = True,
         use_has_coloring_check: bool = True,
         seed: int | None = None,
@@ -1999,7 +2000,7 @@ class Graph(nx.Graph):
             self,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            use_chromatic_partitions=use_chromatic_partitions,
+            monochromatic_class_type=monochromatic_class_type,
             use_decompositions=use_decompositions,
             use_has_coloring_check=use_has_coloring_check,
             seed=seed,

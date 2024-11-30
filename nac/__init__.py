@@ -4,8 +4,8 @@ Module related to the NAC coloring search
 
 from nac.data_type import *
 from nac.monochromatic_classes import (
+    MonochromaticClassType,
     find_monochromatic_classes,
-    trivial_monochromatic_classes,
     create_T_graph_from_components,
 )
 from nac.entry import *

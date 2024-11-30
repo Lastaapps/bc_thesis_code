@@ -15,8 +15,8 @@ from nac.util.repetable_iterator import RepeatableIterator
 
 from nac.data_type import NACColoring, Edge
 from nac.monochromatic_classes import (
+    MonochromaticClassType,
     find_monochromatic_classes,
-    trivial_monochromatic_classes,
     create_T_graph_from_components,
 )
 from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
@@ -822,6 +822,7 @@ def _subgraphs_strategy_components_deprecated(
 
     return ordered_vertices
 
+
 def _subgraphs_strategy_kernighan_lin(
     t_graph: nx.Graph,
     preferred_chunk_size: int,
@@ -851,6 +852,7 @@ def _subgraphs_strategy_kernighan_lin(
 
     return do_split(t_graph)
 
+
 def _subgraphs_strategy_cuts(
     t_graph: nx.Graph,
     preferred_chunk_size: int,
@@ -860,7 +862,7 @@ def _subgraphs_strategy_cuts(
 
     def do_split(t_subgraph: nx.Graph) -> List[List[int]]:
         # required as induced subgraphs are frozen
-        t_subgraph=NiceGraph(t_subgraph)
+        t_subgraph = NiceGraph(t_subgraph)
 
         if t_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
             return [list(t_subgraph.nodes)]
@@ -878,7 +880,9 @@ def _subgraphs_strategy_cuts(
                 if s == t:
                     continue
                 cut_edges = nx.algorithms.connectivity.minimum_st_edge_cut(
-                    t_subgraph, perspective[s], perspective[t],
+                    t_subgraph,
+                    perspective[s],
+                    perspective[t],
                 )
                 t_subgraph.remove_edges_from(cut_edges)
 
@@ -886,13 +890,19 @@ def _subgraphs_strategy_cuts(
                 components = nx.connected_components(t_subgraph)
                 component = next(components)
 
-                score = np.abs(2*len(component) - t_subgraph.number_of_nodes())
+                score = np.abs(2 * len(component) - t_subgraph.number_of_nodes())
                 curr_score = np.abs(len(the_best_cut[0]) - len(the_best_cut[1]))
 
                 # choose the partitioning with the most balanced halves
                 # and the randomness is also to super correct here...
-                if score < curr_score or (score == curr_score and rand.randint(0,int(np.sqrt(len(perspective)))) == 0):
-                    the_best_cut = (component, set(v for comp in components for v in comp))
+                if score < curr_score or (
+                    score == curr_score
+                    and rand.randint(0, int(np.sqrt(len(perspective)))) == 0
+                ):
+                    the_best_cut = (
+                        component,
+                        set(v for comp in components for v in comp),
+                    )
                 t_subgraph.add_edges_from(cut_edges)
 
         a, b = the_best_cut
@@ -1899,6 +1909,7 @@ def _NAC_colorings_subgraphs(
                 all_epochs[best_pair[0]] = (list(iterable), mask)
 
         case "shared_vertices":
+
             def graph_to_vertices(allow_mask: int) -> Set[int]:
                 graph_vertices: Set[int] = set()
                 for i, edges in enumerate(component_to_edges):
@@ -2655,7 +2666,7 @@ def NAC_colorings_impl(
     relabel_strategy: str,
     use_decompositions: bool,
     is_cartesian: bool,
-    use_chromatic_partitions: bool,
+    monochromatic_class_type: MonochromaticClassType,
     remove_vertices_cnt: int,
     use_has_coloring_check: bool,  # I disable the check in tests
     seed: int | None,
@@ -2680,13 +2691,12 @@ def NAC_colorings_impl(
         if graph.number_of_edges() == 0:
             return []
 
-        if use_chromatic_partitions:
-            edge_to_component, component_to_edge = find_monochromatic_classes(
-                graph,
-                is_cartesian_NAC_coloring=is_cartesian,
-            )
-        else:
-            edge_to_component, component_to_edge = trivial_monochromatic_classes(graph)
+        edge_to_component, component_to_edge = find_monochromatic_classes(
+            graph,
+            monochromatic_class_type,
+            is_cartesian_NAC_coloring=is_cartesian,
+        )
+
         t_graph = create_T_graph_from_components(graph, edge_to_component)
 
         algorithm_parts = list(algorithm.split("-"))
@@ -2806,7 +2816,7 @@ def NAC_colorings(
     graph: nx.Graph,
     algorithm: str = "subgraphs",
     relabel_strategy: str = "none",
-    use_chromatic_partitions: bool = True,
+    monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     use_decompositions: bool = True,
     remove_vertices_cnt: int = 0,
     use_has_coloring_check: bool = True,
@@ -2816,7 +2826,7 @@ def NAC_colorings(
         self=graph,
         algorithm=algorithm,
         relabel_strategy=relabel_strategy,
-        use_chromatic_partitions=use_chromatic_partitions,
+        monochromatic_class_type=monochromatic_class_type,
         use_decompositions=use_decompositions,
         is_cartesian=False,
         remove_vertices_cnt=remove_vertices_cnt,
@@ -2829,7 +2839,7 @@ def cartesian_NAC_colorings(
     graph: nx.Graph,
     algorithm: str = "subgraphs",
     relabel_strategy: str = "none",
-    use_chromatic_partitions: bool = True,
+    monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     use_decompositions: bool = True,
     use_has_coloring_check: bool = True,
     seed: int | None = None,
@@ -2838,7 +2848,7 @@ def cartesian_NAC_colorings(
         self=graph,
         algorithm=algorithm,
         relabel_strategy=relabel_strategy,
-        use_chromatic_partitions=use_chromatic_partitions,
+        monochromatic_class_type=monochromatic_class_type,
         use_decompositions=use_decompositions,
         is_cartesian=True,
         remove_vertices_cnt=0,

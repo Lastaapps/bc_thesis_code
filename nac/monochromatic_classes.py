@@ -5,13 +5,20 @@ triangle components.
 
 from collections import defaultdict
 from typing import *
+from enum import Enum
 import networkx as nx
 
 from nac.util.union_find import UnionFind
 from nac.data_type import Edge
 
 
-def trivial_monochromatic_classes(
+class MonochromaticClassType(Enum):
+    EDGES = "EDGES"
+    TRIANGLES = "TRIANGLES"
+    MONOCHROMATIC = "MONOCHROMATIC"
+
+
+def _trivial_monochromatic_classes(
     graph: nx.Graph,
 ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
     edge_to_component: Dict[Edge, int] = {}
@@ -24,7 +31,7 @@ def trivial_monochromatic_classes(
 
 def find_monochromatic_classes(
     graph: nx.Graph,
-    use_triangles_over_component: bool = True,
+    class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     is_cartesian_NAC_coloring: bool = False,
 ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
     """
@@ -40,6 +47,8 @@ def find_monochromatic_classes(
 
     Components are indexed from 0.
     """
+    if class_type == MonochromaticClassType.EDGES:
+        return _trivial_monochromatic_classes(graph)
 
     components = UnionFind[Edge]()
 
@@ -63,7 +72,7 @@ def find_monochromatic_classes(
     # that may produce disconnected components, as cycles may not exist!
     # There routines are highly inefficient, but the time is still
     # negligible compared to the main algorithm running time.
-    if use_triangles_over_component:
+    if class_type == MonochromaticClassType.MONOCHROMATIC:
         # we try again until we find no other component to merge
         # new opinions may appear later
         # could be most probably implemented smarter

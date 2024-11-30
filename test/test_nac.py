@@ -955,7 +955,7 @@ def test_all_NAC_colorings(
             graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            use_chromatic_partitions=True,
+            monochromatic_class_type=nac.MonochromaticClassType.MONOCHROMATIC,
             use_decompositions=use_decompositions,
             use_has_coloring_check=False,
             seed=42,  # this is potentially dangerous

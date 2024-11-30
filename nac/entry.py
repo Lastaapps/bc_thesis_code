@@ -13,13 +13,14 @@ from nac.single import (
     has_cartesian_NAC_coloring_impl,
     single_cartesian_NAC_coloring_impl,
 )
+from nac.monochromatic_classes import MonochromaticClassType
 
 
 def NAC_colorings(
     graph: nx.Graph,
     algorithm: str = "subgraphs",
     relabel_strategy: str = "none",
-    use_chromatic_partitions: bool = True,
+    monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     use_decompositions: bool = True,
     remove_vertices_cnt: int = 0,
     use_has_coloring_check: bool = True,
@@ -29,7 +30,7 @@ def NAC_colorings(
         self=graph,
         algorithm=algorithm,
         relabel_strategy=relabel_strategy,
-        use_chromatic_partitions=use_chromatic_partitions,
+        monochromatic_class_type=monochromatic_class_type,
         use_decompositions=use_decompositions,
         is_cartesian=False,
         remove_vertices_cnt=remove_vertices_cnt,
@@ -42,7 +43,7 @@ def cartesian_NAC_colorings(
     graph: nx.Graph,
     algorithm: str = "subgraphs",
     relabel_strategy: str = "none",
-    use_chromatic_partitions: bool = True,
+    monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     use_decompositions: bool = True,
     use_has_coloring_check: bool = True,
     seed: int | None = None,
@@ -51,7 +52,7 @@ def cartesian_NAC_colorings(
         self=graph,
         algorithm=algorithm,
         relabel_strategy=relabel_strategy,
-        use_chromatic_partitions=use_chromatic_partitions,
+        monochromatic_class_type=monochromatic_class_type,
         use_decompositions=use_decompositions,
         is_cartesian=True,
         remove_vertices_cnt=0,

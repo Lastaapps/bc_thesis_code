@@ -37,10 +37,13 @@ def _filter_triangle_only_laman_graphs(graphs) -> filter:
         graphs,
     )
 
+
 def _filter_non_connected(graphs: Iterable[Graph]) -> Iterable[Graph]:
     for graph in graphs:
         if nx.is_connected(graph):
             yield graph
+
+
 ################################################################################
 
 
@@ -130,6 +133,7 @@ def _convert_g6_to_int(from_path: str, to_path: str):
             output_file.write(str(graph.to_int()))
         output_file.write("}")
 
+
 def load_graph6_graphs(
     dir: str,
 ) -> List[Graph]:
@@ -155,8 +159,10 @@ def load_graph6_graphs(
 
     return graphs
 
+
 def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
     return load_graph6_graphs(os.path.join(STORE_DIR, "no_3_nor_4_cycles"))
+
 
 ################################################################################
 # Random graphs generation and search
