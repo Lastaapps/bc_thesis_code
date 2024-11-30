@@ -730,6 +730,8 @@ NAC_ALGORITHMS = [
                 # "beam_neighbors_max_triangles",
                 # "components_biggest",
                 # "components_spredded",
+                "kernighan_lin",
+                "cuts",
             ]
             for size in [1, 4]
         ]
