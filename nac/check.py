@@ -16,13 +16,16 @@ from nac.util import NiceGraph
 # how many times was the routine called
 _NAC_CHECK_IS_NAC_COLORING = 0
 _NAC_CHECK_CYCLE_MASK = 0
+_NAC_SUBGRAPHS_NO_INTERSECTION = 0
 
 
 def _NAC_check_called_reset():
     global _NAC_CHECK_IS_NAC_COLORING
     global _NAC_CHECK_CYCLE_MASK
+    global _NAC_SUBGRAPHS_NO_INTERSECTION
     _NAC_CHECK_IS_NAC_COLORING = 0
     _NAC_CHECK_CYCLE_MASK = 0
+    _NAC_SUBGRAPHS_NO_INTERSECTION = 0
 
 
 def NAC_check_called() -> Tuple[int, int]:

@@ -1575,6 +1575,7 @@ def _NAC_colorings_subgraphs(
         vertices_1 = mask_to_vertices(colorings_1[1])
         vertices_2 = mask_to_vertices(colorings_2[1])
         if len(vertices_1.intersection(vertices_2)) <= 1:
+            nac.check._NAC_SUBGRAPHS_NO_INTERSECTION += 1
 
             def generator() -> Iterator[int]:
                 for c1 in epoch1:
