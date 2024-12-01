@@ -924,6 +924,45 @@ NAC_TEST_CASES: List[NACTestCase] = [
         126,
         None,  # unknown, yet
     ),
+    NACTestCase(
+        "cycles_destroyer",
+        Graph.from_vertices_and_edges(
+            list(range(14 + 1)),
+            [
+                (0, 3),
+                (0, 8),
+                (0, 12),
+                (0, 14),
+                (0, 9),
+                (0, 5),
+                (1, 13),
+                (1, 2),
+                (1, 8),
+                (1, 10),
+                (2, 11),
+                (2, 7),
+                (2, 9),
+                (3, 6),
+                (4, 14),
+                (4, 13),
+                (5, 9),
+                (5, 6),
+                (6, 9),
+                (6, 10),
+                (6, 8),
+                (7, 10),
+                (7, 11),
+                (8, 10),
+                (9, 10),
+                (10, 12),
+                (11, 13),
+                (11, 12),
+                (12, 14),
+            ],
+        ),
+        68,
+        None,  # unknown, yet
+    ),
 ]
 
 
@@ -940,12 +979,20 @@ NAC_TEST_CASES: List[NACTestCase] = [
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_decompositions", [True, False])
+@pytest.mark.parametrize(
+    "class_type",
+    [
+        nac.MonochromaticClassType.MONOCHROMATIC,
+        nac.MonochromaticClassType.TRIANGLES,
+    ],
+)
 def test_all_NAC_colorings(
     graph: nx.Graph,
     colorings_no: int,
     algorithm: str,
     relabel_strategy: str,
     use_decompositions: bool,
+    class_type: nac.MonochromaticClassType,
 ):
     # print(f"\nTested graph: {graph=}")
     # print(nx.nx_agraph.to_agraph(graph))
@@ -955,7 +1002,7 @@ def test_all_NAC_colorings(
             graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            monochromatic_class_type=nac.MonochromaticClassType.TRIANGLES,
+            monochromatic_class_type=class_type,
             use_decompositions=use_decompositions,
             use_has_coloring_check=False,
             seed=42,  # this is potentially dangerous
@@ -1079,6 +1126,13 @@ def test__check_for_simple_stable_cut(graph: nx.Graph, coloring: Optional[NACCol
 @pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
 @pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
 @pytest.mark.parametrize("use_decompositions", [True, False])
+@pytest.mark.parametrize(
+    "class_type",
+    [
+        nac.MonochromaticClassType.MONOCHROMATIC,
+        nac.MonochromaticClassType.TRIANGLES,
+    ],
+)
 @pytest.mark.skip(
     "Cartesian NAC coloring is slightly broken and I don't care at the moment"
 )
@@ -1088,6 +1142,7 @@ def test_all_cartesian_NAC_colorings(
     algorithm: str,
     relabel_strategy: str,
     use_decompositions: bool,
+    class_type: nac.MonochromaticClassType,
 ):
     # print(f"\nTested graph: {graph=}")
     coloring_list = list(
@@ -1095,7 +1150,8 @@ def test_all_cartesian_NAC_colorings(
             graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            use_decompositions_decomposition=use_decompositions,
+            use_decompositions=use_decompositions,
+            monochromatic_class_type=class_type,
             use_has_coloring_check=False,
         )
     )

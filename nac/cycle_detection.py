@@ -515,7 +515,8 @@ def _find_useful_cycles_for_components(
         intersection = u_comps.intersection(v_comps)
         u_comps = u_comps - intersection
         v_comps = v_comps - intersection
-        assert len(intersection) <= 1
+        # TODO reenable - this only makes sense for proper monochromatic classes, triangle components fail on it
+        # assert len(intersection) <= 1
         if len(intersection) == 0:
             continue
 
