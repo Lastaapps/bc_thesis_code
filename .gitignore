@@ -21,5 +21,4 @@ venv
 !NAC_search.ipynb
 !NAC_benchmark.ipynb
 !NAC_benchmark_presentation.ipynb
-graphs_store
 .vscode
