@@ -142,6 +142,7 @@ def load_graph6_graphs_from_dir(
 
     return graphs
 
+
 def load_graph6_graphs_from_file(
     path: str,
 ) -> List[Graph]:
@@ -168,11 +169,16 @@ def load_graph6_graphs_from_file(
 def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
     return load_graph6_graphs_from_dir(os.path.join(STORE_DIR, "no_3_nor_4_cycles"))
 
+
 def load_globally_rigid_graphs() -> List[Graph]:
     return load_graph6_graphs_from_file(os.path.join(RANDOM_DIR, "globally_rigid.g6"))
 
+
 def load_sparse_with_few_colorings_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_file(os.path.join(RANDOM_DIR, "sparse_with_few_colorings.g6"))
+    return load_graph6_graphs_from_file(
+        os.path.join(RANDOM_DIR, "sparse_with_few_colorings.g6")
+    )
+
 
 ################################################################################
 # Random graphs generation and search

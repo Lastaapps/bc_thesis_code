@@ -1546,9 +1546,9 @@ def _NAC_colorings_subgraphs(
         colorings_1: Tuple[Iterable[int], int],
         colorings_2: Tuple[Iterable[int], int],
     ) -> Tuple[Iterable[int], int]:
+
         (epoch1, subgraph_mask_1) = colorings_1
         (epoch2, subgraph_mask_2) = colorings_2
-
         epoch1 = RepeatableIterator(epoch1)
         epoch2 = RepeatableIterator(epoch2)
         # epoch2_switched = ( # could be RepeatableIterator
@@ -1557,6 +1557,37 @@ def _NAC_colorings_subgraphs(
             [coloring ^ subgraph_mask_2 for coloring in epoch2]
         )
 
+        # if the subgraphs share no vertices, they cannot
+        # form any almost cycle and therefore all the checks can be skipped
+        def mask_to_vertices(mask: int) -> Set[int]:
+            graph_vertices: Set[int] = set()
+            for i, edges in enumerate(component_to_edges):
+                address = 1 << i
+
+                if address & mask == 0:
+                    continue
+
+                for u, v in edges:
+                    graph_vertices.add(u)
+                    graph_vertices.add(v)
+            return graph_vertices
+
+        vertices_1 = mask_to_vertices(colorings_1[1])
+        vertices_2 = mask_to_vertices(colorings_2[1])
+        if len(vertices_1.intersection(vertices_2)) <= 1:
+
+            def generator() -> Iterator[int]:
+                for c1 in epoch1:
+                    for c2, c2s in zip(epoch2, epoch2_switched):
+                        yield c1 | c2
+                        yield c1 | c2s
+
+            return (
+                generator(),
+                subgraph_mask_1 | subgraph_mask_2,
+            )
+
+        # if at least two vertices are shared, we need to do the full check
         return (
             itertools.chain(
                 _subgraphs_join_epochs(
