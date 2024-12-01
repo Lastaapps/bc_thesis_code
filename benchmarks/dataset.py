@@ -6,16 +6,11 @@ The middle part generates and loads some not as interesting graph classes
 The bottom part generates sparse graphs of the given size.
 """
 
-from collections import defaultdict
 import os
 import random
 import re
-import sys
 import math
-import urllib.request
-from enum import Enum
 import networkx as nx
-import zipfile
 from typing import *
 
 import networkx as nx
@@ -23,10 +18,11 @@ import nac
 from nac.util import NiceGraph as Graph
 
 STORE_DIR = os.path.join("graphs_store")
+RANDOM_DIR = os.path.join(STORE_DIR, "random")
 LAMAN_DIR_NAUTY = os.path.join(STORE_DIR, "nauty")
 LAMAN_DIR = os.path.join(LAMAN_DIR_NAUTY, "laman_some")
 LAMAN_DIR_DEGREE_3_PLUS = os.path.join(LAMAN_DIR_NAUTY, "laman_some_degree_3_plus")
-LAMAN_DIR_RANDOM = os.path.join(STORE_DIR, "random", "laman")
+LAMAN_DIR_RANDOM = os.path.join(RANDOM_DIR, "laman")
 GENERAL_DIR = os.path.join(STORE_DIR, "general-graphs")
 
 
@@ -134,7 +130,7 @@ def _convert_g6_to_int(from_path: str, to_path: str):
         output_file.write("}")
 
 
-def load_graph6_graphs(
+def load_graph6_graphs_from_dir(
     dir: str,
 ) -> List[Graph]:
     graphs: List[Graph] = []
@@ -142,27 +138,41 @@ def load_graph6_graphs(
     for file in os.listdir(dir):
         path = os.path.join(dir, file)
 
-        if file.endswith(".g6"):
-            # print(f"Loading file {path}")
+        graphs += load_graph6_graphs_from_file(path)
 
-            graphs.extend(nx.read_graph6(path))
-        if file.endswith(".g6") or file.endswith(".s6"):
-            # print(f"Loading file {path}")
+    return graphs
 
-            with open(path, mode="rb") as input_file:
-                for line in input_file:
-                    line = line.strip()
-                    if not len(line):
-                        continue
-                    g = nx.from_sparse6_bytes(line.__bytes__())
-                    graphs.append(Graph(g))
+def load_graph6_graphs_from_file(
+    path: str,
+) -> List[Graph]:
+    graphs: List[Graph] = []
+
+    if path.endswith(".g6"):
+        # print(f"Loading file {path}")
+
+        graphs.extend(nx.read_graph6(path))
+    if path.endswith(".s6"):
+        # print(f"Loading file {path}")
+
+        with open(path, mode="rb") as input_file:
+            for line in input_file:
+                line = line.strip()
+                if not len(line):
+                    continue
+                g = nx.from_sparse6_bytes(line.__bytes__())
+                graphs.append(Graph(g))
 
     return graphs
 
 
 def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
-    return load_graph6_graphs(os.path.join(STORE_DIR, "no_3_nor_4_cycles"))
+    return load_graph6_graphs_from_dir(os.path.join(STORE_DIR, "no_3_nor_4_cycles"))
 
+def load_globally_rigid_graphs() -> List[Graph]:
+    return load_graph6_graphs_from_file(os.path.join(RANDOM_DIR, "globally_rigid.g6"))
+
+def load_sparse_with_few_colorings_graphs() -> List[Graph]:
+    return load_graph6_graphs_from_file(os.path.join(RANDOM_DIR, "sparse_with_few_colorings.g6"))
 
 ################################################################################
 # Random graphs generation and search
