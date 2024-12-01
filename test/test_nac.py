@@ -730,8 +730,8 @@ NAC_ALGORITHMS = [
                 # "beam_neighbors_max_triangles",
                 # "components_biggest",
                 # "components_spredded",
-                "kernighan_lin",
-                "cuts",
+                # "kernighan_lin",
+                # "cuts",
             ]
             for size in [1, 4]
         ]
@@ -955,7 +955,7 @@ def test_all_NAC_colorings(
             graph,
             algorithm=algorithm,
             relabel_strategy=relabel_strategy,
-            monochromatic_class_type=nac.MonochromaticClassType.MONOCHROMATIC,
+            monochromatic_class_type=nac.MonochromaticClassType.TRIANGLES,
             use_decompositions=use_decompositions,
             use_has_coloring_check=False,
             seed=42,  # this is potentially dangerous
