@@ -39,7 +39,7 @@ import nac.check
 
 
 def _coloring_from_mask(
-    vertices: List[int],
+    ordered_comp_ids: List[int],
     mask: int,
     component_to_edges: List[List[Edge]],
     allow_mask: int | None = None,
@@ -47,10 +47,10 @@ def _coloring_from_mask(
 
     # TODO use numpy and boolean addressing
     if allow_mask is None:
-        allow_mask = 2 ** len(vertices) - 1
+        allow_mask = 2 ** len(ordered_comp_ids) - 1
 
     red, blue = [], []  # set(), set()
-    for i, e in enumerate(vertices):
+    for i, e in enumerate(ordered_comp_ids):
         address = 1 << i
 
         if address & allow_mask == 0:
@@ -63,11 +63,11 @@ def _coloring_from_mask(
 
     # numpy impl, ~10% slower
     # if allow_mask is not None:
-    #     vertices = vertices[allow_mask]
+    #     ordered_comp_ids = ordered_comp_ids[allow_mask]
     #     mask = mask[allow_mask]
 
-    # red_vert = vertices[mask]
-    # blue_vert = vertices[~mask]
+    # red_vert = ordered_comp_ids[mask]
+    # blue_vert = ordered_comp_ids[~mask]
 
     # red = [edge for edges in red_vert for edge in component_to_edges[edges]]
     # blue = [edge for edges in blue_vert for edge in component_to_edges[edges]]
@@ -81,12 +81,12 @@ def _NAC_colorings_naive(
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
 ) -> Iterable[NACColoring]:
-    vertices = list(t_graph.nodes())
+    comp_ids = list(t_graph.nodes())
 
     # iterate all the coloring variants
     # division by 2 is used as the problem is symmetrical
-    for mask in range(1, 2 ** len(vertices) // 2):
-        coloring = _coloring_from_mask(vertices, mask, component_to_edges)
+    for mask in range(1, 2 ** len(comp_ids) // 2):
+        coloring = _coloring_from_mask(comp_ids, mask, component_to_edges)
 
         if not check_selected_NAC_coloring(graph, coloring):
             continue
@@ -99,11 +99,11 @@ def _create_bitmask_for_t_graph_cycle(
     graph: nx.Graph,
     component_to_edges: Callable[[int], List[Edge]],
     cycle: Tuple[int, ...],
-    local_vertices: Set[int] | None = None,
+    local_ordered_comp_ids: Set[int] | None = None,
 ) -> Tuple[int, int]:
     """
-    Creates a bit mask (template) to match vertices in the cycle
-    and a mask matching vertices of the cycle that make NAC coloring
+    Creates a bit mask (template) to match components in the cycle
+    and a mask matching components of the cycle that make NAC coloring
     impossible if they are the only ones with different color
 
     Parameters
@@ -118,8 +118,8 @@ def _create_bitmask_for_t_graph_cycle(
 
     template = 0
     valid = 0
-    # template = np.zeros(len(vertices), dtype=np.bool)
-    # valid = np.zeros(len(vertices), dtype=np.bool)
+    # template = np.zeros(len(ordered_comp_ids), dtype=np.bool)
+    # valid = np.zeros(len(ordered_comp_id), dtype=np.bool)
 
     for v in cycle:
         template |= 1 << v
@@ -147,9 +147,9 @@ def _create_bitmask_for_t_graph_cycle(
         intersections_next = vertices_next.intersection(vertices_curr)
         # print(f"{intersections_prev=} {intersections_next=}")
 
-        if local_vertices is not None:
-            intersections_prev = intersections_prev.intersection(local_vertices)
-            intersections_next = intersections_next.intersection(local_vertices)
+        if local_ordered_comp_ids is not None:
+            intersections_prev = intersections_prev.intersection(local_ordered_comp_ids)
+            intersections_next = intersections_next.intersection(local_ordered_comp_ids)
 
         for p in intersections_prev:
             neighbors = set(graph.neighbors(p))
@@ -300,8 +300,8 @@ def _split_and_find(
         sum(local_chunk_sizes[: length // 2]),
         sum(local_chunk_sizes[length // 2 :]),
     )
-    ordered_vertices = search_func(local_graph, sizes)
-    groups = (ordered_vertices[: sizes[0]], ordered_vertices[sizes[0] :])
+    ordered_comp_ids = search_func(local_graph, sizes)
+    groups = (ordered_comp_ids[: sizes[0]], ordered_comp_ids[sizes[0] :])
     graphs = tuple(nx.induced_subgraph(local_graph, g) for g in groups)
     assert len(graphs) == 2
     return _split_and_find(
@@ -314,24 +314,24 @@ def _subgraphs_strategy_degree_cycles(
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
-    degree_ordered_vertices = _degree_ordered_nodes(t_graph)
+    degree_ordered_comp_ids = _degree_ordered_nodes(t_graph)
     vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
 
-    ordered_vertices: List[int] = []
-    used_vertices: Set[int] = set()
-    for v in degree_ordered_vertices:
-        # Handle vertices with no cycles
-        if v not in used_vertices:
-            ordered_vertices.append(v)
-            used_vertices.add(v)
+    ordered_comp_ids: List[int] = []
+    used_comp_ids: Set[int] = set()
+    for v in degree_ordered_comp_ids:
+        # Handle components with no cycles
+        if v not in used_comp_ids:
+            ordered_comp_ids.append(v)
+            used_comp_ids.add(v)
 
         for cycle in vertex_cycles[v]:
             for u in cycle:
-                if u in used_vertices:
+                if u in used_comp_ids:
                     continue
-                ordered_vertices.append(u)
-                used_vertices.add(u)
-    return ordered_vertices
+                ordered_comp_ids.append(u)
+                used_comp_ids.add(u)
+    return ordered_comp_ids
 
 
 def _subgraphs_strategy_cycles(
@@ -339,18 +339,18 @@ def _subgraphs_strategy_cycles(
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
-    degree_ordered_vertices = _degree_ordered_nodes(t_graph)
+    degree_ordered_comp_ids = _degree_ordered_nodes(t_graph)
     vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
 
-    ordered_vertices: List[int] = []
-    used_vertices: Set[int] = set()
-    all_vertices = deque(degree_ordered_vertices)
+    ordered_comp_ids: List[int] = []
+    used_comp_ids: Set[int] = set()
+    all_comp_ids = deque(degree_ordered_comp_ids)
 
-    while all_vertices:
-        v = all_vertices.popleft()
+    while all_comp_ids:
+        v = all_comp_ids.popleft()
 
         # the vertex may have been used before from a cycle
-        if v in used_vertices:
+        if v in used_comp_ids:
             continue
 
         queue: Deque[int] = deque([v])
@@ -358,18 +358,18 @@ def _subgraphs_strategy_cycles(
         while queue:
             u = queue.popleft()
 
-            if u in used_vertices:
+            if u in used_comp_ids:
                 continue
 
-            ordered_vertices.append(u)
-            used_vertices.add(u)
+            ordered_comp_ids.append(u)
+            used_comp_ids.add(u)
 
             for cycle in vertex_cycles[u]:
                 for u in cycle:
-                    if u in used_vertices:
+                    if u in used_comp_ids:
                         continue
                     queue.append(u)
-    return ordered_vertices
+    return ordered_comp_ids
 
 
 def _subgraphs_strategy_cycles_match_chunks(
@@ -379,18 +379,18 @@ def _subgraphs_strategy_cycles_match_chunks(
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
     chunk_size = chunk_sizes[0]
-    degree_ordered_vertices = _degree_ordered_nodes(t_graph)
+    degree_ordered_comp_ids = _degree_ordered_nodes(t_graph)
     vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
 
-    ordered_vertices: List[int] = []
-    used_vertices: Set[int] = set()
-    all_vertices = deque(degree_ordered_vertices)
+    ordered_comp_ids: List[int] = []
+    used_comp_ids: Set[int] = set()
+    all_comp_ids = deque(degree_ordered_comp_ids)
 
-    while all_vertices:
-        v = all_vertices.popleft()
+    while all_comp_ids:
+        v = all_comp_ids.popleft()
 
         # the vertex may have been used before from a cycle
-        if v in used_vertices:
+        if v in used_comp_ids:
             continue
 
         used_in_epoch = 0
@@ -399,35 +399,35 @@ def _subgraphs_strategy_cycles_match_chunks(
         while queue and used_in_epoch < chunk_size:
             u = queue.popleft()
 
-            if u in used_vertices:
+            if u in used_comp_ids:
                 continue
 
-            ordered_vertices.append(u)
-            used_vertices.add(u)
+            ordered_comp_ids.append(u)
+            used_comp_ids.add(u)
             used_in_epoch += 1
 
             for cycle in vertex_cycles[u]:
                 for u in cycle:
-                    if u in used_vertices:
+                    if u in used_comp_ids:
                         continue
                     queue.append(u)
 
-        while used_in_epoch < chunk_size and len(used_vertices) != len(
-            degree_ordered_vertices
+        while used_in_epoch < chunk_size and len(used_comp_ids) != len(
+            degree_ordered_comp_ids
         ):
-            v = all_vertices.pop()
-            if v in used_vertices:
+            v = all_comp_ids.pop()
+            if v in used_comp_ids:
                 continue
-            ordered_vertices.append(v)
-            used_vertices.add(v)
+            ordered_comp_ids.append(v)
+            used_comp_ids.add(v)
             used_in_epoch += 1
 
-    for v in degree_ordered_vertices:
-        if v in used_vertices:
+    for v in degree_ordered_comp_ids:
+        if v in used_comp_ids:
             continue
-        ordered_vertices.append(v)
+        ordered_comp_ids.append(v)
 
-    return ordered_vertices
+    return ordered_comp_ids
 
 
 def _subgraphs_strategy_bfs(
@@ -435,37 +435,37 @@ def _subgraphs_strategy_bfs(
     chunk_sizes: Sequence[int],
 ) -> List[int]:
     graph = nx.Graph(t_graph)
-    used_vertices: Set[int] = set()
-    ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
+    used_comp_ids: Set[int] = set()
+    ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
     for v in _degree_ordered_nodes(graph):
-        if v in used_vertices:
+        if v in used_comp_ids:
             continue
 
         index_min = min(
-            range(len(ordered_vertices_groups)),
-            key=lambda x: len(ordered_vertices_groups[x]) / chunk_sizes[x],
+            range(len(ordered_comp_ids_groups)),
+            key=lambda x: len(ordered_comp_ids_groups[x]) / chunk_sizes[x],
         )
-        target = ordered_vertices_groups[index_min]
+        target = ordered_comp_ids_groups[index_min]
 
-        added_vertices: List[int] = [v]
-        used_vertices.add(v)
+        added_comp_ids: List[int] = [v]
+        used_comp_ids.add(v)
         target.append(v)
 
         for _, u in nx.bfs_edges(graph, v):
-            if u in used_vertices:
+            if u in used_comp_ids:
                 continue
 
-            added_vertices.append(u)
+            added_comp_ids.append(u)
             target.append(u)
-            used_vertices.add(u)
+            used_comp_ids.add(u)
 
             if len(target) == chunk_sizes[index_min]:
                 break
 
-        graph.remove_nodes_from(added_vertices)
+        graph.remove_nodes_from(added_comp_ids)
 
-    return [v for group in ordered_vertices_groups for v in group]
+    return [v for group in ordered_comp_ids_groups for v in group]
 
 
 def _subgraphs_strategy_neighbors(
@@ -510,7 +510,7 @@ def _subgraphs_strategy_neighbors(
     # t_graph is just a peace of legacy code that we did not optimize away yet
     # here it serves only as a set of monochromatic components to consider
     t_graph = nx.Graph(t_graph)
-    ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
+    ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
     # if False, chunk does need to assign random component
     is_random_component_required: List[bool] = [True for _ in chunk_sizes]
@@ -523,7 +523,7 @@ def _subgraphs_strategy_neighbors(
     while t_graph.number_of_nodes() > 0:
         # TODO connected components
         # TODO run algorithm per component, not per vertex
-        # TODO omit adding vertices with only single connection when
+        # TODO omit adding components with only single connection when
         #      the chunk is almost full
 
         component_ids = list(t_graph.nodes)
@@ -531,7 +531,7 @@ def _subgraphs_strategy_neighbors(
         rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
 
         # could by avoided by having a proper subgraph
-        local_vertices: Set[int] = {
+        local_ordered_comp_ids: Set[int] = {
             v
             for comp_id, comp in enumerate(component_to_edges)
             for e in comp
@@ -541,11 +541,11 @@ def _subgraphs_strategy_neighbors(
 
         # represents index of the chosen subgraph
         chunk_index = min(
-            range(len(ordered_vertices_groups)),
-            key=lambda x: len(ordered_vertices_groups[x]) / chunk_sizes[x],
+            range(len(ordered_comp_ids_groups)),
+            key=lambda x: len(ordered_comp_ids_groups[x]) / chunk_sizes[x],
         )
         # list to add monochromatic class to
-        target = ordered_vertices_groups[chunk_index]
+        target = ordered_comp_ids_groups[chunk_index]
 
         # components already added to the subgraph
         added_components: Set[int]
@@ -602,7 +602,7 @@ def _subgraphs_strategy_neighbors(
             for u in graph.neighbors(v):
                 if u in used_vertices:
                     continue
-                if u not in local_vertices:
+                if u not in local_ordered_comp_ids:
                     continue
                 opened.add(u)
 
@@ -629,7 +629,9 @@ def _subgraphs_strategy_neighbors(
                         (
                             len(used_vertices.intersection(graph.neighbors(u))),
                             # degree
-                            -len(local_vertices.intersection(graph.neighbors(u))),
+                            -len(
+                                local_ordered_comp_ids.intersection(graph.neighbors(u))
+                            ),
                         ),
                     )
                     for u in opened
@@ -644,7 +646,7 @@ def _subgraphs_strategy_neighbors(
             # we take the common neighborhood of already used vertices and the chosen vertex
             for neighbor in used_vertices.intersection(graph.neighbors(best_vertex)):
                 # vertex is not part of the current subgraph
-                if neighbor not in local_vertices:
+                if neighbor not in local_ordered_comp_ids:
                     continue
 
                 # component of the edge incident to the best vertex
@@ -683,7 +685,7 @@ def _subgraphs_strategy_neighbors(
                     for u in graph.neighbors(v):
                         if u in used_vertices:
                             continue
-                        if u not in local_vertices:
+                        if u not in local_ordered_comp_ids:
                             continue
                         opened.add(u)
 
@@ -697,7 +699,7 @@ def _subgraphs_strategy_neighbors(
             is_random_component_required[chunk_index] = True
 
         t_graph.remove_nodes_from(added_components)
-    return [v for group in ordered_vertices_groups for v in group]
+    return [v for group in ordered_comp_ids_groups for v in group]
 
 
 def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
@@ -707,7 +709,7 @@ def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
     start_from_min: bool,
 ) -> List[int]:
     t_graph = nx.Graph(t_graph)
-    ordered_vertices_groups: List[List[int]] = [[] for _ in chunk_sizes]
+    ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
     beam_size: int = min(chunk_sizes[0], 10)
     # beam_size: int = 1024
 
@@ -723,13 +725,13 @@ def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
         queue: List[int] = [start]
 
         index_min = min(
-            range(len(ordered_vertices_groups)),
-            key=lambda x: len(ordered_vertices_groups[x]) / chunk_sizes[x],
+            range(len(ordered_comp_ids_groups)),
+            key=lambda x: len(ordered_comp_ids_groups[x]) / chunk_sizes[x],
         )
-        target = ordered_vertices_groups[index_min]
+        target = ordered_comp_ids_groups[index_min]
 
         bfs_visited: Set[int] = set([start])
-        added_vertices: Set[int] = set()
+        added_comp_ids: Set[int] = set()
 
         # it's quite beneficial to start with a triangle
         # in fact we just apply the same strategy as later
@@ -749,9 +751,9 @@ def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
             # it's gonna be slow anyway (also the graphs are small)
 
             values = [
-                len(added_vertices.intersection(t_graph.neighbors(u))) for u in queue
+                len(added_comp_ids.intersection(t_graph.neighbors(u))) for u in queue
             ]
-            # values = [(len(added_vertices.intersection(t_graph.neighbors(u))), -t_graph.degree(u)) for u in queue]
+            # values = [(len(added_comp_ids.intersection(t_graph.neighbors(u))), -t_graph.degree(u)) for u in queue]
 
             sorted_by_metric = sorted(
                 [i for i in range(len(values))],
@@ -767,7 +769,7 @@ def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
             # v = queue.pop(largest)
             # queue = queue[:beam_size]
 
-            added_vertices.add(v)
+            added_comp_ids.add(v)
             target.append(v)
 
             for u in t_graph.neighbors(v):
@@ -776,8 +778,8 @@ def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                 bfs_visited.add(u)
                 queue.append(u)
 
-        t_graph.remove_nodes_from(added_vertices)
-    return [v for group in ordered_vertices_groups for v in group]
+        t_graph.remove_nodes_from(added_comp_ids)
+    return [v for group in ordered_comp_ids_groups for v in group]
 
 
 def _subgraphs_strategy_components_deprecated(
@@ -803,24 +805,24 @@ def _subgraphs_strategy_components_deprecated(
                 keys = keys[i:]
                 break
 
-    ordered_vertices: List[int] = []
-    used_vertices: Set[int] = set()
+    ordered_comp_ids: List[int] = []
+    used_comp_ids: Set[int] = set()
 
     for key in keys:
         for component in k_components[key]:
             for v in component:
-                if v in used_vertices:
+                if v in used_comp_ids:
                     continue
-                ordered_vertices.append(v)
-                used_vertices.add(v)
+                ordered_comp_ids.append(v)
+                used_comp_ids.add(v)
 
     # make sure all the nodes were added
     for v in t_graph.nodes():
-        if v in used_vertices:
+        if v in used_comp_ids:
             continue
-        ordered_vertices.append(v)
+        ordered_comp_ids.append(v)
 
-    return ordered_vertices
+    return ordered_comp_ids
 
 
 def _subgraphs_strategy_kernighan_lin(
@@ -955,13 +957,54 @@ def _cycles_per_vertex(
     return vertex_cycles
 
 
+def _mask_to_vertices(
+    ordered_comp_ids: List[int],
+    component_to_edges: List[List[Edge]],
+    subgraph_mask: int,
+) -> Set[int]:
+    """
+    Returns vertices in the original graph
+    that are
+    """
+    graph_vertices: Set[int] = set()
+
+    for i, v in enumerate(ordered_comp_ids):
+        if (1 << i) & subgraph_mask == 0:
+            continue
+
+        edges = component_to_edges[v]
+        for u, w in edges:
+            graph_vertices.add(u)
+            graph_vertices.add(w)
+    return graph_vertices
+
+
+def _mask_to_graph(
+    ordered_comp_ids: List[int],
+    component_to_edges: List[List[Edge]],
+    subgraph_mask: int,
+) -> nx.Graph:
+    """
+    Reconstructs the graph represented by the mask given
+    """
+    graph = nx.Graph()
+
+    for i, v in enumerate(ordered_comp_ids):
+        if (1 << i) & subgraph_mask == 0:
+            continue
+
+        edges = component_to_edges[v]
+        graph.add_edges_from(edges)
+    return graph
+
+
 def _subgraphs_join_epochs(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
     from_angle_preserving_components: bool,
-    vertices: List[int],
+    ordered_comp_ids: List[int],
     epoch1: Iterable[int],
     subgraph_mask_1: int,
     epoch2: RepeatableIterator[int],
@@ -983,25 +1026,25 @@ def _subgraphs_join_epochs(
 
     subgraph_mask = subgraph_mask_1 | subgraph_mask_2
 
-    local_vertices: List[int] = []
+    local_ordered_comp_ids: List[int] = []
 
     # local vertex -> global index
     mapping: Dict[int, int] = {}
 
-    for i, v in enumerate(vertices):
+    for i, v in enumerate(ordered_comp_ids):
         if (1 << i) & subgraph_mask:
             mapping[v] = i
-            local_vertices.append(v)
+            local_ordered_comp_ids.append(v)
 
-    local_t_graph = nx.Graph(nx.induced_subgraph(t_graph, local_vertices))
+    local_t_graph = nx.Graph(nx.induced_subgraph(t_graph, local_ordered_comp_ids))
     local_cycles = find_cycles(
         graph,
         set(local_t_graph.nodes),
         component_to_edges,
     )
 
-    mapped_components_to_edges = lambda ind: component_to_edges[vertices[ind]]
-    # cycles with indices of the vertices in the global order
+    mapped_components_to_edges = lambda ind: component_to_edges[ordered_comp_ids[ind]]
+    # cycles with indices of the comp ids in the global order
     local_cycles = [tuple(mapping[c] for c in cycle) for cycle in local_cycles]
     templates = [
         _create_bitmask_for_t_graph_cycle(graph, mapped_components_to_edges, cycle)
@@ -1033,7 +1076,7 @@ def _subgraphs_join_epochs(
             continue
 
         coloring = _coloring_from_mask(
-            vertices,
+            ordered_comp_ids,
             mask,
             component_to_edges,
             subgraph_mask,
@@ -1055,7 +1098,7 @@ def _subgraph_colorings_generator(
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
-    vertices: List[int],
+    ordered_comp_ids: List[int],
     chunk_size: int,
     offset: int,
 ) -> Iterable[int]:
@@ -1066,7 +1109,7 @@ def _subgraph_colorings_generator(
                 t_graph,
                 component_to_edges,
                 check_selected_NAC_coloring,
-                vertices,
+                ordered_comp_ids,
                 chunk_size,
                 offset,
             )
@@ -1078,7 +1121,7 @@ def _subgraph_colorings_generator(
                 t_graph,
                 component_to_edges,
                 check_selected_NAC_coloring,
-                vertices,
+                ordered_comp_ids,
                 chunk_size,
                 offset,
             )
@@ -1090,7 +1133,7 @@ def _subgraph_colorings_cycles_generator(
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
-    vertices: List[int],
+    ordered_comp_ids: List[int],
     chunk_size: int,
     offset: int,
 ) -> Iterable[int]:
@@ -1099,10 +1142,10 @@ def _subgraph_colorings_cycles_generator(
     division by 2 is used as the problem is symmetrical
     """
     # The last chunk can be smaller
-    local_vertices: List[int] = vertices[offset : offset + chunk_size]
-    # print(f"Local vertices: {local_vertices}")
+    local_ordered_comp_ids: List[int] = ordered_comp_ids[offset : offset + chunk_size]
+    # print(f"Local comp_ids: {local_ordered_comp_ids}")
 
-    local_t_graph = nx.Graph(nx.induced_subgraph(t_graph, local_vertices))
+    local_t_graph = nx.Graph(nx.induced_subgraph(t_graph, local_ordered_comp_ids))
     local_cycles = find_cycles(
         graph,
         set(local_t_graph.nodes),
@@ -1110,9 +1153,11 @@ def _subgraph_colorings_cycles_generator(
     )
 
     # local -> first chunk_size vertices
-    mapping = {x: i for i, x in enumerate(local_vertices)}
+    mapping = {x: i for i, x in enumerate(local_ordered_comp_ids)}
 
-    mapped_components_to_edges = lambda ind: component_to_edges[local_vertices[ind]]
+    mapped_components_to_edges = lambda ind: component_to_edges[
+        local_ordered_comp_ids[ind]
+    ]
     local_cycles = (tuple(mapping[c] for c in cycle) for cycle in local_cycles)
     templates = [
         _create_bitmask_for_t_graph_cycle(graph, mapped_components_to_edges, cycle)
@@ -1121,12 +1166,12 @@ def _subgraph_colorings_cycles_generator(
     templates = [t for t in templates if t[1] > 0]
 
     counter = 0
-    subgraph_mask = 2 ** len(local_vertices) - 1
+    subgraph_mask = 2 ** len(local_ordered_comp_ids) - 1
     for mask in range(0, 2**chunk_size // 2):
         if _mask_matches_templates(templates, mask, subgraph_mask):
             continue
 
-        coloring = _coloring_from_mask(local_vertices, mask, component_to_edges)
+        coloring = _coloring_from_mask(local_ordered_comp_ids, mask, component_to_edges)
 
         if not check_selected_NAC_coloring(graph, coloring):
             continue
@@ -1285,8 +1330,8 @@ def _NAC_colorings_subgraphs(
     preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
     assert preferred_chunk_size >= 1
 
-    # Represents size (no. of vertices of the t-graph) of a basic subgraph
-    vertices_no = t_graph.number_of_nodes()
+    # Represents size (no. of vertices (components) of the t-graph) of a basic subgraph
+    components_no = t_graph.number_of_nodes()
 
     def create_chunk_sizes() -> List[int]:
         """
@@ -1297,12 +1342,12 @@ def _NAC_colorings_subgraphs(
         get over it.
         """
         # chunk_size = max(
-        #     int(np.sqrt(vertices_no)), min(preferred_chunk_size, vertices_no)
+        #     int(np.sqrt(components_no)), min(preferred_chunk_size, components_no)
         # )
-        # chunk_no = (vertices_no + chunk_size - 1) // chunk_size
-        chunk_no = vertices_no // preferred_chunk_size
+        # chunk_no = (components_no + chunk_size - 1) // chunk_size
+        chunk_no = components_no // preferred_chunk_size
         chunk_sizes = []
-        remaining_len = vertices_no
+        remaining_len = components_no
         for _ in range(chunk_no):
             # ceiling floats, scary
             chunk_sizes.append(
@@ -1330,17 +1375,17 @@ def _NAC_colorings_subgraphs(
 
     match order_strategy:
         case "none":
-            vertices = list(t_graph.nodes())
+            ordered_comp_ids = list(t_graph.nodes())
 
         case "random":
-            vertices = list(t_graph.nodes())
-            random.Random(seed).shuffle(vertices)
+            ordered_comp_ids = list(t_graph.nodes())
+            random.Random(seed).shuffle(ordered_comp_ids)
 
         case "degree":
-            vertices = process(lambda g, _: _degree_ordered_nodes(g))
+            ordered_comp_ids = process(lambda g, _: _degree_ordered_nodes(g))
 
         case "degree_cycles":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, _: _subgraphs_strategy_degree_cycles(
                     graph,
                     g,
@@ -1348,7 +1393,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "cycles":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, _: _subgraphs_strategy_cycles(
                     graph,
                     g,
@@ -1356,7 +1401,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "cycles_match_chunks":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_cycles_match_chunks(
                     l,
                     graph,
@@ -1365,14 +1410,14 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "bfs":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_bfs(
                     t_graph=g,
                     chunk_sizes=l,
                 )
             )
         case "neighbors":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1385,7 +1430,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "neighbors_cycle" | "neighbors_cycles":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1398,7 +1443,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "neighbors_degree":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1411,7 +1456,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "neighbors_degree_cycle":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1424,7 +1469,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "neighbors_iterative":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1437,7 +1482,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "neighbors_iterative_cycle":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_neighbors(
                     graph=graph,
                     t_graph=g,
@@ -1450,7 +1495,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "beam_neighbors":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
@@ -1459,7 +1504,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "beam_neighbors_max":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
@@ -1468,7 +1513,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "beam_neighbors_triangles":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
@@ -1477,7 +1522,7 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "beam_neighbors_max_triangles":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
@@ -1486,13 +1531,13 @@ def _NAC_colorings_subgraphs(
                 )
             )
         case "components_biggest":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_components_deprecated(
                     g, l, start_from_biggest_component=True
                 )
             )
         case "components_spredded":
-            vertices = process(
+            ordered_comp_ids = process(
                 lambda g, l: _subgraphs_strategy_components_deprecated(
                     g, l, start_from_biggest_component=False
                 )
@@ -1505,7 +1550,7 @@ def _NAC_colorings_subgraphs(
             )
             # TODO refactor later
             chunk_sizes = [len(subgraph) for subgraph in subgraph_classes]
-            vertices = [v for subgraph in subgraph_classes for v in subgraph]
+            ordered_comp_ids = [v for subgraph in subgraph_classes for v in subgraph]
         case "cuts":
             subgraph_classes = _subgraphs_strategy_cuts(
                 t_graph=t_graph,
@@ -1514,21 +1559,29 @@ def _NAC_colorings_subgraphs(
             )
             # TODO refactor later
             chunk_sizes = [len(subgraph) for subgraph in subgraph_classes]
-            vertices = [v for subgraph in subgraph_classes for v in subgraph]
+            ordered_comp_ids = [v for subgraph in subgraph_classes for v in subgraph]
         case _:
             raise ValueError(
                 f"Unknown strategy: {order_strategy}, supported: none, degree, degree_cycles, cycles, cycles_match_chunks, bfs, beam_neighbors, components_biggest, components_spredded"
             )
 
-    assert vertices_no == len(vertices)
+    assert components_no == len(ordered_comp_ids)
 
     if NAC_PRINT_SWITCH:
         print("-" * 80)
-        print(graphviz_graph(order_strategy, component_to_edges, chunk_sizes, vertices))
+        print(
+            graphviz_graph(
+                order_strategy, component_to_edges, chunk_sizes, ordered_comp_ids
+            )
+        )
         print("-" * 80)
         print(
             graphviz_t_graph(
-                t_graph, order_strategy, component_to_edges, chunk_sizes, vertices
+                t_graph,
+                order_strategy,
+                component_to_edges,
+                chunk_sizes,
+                ordered_comp_ids,
             )
         )
 
@@ -1557,23 +1610,13 @@ def _NAC_colorings_subgraphs(
             [coloring ^ subgraph_mask_2 for coloring in epoch2]
         )
 
-        # if the subgraphs share no vertices, they cannot
-        # form any almost cycle and therefore all the checks can be skipped
-        def mask_to_vertices(mask: int) -> Set[int]:
-            graph_vertices: Set[int] = set()
-            for i, edges in enumerate(component_to_edges):
-                address = 1 << i
+        vertices_1 = _mask_to_vertices(
+            ordered_comp_ids, component_to_edges, colorings_1[1]
+        )
+        vertices_2 = _mask_to_vertices(
+            ordered_comp_ids, component_to_edges, colorings_2[1]
+        )
 
-                if address & mask == 0:
-                    continue
-
-                for u, v in edges:
-                    graph_vertices.add(u)
-                    graph_vertices.add(v)
-            return graph_vertices
-
-        vertices_1 = mask_to_vertices(colorings_1[1])
-        vertices_2 = mask_to_vertices(colorings_2[1])
         if len(vertices_1.intersection(vertices_2)) <= 1:
             nac.check._NAC_SUBGRAPHS_NO_INTERSECTION += 1
 
@@ -1597,7 +1640,7 @@ def _NAC_colorings_subgraphs(
                     component_to_edges,
                     check_selected_NAC_coloring,
                     from_angle_preserving_components,
-                    vertices,
+                    ordered_comp_ids,
                     epoch1,
                     subgraph_mask_1,
                     epoch2,
@@ -1609,7 +1652,7 @@ def _NAC_colorings_subgraphs(
                     component_to_edges,
                     check_selected_NAC_coloring,
                     from_angle_preserving_components,
-                    vertices,
+                    ordered_comp_ids,
                     epoch1,
                     subgraph_mask_1,
                     epoch2_switched,
@@ -1621,7 +1664,7 @@ def _NAC_colorings_subgraphs(
 
     # Holds all the NAC colorings for a subgraph represented by the second bitmask
     all_epochs: List[Tuple[Iterable[int], int]] = []
-    # No. of vertices already processed in previous chunks
+    # No. of components already processed in previous chunks
     offset = 0
     for chunk_size in chunk_sizes:
 
@@ -1633,7 +1676,7 @@ def _NAC_colorings_subgraphs(
                     t_graph,
                     component_to_edges,
                     check_selected_NAC_coloring,
-                    vertices,
+                    ordered_comp_ids,
                     chunk_size,
                     offset,
                 ),
@@ -1942,23 +1985,11 @@ def _NAC_colorings_subgraphs(
 
         case "shared_vertices":
 
-            def graph_to_vertices(allow_mask: int) -> Set[int]:
-                graph_vertices: Set[int] = set()
-                for i, edges in enumerate(component_to_edges):
-                    address = 1 << i
-
-                    if address & allow_mask == 0:
-                        continue
-
-                    for u, v in edges:
-                        graph_vertices.add(u)
-                        graph_vertices.add(v)
-                return graph_vertices
-
             while len(all_epochs) > 1:
                 best = (0, 0, 1)
                 subgraph_vertices: List[Set[int]] = [
-                    graph_to_vertices(allow_mask) for _, allow_mask in all_epochs
+                    _mask_to_vertices(ordered_comp_ids, component_to_edges, allow_mask)
+                    for _, allow_mask in all_epochs
                 ]
                 for i in range(0, len(subgraph_vertices)):
                     for j in range(i + 1, len(subgraph_vertices)):
@@ -1984,18 +2015,13 @@ def _NAC_colorings_subgraphs(
             - unspecified
             """
 
-            def mask_to_graph(allow_mask: int) -> Tuple[List[Edge], List[Set[int]]]:
+            def mask_to_edges_and_components(
+                allow_mask: int,
+            ) -> Tuple[List[Edge], List[Set[int]]]:
                 """
                 Creates a graph for the monochromatic classes given by the mask
                 """
-                graph = nx.Graph()
-                for i, edges in enumerate(component_to_edges):
-                    address = 1 << i
-
-                    if address & allow_mask == 0:
-                        continue
-
-                    graph.add_edges_from(edges)
+                graph = _mask_to_graph(ordered_comp_ids, component_to_edges, allow_mask)
                 return list(graph.edges), list(nx.connected_components(graph))
 
             def find_potential_cycles(
@@ -2081,7 +2107,7 @@ def _NAC_colorings_subgraphs(
                 _, mask = mask
 
                 # create a graph representation
-                graph_props = mask_to_graph(mask)
+                graph_props = mask_to_edges_and_components(mask)
                 mapped_graphs[mask] = graph_props
 
                 on_new_graph(mask, graph_props, checks_limit=i)
@@ -2103,7 +2129,7 @@ def _NAC_colorings_subgraphs(
 
                 # register the new graph
                 mask = res[1]
-                graph_props = mask_to_graph(mask)
+                graph_props = mask_to_edges_and_components(mask)
                 mapped_graphs[mask] = graph_props
                 on_new_graph(mask, graph_props)
 
@@ -2116,15 +2142,15 @@ def _NAC_colorings_subgraphs(
             raise ValueError(f"Unknown merge strategy: {merge_strategy}")
 
     assert len(all_epochs) == 1
-    expected_subgraph_mask = 2**vertices_no - 1
+    expected_subgraph_mask = 2**components_no - 1
     assert expected_subgraph_mask == all_epochs[0][1]
 
     for mask in all_epochs[0][0]:
         # print(f"Got mask={bin(mask)}")
-        if mask == 0 or mask.bit_count() == len(vertices):
+        if mask == 0 or mask.bit_count() == len(ordered_comp_ids):
             continue
 
-        coloring = _coloring_from_mask(vertices, mask, component_to_edges)
+        coloring = _coloring_from_mask(ordered_comp_ids, mask, component_to_edges)
 
         yield (coloring[0], coloring[1])
         yield (coloring[1], coloring[0])

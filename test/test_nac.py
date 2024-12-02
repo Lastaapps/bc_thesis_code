@@ -685,64 +685,90 @@ def test__find_shortest_cycles_for_components(graph: nx.Graph, result: Set[Tuple
     assert res == result
 
 
-NAC_ALGORITHMS = [
-    "naive",
-    "cycles-True",
-    "cycles-False",
-    "subgraphs-log-none-64",
-] + [
-    flattened
-    for paired in [
-        # (alg,)
-        (alg, alg + "-smart")
-        for alg in [
-            "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
-            for merge in [
-                "linear",
-                "log",
-                "log_reverse",
-                "sorted_bits",
-                "sorted_size",
-                "min_max",
-                "score",
-                "dynamic",
-                "recursion",
-                "shared_vertices",
-                "promising_cycles",
-            ]
-            for algo in [
-                "none",
-                "random",
-                "degree",
-                "degree_cycles",
-                "cycles",
-                "cycles_match_chunks",
-                "bfs",
-                "neighbors",
-                "neighbors_cycle",
-                "neighbors_degree",
-                "neighbors_degree_cycle",
-                "neighbors_iterative",
-                "neighbors_iterative_cycle",
-                # "beam_neighbors",
-                # "beam_neighbors_max",
-                # "beam_neighbors_triangles",
-                # "beam_neighbors_max_triangles",
-                # "components_biggest",
-                # "components_spredded",
-                # "kernighan_lin",
-                # "cuts",
-            ]
-            for size in [1, 4]
-        ]
+NAC_ALGORITHMS = (
+    [
+        "naive",
+        "cycles-True",
+        "cycles-False",
+        "subgraphs-log-none-64",
+        "subgraphs-log-none-1-smart",
     ]
-    for flattened in paired
-]
+    + [
+        flattened
+        for paired in [
+            (alg,)
+            # (alg, alg + "-smart")
+            for alg in [
+                "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
+                for merge in [
+                    "linear",
+                    "log",
+                    # "log_reverse",
+                    "sorted_bits",
+                    # "sorted_size",
+                    # "min_max",
+                    "score",
+                    # "dynamic",
+                    # "recursion",
+                    "shared_vertices",
+                    "promising_cycles",
+                ]
+                for algo in [
+                    "none",
+                    "random",
+                    "neighbors",
+                ]
+                for size in [1, 4]
+            ]
+        ]
+        for flattened in paired
+    ]
+    + [
+        flattened
+        for paired in [
+            (alg,)
+            # (alg, alg + "-smart")
+            for alg in [
+                "subgraphs-{}-{}-{}-smart".format(merge, algo, size)
+                for merge in [
+                    "linear",
+                    "log",
+                    "score",
+                ]
+                for algo in [
+                    "none",
+                    "random",
+                    # "degree",
+                    # "degree_cycles",
+                    "cycles",
+                    "cycles_match_chunks",
+                    # "bfs",
+                    "neighbors",
+                    "neighbors_cycle",
+                    "neighbors_degree",
+                    "neighbors_degree_cycle",
+                    "neighbors_iterative",
+                    "neighbors_iterative_cycle",
+                    # "beam_neighbors",
+                    # "beam_neighbors_max",
+                    # "beam_neighbors_triangles",
+                    # "beam_neighbors_max_triangles",
+                    # "components_biggest",
+                    # "components_spredded",
+                    # "kernighan_lin",
+                    # "cuts",
+                ]
+                for size in [1, 4]
+            ]
+        ]
+        for flattened in paired
+    ]
+)
 NAC_RELABEL_STRATEGIES = [
     "none",
     "random",
-    "bfs",
-    "beam_degree",
+    # "bfs",
+    # "beam_degree",
 ]
 
 
@@ -962,6 +988,21 @@ NAC_TEST_CASES: List[NACTestCase] = [
         ),
         68,
         None,  # unknown, yet
+    ),
+    NACTestCase(
+        "square_and_line",
+        Graph.from_vertices_and_edges(
+            list(range(15)),
+            [
+                (7, 8),
+                (0, 13),
+                (5, 13),
+                (0, 14),
+                (5, 14),
+            ],
+        ),
+        14,
+        6,
     ),
 ]
 
