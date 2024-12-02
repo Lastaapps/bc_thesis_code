@@ -23,4 +23,5 @@ venv
 !NAC_benchmark_presentation.ipynb
 !NAC_benchmark_latex_export.ipynb
 !NAC_playground.ipynb
+figures
 .vscode
