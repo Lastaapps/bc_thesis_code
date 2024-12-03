@@ -16,18 +16,22 @@ import networkx as nx
 import nac
 from nac.util import NiceGraph as Graph
 from benchmarks import dataset
+
 # TODO import PyRigi
 
 ################################################################################
+
 
 class RangeWithCount(NamedTuple):
     """
     Represents range of values with assigned count
     The high bound is excluded
     """
+
     low: int
     high: int
     cnt: int
+
 
 def _write_graphs_to_file(
     path: str | Path,
@@ -36,6 +40,7 @@ def _write_graphs_to_file(
     with open(path, "wb") as f:
         for graph in graphs:
             f.write(nx.readwrite.graph6.to_graph6_bytes(graph, header=False))
+
 
 def _generate_random_graphs_impl(
     ranges_with_count: Sequence[RangeWithCount],
@@ -64,12 +69,16 @@ def _generate_random_graphs_impl(
         for _ in range(len(graphs)):
             rand.randint(0, 2**30)
 
-        graphs += [generate_graph(n, rand.randint(0, 2**30)) for _ in range(count - len(graphs))]
+        graphs += [
+            generate_graph(n, rand.randint(0, 2**30))
+            for _ in range(count - len(graphs))
+        ]
 
         _write_graphs_to_file(path, graphs)
 
         results.append((n, graphs))
     return results
+
 
 # takes ~1h 30m on my laptop
 def generate_random_laman_graphs(
@@ -88,9 +97,11 @@ def generate_random_laman_graphs(
     return _generate_random_graphs_impl(
         ranges,
         lambda n, seed: _generate_laman_graph(n, seed),
-        dir, filename_template,
+        dir,
+        filename_template,
         seed,
     )
+
 
 def generate_random_globally_rigid_graphs(
     dir: str = os.path.join(dataset.RANDOM_DIR, "globally_rigid"),
@@ -108,9 +119,11 @@ def generate_random_globally_rigid_graphs(
     return _generate_random_graphs_impl(
         ranges,
         lambda n, seed: _generate_globally_rigid_graph(n, seed),
-        dir, filename_template,
+        dir,
+        filename_template,
         seed,
     )
+
 
 def generate_random_sparse_with_few_colorings_graphs(
     dir: str = os.path.join(dataset.RANDOM_DIR, "sparse_with_few_colorings"),
@@ -128,7 +141,8 @@ def generate_random_sparse_with_few_colorings_graphs(
     return _generate_random_graphs_impl(
         ranges,
         lambda n, seed: _generate_NAC_critical_graph(n, seed),
-        dir, filename_template,
+        dir,
+        filename_template,
         seed,
     )
 
@@ -137,23 +151,20 @@ def generate_random_sparse_with_few_colorings_graphs(
 # Generate a single graph of the given class
 ################################################################################
 
+
 def _generate_laman_graph(
     n: int,
     seed: int | None,
     min_degree: int | None = None,
 ) -> nx.Graph:
     import pyrigi.graph
+
     rand = random.Random(seed)
 
     while True:
-        graph = pyrigi.Graph(
-            nx.gnm_random_graph(n, 2 * n - 3, rand.randint(0, 2**30))
-        )
+        graph = pyrigi.Graph(nx.gnm_random_graph(n, 2 * n - 3, rand.randint(0, 2**30)))
         if min_degree is not None:
-            if (
-                next((1 for d in nx.degree(graph) if d < min_degree), None)
-                is not None
-            ):
+            if next((1 for d in nx.degree(graph) if d < min_degree), None) is not None:
                 continue
         if not nx.is_connected(graph):
             continue
@@ -230,6 +241,7 @@ def _generate_globally_rigid_graph(
     or no NAC colorings what so ever
     """
     import pyrigi
+
     rand = random.Random(seed)
 
     # this formula comes from a related
@@ -239,7 +251,9 @@ def _generate_globally_rigid_graph(
 
     p = (2 * math.log(n, log_base) / (n * n)) ** (1 / 3)
     while True:
-        graph = pyrigi.Graph(nx.fast_gnp_random_graph(n, p, seed=rand.randint(0, 2**30)))
+        graph = pyrigi.Graph(
+            nx.fast_gnp_random_graph(n, p, seed=rand.randint(0, 2**30))
+        )
         if not nx.is_connected(graph):
             continue
         if len(nac.find_monochromatic_classes(graph)[1]) == 1:
