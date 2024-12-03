@@ -54,5 +54,7 @@ pkgs.mkShell {
     ipython~=8.29.0 \
     ipykernel~=6.29.0 \
     jupyterlab~=4.2.0 \
+    \
+    pyrigi==0.3.0 \
   '';
 }
