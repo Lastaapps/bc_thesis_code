@@ -13,8 +13,15 @@ from nac.data_type import Edge
 
 
 class MonochromaticClassType(Enum):
+    """
+    Represents the way monochromatic classes are found.
+    """
+
+    """Each edge is its own monochromatic class."""
     EDGES = "EDGES"
+    """Each triangle-connected component it its own monochromatic class."""
     TRIANGLES = "TRIANGLES"
+    """Creates monochromatic classes according to the paper."""
     MONOCHROMATIC = "MONOCHROMATIC"
 
 

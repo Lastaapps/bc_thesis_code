@@ -1,3 +1,22 @@
+"""
+This modules is the main entry point for the NAC-colorings search.
+The main entry point is the function NAC_colorings_impl.
+Then the graph given is relabeled according to
+the given relabel strategy.
+
+Then algorithm argument is parsed and either
+Naive algorithm (_NAC_colorings_naive),
+Naive alg. optimized using cycles mask matching (_NAC_colorings_cycles) and
+Subgraph decomposition algorithm (_NAC_colorings_subgraphs).
+It contains a huge switch statement choosing the splitting strategy
+and another one for merging strategies.
+The neighbors strategy is implemented in _subgraphs_strategy_neighbors
+
+The main pair of the search uses only a bitmask representing
+the coloring and converts it back to NAC coloring once a check is need.
+TODO create a class for coloring mask caching its coloring.
+"""
+
 from collections import defaultdict, deque
 from queue import PriorityQueue
 from functools import reduce
@@ -40,12 +59,27 @@ import nac.check
 
 def _coloring_from_mask(
     ordered_comp_ids: List[int],
-    mask: int,
     component_to_edges: List[List[Edge]],
+    mask: int,
     allow_mask: int | None = None,
 ) -> NACColoring:
+    """
+    Converts a mask representing a red-blue edge coloring.
 
-    # TODO use numpy and boolean addressing
+    Parameters
+    ----------
+    ordered_comp_ids:
+        list of component ids, mask points into it
+    component_to_edges:
+        mapping from component id to its edges
+    mask:
+        bit mask pointing into ordered_comp_ids,
+        1 means red and 0 blue (or otherwise)
+    allow_mask:
+        mask allowing only some components.
+        Used when generating coloring for subgraph.
+    """
+
     if allow_mask is None:
         allow_mask = 2 ** len(ordered_comp_ids) - 1
 
@@ -77,16 +111,22 @@ def _coloring_from_mask(
 
 def _NAC_colorings_naive(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    component_ids: List[int],
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
 ) -> Iterable[NACColoring]:
-    comp_ids = list(t_graph.nodes())
+    """
+    Naive implementation of the basic search algorithm
+    """
 
     # iterate all the coloring variants
     # division by 2 is used as the problem is symmetrical
-    for mask in range(1, 2 ** len(comp_ids) // 2):
-        coloring = _coloring_from_mask(comp_ids, mask, component_to_edges)
+    for mask in range(1, 2 ** len(component_ids) // 2):
+        coloring = _coloring_from_mask(
+            component_ids,
+            component_to_edges,
+            mask,
+        )
 
         if not check_selected_NAC_coloring(graph, coloring):
             continue
@@ -95,6 +135,7 @@ def _NAC_colorings_naive(
         yield (coloring[1], coloring[0])
 
 
+################################################################################
 def _create_bitmask_for_t_graph_cycle(
     graph: nx.Graph,
     component_to_edges: Callable[[int], List[Edge]],
@@ -209,20 +250,22 @@ def _mask_matches_templates(
 
 def _NAC_colorings_cycles(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    components_ids: List[int],
     component_to_edges: List[List[Edge]],
     check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
     from_angle_preserving_components: bool,
     use_all_cycles: bool = False,
 ) -> Iterable[NACColoring]:
-    vertices = list(t_graph.nodes())
+    """
+    Implementation of the naive algorithm improved by using cycles.
+    """
     # so we start with 0
-    vertices.sort()
+    components_ids.sort()
 
     # find some small cycles for state filtering
     cycles = find_cycles(
         graph,
-        set(t_graph.nodes),
+        set(components_ids),
         component_to_edges,
         all=use_all_cycles,
     )
@@ -241,21 +284,21 @@ def _NAC_colorings_cycles(
     #     templates = np.stack(templates)
     #     validities = np.stack(validities)
     # else:
-    #     templates = np.empty((0, len(vertices)), dtype=np.bool)
-    #     validities = np.empty((0, len(vertices)), dtype=np.bool)
+    #     templates = np.empty((0, len(components_ids)), dtype=np.bool)
+    #     validities = np.empty((0, len(components_ids)), dtype=np.bool)
 
     # this is used for mask inversion, because how ~ works on python
     # numbers, if we used some kind of bit arrays,
     # this would not be needed.
-    subgraph_mask = 0  # 2 ** len(vertices) - 1
-    for v in vertices:
+    subgraph_mask = 0  # 2 ** len(components_ids) - 1
+    for v in components_ids:
         subgraph_mask |= 1 << v
-    # subgraph_mask = np.ones(len(vertices), dtype=np.bool)
-    # demasking = 2**np.arange(len(vertices))
+    # subgraph_mask = np.ones(len(components_ids), dtype=np.bool)
+    # demasking = 2**np.arange(len(components_ids))
 
     # iterate all the coloring variants
     # division by 2 is used as the problem is symmetrical
-    for mask in range(1, 2 ** len(vertices) // 2):
+    for mask in range(1, 2 ** len(components_ids) // 2):
 
         # This is part of a slower implementation using numpy
         # TODO remove before the final merge
@@ -272,7 +315,11 @@ def _NAC_colorings_cycles(
         if _mask_matches_templates(templates, mask, subgraph_mask):
             continue
 
-        coloring = _coloring_from_mask(vertices, mask, component_to_edges)
+        coloring = _coloring_from_mask(
+            components_ids,
+            component_to_edges,
+            mask,
+        )
 
         if not check_selected_NAC_coloring(graph, coloring):
             continue
@@ -281,7 +328,10 @@ def _NAC_colorings_cycles(
         yield (coloring[1], coloring[0])
 
 
-def _split_and_find(
+################################################################################
+
+
+def _smart_split(
     local_graph: nx.Graph,
     local_chunk_sizes: List[int],
     search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
@@ -304,9 +354,9 @@ def _split_and_find(
     groups = (ordered_comp_ids[: sizes[0]], ordered_comp_ids[sizes[0] :])
     graphs = tuple(nx.induced_subgraph(local_graph, g) for g in groups)
     assert len(graphs) == 2
-    return _split_and_find(
+    return _smart_split(
         graphs[0], local_chunk_sizes[: length // 2], search_func
-    ) + _split_and_find(graphs[1], local_chunk_sizes[length // 2 :], search_func)
+    ) + _smart_split(graphs[1], local_chunk_sizes[length // 2 :], search_func)
 
 
 def _subgraphs_strategy_degree_cycles(
@@ -702,7 +752,7 @@ def _subgraphs_strategy_neighbors(
     return [v for group in ordered_comp_ids_groups for v in group]
 
 
-def _wrong_subgraphs_strategy_beam_neighbors_deprecated(
+def _subgraphs_strategy_beam_neighbors_deprecated(
     t_graph: nx.Graph,
     chunk_sizes: Sequence[int],
     start_with_triangles: bool,
@@ -920,6 +970,7 @@ def _subgraphs_strategy_cuts(
     return do_split(t_graph)
 
 
+################################################################################
 def _degree_ordered_nodes(graph: nx.Graph) -> List[int]:
     return list(
         map(
@@ -998,6 +1049,7 @@ def _mask_to_graph(
     return graph
 
 
+################################################################################
 def _subgraphs_join_epochs(
     graph: nx.Graph,
     t_graph: nx.Graph,
@@ -1077,8 +1129,8 @@ def _subgraphs_join_epochs(
 
         coloring = _coloring_from_mask(
             ordered_comp_ids,
-            mask,
             component_to_edges,
+            mask,
             subgraph_mask,
         )
 
@@ -1171,7 +1223,11 @@ def _subgraph_colorings_cycles_generator(
         if _mask_matches_templates(templates, mask, subgraph_mask):
             continue
 
-        coloring = _coloring_from_mask(local_ordered_comp_ids, mask, component_to_edges)
+        coloring = _coloring_from_mask(
+            local_ordered_comp_ids,
+            component_to_edges,
+            mask,
+        )
 
         if not check_selected_NAC_coloring(graph, coloring):
             continue
@@ -1290,7 +1346,9 @@ def _subgraph_colorings_removal_generator(
 
         # print("Accepted", bin(mask))
         # coloring = _coloring_from_mask(
-        #     local_partitions, mask >> offset, component_to_edges
+        #     local_partitions,
+        #     component_to_edges,
+        #     mask >> offset,
         # )
         # print(f"{coloring=}")
         # if mask in produced:
@@ -1365,7 +1423,7 @@ def _NAC_colorings_subgraphs(
         search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
     ):
         if get_subgraphs_together:
-            return _split_and_find(
+            return _smart_split(
                 t_graph,
                 chunk_sizes,
                 search_func,
@@ -1496,7 +1554,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors":
             ordered_comp_ids = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
+                lambda g, l: _subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=False,
@@ -1505,7 +1563,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_max":
             ordered_comp_ids = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
+                lambda g, l: _subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=False,
@@ -1514,7 +1572,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_triangles":
             ordered_comp_ids = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
+                lambda g, l: _subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=True,
@@ -1523,7 +1581,7 @@ def _NAC_colorings_subgraphs(
             )
         case "beam_neighbors_max_triangles":
             ordered_comp_ids = process(
-                lambda g, l: _wrong_subgraphs_strategy_beam_neighbors_deprecated(
+                lambda g, l: _subgraphs_strategy_beam_neighbors_deprecated(
                     t_graph=g,
                     chunk_sizes=l,
                     start_with_triangles=True,
@@ -1988,8 +2046,8 @@ def _NAC_colorings_subgraphs(
             while len(all_epochs) > 1:
                 best = (0, 0, 1)
                 subgraph_vertices: List[Set[int]] = [
-                    _mask_to_vertices(ordered_comp_ids, component_to_edges, allow_mask)
-                    for _, allow_mask in all_epochs
+                    _mask_to_vertices(ordered_comp_ids, component_to_edges, mask)
+                    for _, mask in all_epochs
                 ]
                 for i in range(0, len(subgraph_vertices)):
                     for j in range(i + 1, len(subgraph_vertices)):
@@ -2016,12 +2074,12 @@ def _NAC_colorings_subgraphs(
             """
 
             def mask_to_edges_and_components(
-                allow_mask: int,
+                mask: int,
             ) -> Tuple[List[Edge], List[Set[int]]]:
                 """
                 Creates a graph for the monochromatic classes given by the mask
                 """
-                graph = _mask_to_graph(ordered_comp_ids, component_to_edges, allow_mask)
+                graph = _mask_to_graph(ordered_comp_ids, component_to_edges, mask)
                 return list(graph.edges), list(nx.connected_components(graph))
 
             def find_potential_cycles(
@@ -2150,7 +2208,11 @@ def _NAC_colorings_subgraphs(
         if mask == 0 or mask.bit_count() == len(ordered_comp_ids):
             continue
 
-        coloring = _coloring_from_mask(ordered_comp_ids, mask, component_to_edges)
+        coloring = _coloring_from_mask(
+            ordered_comp_ids,
+            component_to_edges,
+            mask,
+        )
 
         yield (coloring[0], coloring[1])
         yield (coloring[1], coloring[0])
@@ -2225,6 +2287,7 @@ def _NAC_colorings_for_single_edges(
         yield b, r
 
 
+################################################################################
 def _NAC_colorings_from_bridges(
     processor: Callable[[nx.Graph], Iterable[NACColoring]],
     graph: nx.Graph,
@@ -2352,6 +2415,7 @@ def _NAC_colorings_with_trivial_stable_cuts(
     pass
 
 
+################################################################################
 def _renamed_coloring(
     ordered_vertices: Sequence[int],
     colorings: Iterable[NACColoring],
@@ -2718,6 +2782,7 @@ def _NAC_colorings_without_vertex(
         # print()
 
 
+################################################################################
 def NAC_colorings_impl(
     self: nx.Graph,
     algorithm: str,
@@ -2767,7 +2832,7 @@ def NAC_colorings_impl(
                 )
                 return _NAC_colorings_naive(
                     graph,
-                    t_graph,
+                    list(t_graph.nodes),
                     component_to_edge,
                     is_NAC_coloring,
                 )
@@ -2781,14 +2846,14 @@ def NAC_colorings_impl(
                 if len(algorithm_parts) == 1:
                     return _NAC_colorings_cycles(
                         graph,
-                        t_graph,
+                        list(t_graph.nodes),
                         component_to_edge,
                         is_NAC_coloring,
                         is_cartesian,
                     )
                 return _NAC_colorings_cycles(
                     graph,
-                    t_graph,
+                    list(t_graph.nodes),
                     component_to_edge,
                     is_NAC_coloring,
                     from_angle_preserving_components=is_cartesian,

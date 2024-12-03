@@ -1,5 +1,6 @@
 """
-The module checks if the coloring given is a NAC coloring
+The module checks if the coloring given is a NAC coloring.
+The main entry point is _is_NAC_coloring_impl
 """
 
 from collections import defaultdict
@@ -37,6 +38,11 @@ def _check_for_almost_red_cycles(
     red_edges: Iterable[Edge],
     blue_edges: Iterable[Edge],
 ) -> bool:
+    """
+    Checks if there is an almost cycle in the graph given with the given coloring.
+    Does not check if the coloring is surjective.
+    Returns true if the coloring has no such cycles..
+    """
     G.clear_edges()
     G.add_edges_from(red_edges)
 
@@ -78,8 +84,8 @@ def _is_NAC_coloring_impl(
 
     red, blue = coloring
 
-    # TODO NAC reimplement graph vertices caching
-    # # 43% speedup
+    # TODO NAC reimplement advanced graph vertices caching in PyRigi
+    # # 43% speedup (from base solution, current work around was not yet compared)
     # # !!! make sure !!! this graph is cleared before every run
     # # this also makes the whole NAC coloring search thread insecure
     # # things will break if you add vertices while another search
@@ -92,6 +98,8 @@ def _is_NAC_coloring_impl(
     #     G = nx.Graph()
     #     G.add_nodes_from(graph.nodes)
     #     graph._graph_is_NAC_coloring = G
+
+    # Workaround
     G = NiceGraph()
     G.add_nodes_from(graph.nodes)
 

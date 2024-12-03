@@ -191,6 +191,7 @@ def _generate_sparse_graph(
 
 
 # does not make sense as dense graphs form a single monochromatic class
+# down to 0.3 or 0.2
 def _generate_dense_graph(
     n: int,
     seed: int | None,
@@ -198,7 +199,7 @@ def _generate_dense_graph(
 ) -> Graph:
     rand = random.Random(seed)
     while True:
-        graph = Graph(nx.gnp_random_graph(n, p, seed))
+        graph = Graph(nx.gnp_random_graph(n, p, seed=rand.randint(0, 2**30)))
         if not nx.is_connected(graph):
             continue
 
