@@ -15,6 +15,71 @@ import nac as nac
 import pytest
 
 
+def ThreePrismPlusTriangleOnSide():
+    """Return the 3-prism graph where there is extra triangle on one of the connecting edges."""
+    return Graph(
+        [
+            (0, 1),
+            (1, 2),
+            (0, 2),
+            (3, 4),
+            (4, 5),
+            (3, 5),
+            (0, 3),
+            (1, 4),
+            (2, 5),
+            (0, 6),
+            (3, 6),
+        ]
+    )
+
+
+def DiamondWithZeroExtension():
+    """
+    Return the diamond graph with zero extension
+    (the diamond with 2 extra connected edges from the opposite spikes).
+    """
+    return Graph(
+        [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)],
+    )
+
+
+def SquareGrid2D(w: int, h: int):
+    """
+    Creates a square grid with width and height given.
+
+    Parameters
+    ----------
+    w:
+        width - no. of nodes in each column
+    h:
+        height - no. of nodes in each row
+    ----------
+
+    Example
+    ----------
+    For input w: 4, h: 2 you get this graph:
+
+    0-1-2-3
+    | | | |
+    4-5-6-7
+    ----------
+    """
+    G = Graph.from_vertices(range(w * h))
+    for r in range(h):
+        offset = r * w
+        for c in range(offset, offset + w - 1):
+            G.add_edge(c, c + 1)
+
+        if r == 0:
+            continue
+
+        for c in range(offset, offset + w):
+            G.add_edge(c - w, c)
+
+    return G
+
+
 @pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "result"),
@@ -28,7 +93,7 @@ import pytest
         (graphs.Diamond(), False),
         (graphs.ThreePrism(), True),
         (graphs.ThreePrismPlusEdge(), False),
-        (graphs.DiamondWithZeroExtension(), True),
+        (DiamondWithZeroExtension(), True),
     ],
     ids=[
         "path",
@@ -83,7 +148,7 @@ def test_sinlge_and_has_NAC_coloring(graph: nx.Graph, result: bool):
             set([(0, 1, 2), (3, 4, 5), (0, 2, 5), (0, 3, 5)]),
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             set([(0, 1, 2), (0, 2, 3), (0, 1, 4, 3), (1, 2, 3, 4)]),
         ),
         (
@@ -210,7 +275,7 @@ def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
             {},
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             {},
         ),
         (
@@ -513,7 +578,7 @@ def test__find_useful_cycles_for_components(graph: nx.Graph, result: Set[Tuple])
             {},
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             {
                 # [[(0, 1), (0, 3), (0, 2), (1, 2), (2, 3)], [(1, 4), (3, 4)]]
                 0: {(0, 1)},
@@ -819,7 +884,7 @@ NAC_TEST_CASES: List[NACTestCase] = [
     NACTestCase("diamond", graphs.Diamond(), 0, 0),
     NACTestCase("prism", graphs.ThreePrism(), 2, 2),
     NACTestCase("prismPlus", graphs.ThreePrismPlusEdge(), 0, 0),
-    NACTestCase("minimallyRigid", graphs.DiamondWithZeroExtension(), 2, 0),
+    NACTestCase("minimallyRigid", DiamondWithZeroExtension(), 2, 0),
     NACTestCase(
         "smaller_problemist",
         Graph.from_vertices_and_edges(
@@ -1072,22 +1137,22 @@ def test_all_NAC_colorings(
     ("graph", "coloring", "result"),
     [
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]), set([(1, 4), (3, 4)])),
             True,
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
             False,
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
             False,
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
             False,
         ),
@@ -1115,7 +1180,7 @@ def test_is_NAC_coloring(
     ("graph", "coloring"),
     [
         (
-            graphs.ThreePrismPlusTriangleOnSide(),
+            ThreePrismPlusTriangleOnSide(),
             None,
         ),
         (
@@ -1220,15 +1285,15 @@ def test_all_cartesian_NAC_colorings(
     ("graph", "coloring"),
     [
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
         ),
         (
-            graphs.DiamondWithZeroExtension(),
+            DiamondWithZeroExtension(),
             (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
         ),
         # tests if everything works with non-integer vertices
@@ -1271,7 +1336,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
     ("graph", "coloring", "result"),
     [
         (
-            graphs.SquareGrid2D(4, 2),
+            SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7)]),
@@ -1279,7 +1344,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             True,
         ),
         (
-            graphs.SquareGrid2D(4, 2),
+            SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7), (6, 7)]),
@@ -1287,7 +1352,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            graphs.SquareGrid2D(4, 2),
+            SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (3, 7)]),
                 set([(0, 4), (1, 5), (2, 6)]),
@@ -1295,7 +1360,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            graphs.SquareGrid2D(4, 2),
+            SquareGrid2D(4, 2),
             (
                 set([(0, 1), (1, 2), (4, 5), (5, 6), (0, 4), (1, 5)]),
                 set([(2, 6), (3, 7), (2, 3), (6, 7)]),
