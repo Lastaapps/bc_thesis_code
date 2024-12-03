@@ -170,10 +170,10 @@ def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
 
 
 def load_globally_rigid_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_file(os.path.join(RANDOM_DIR, "globally_rigid.g6"))
+    return load_graph6_graphs_from_dir(os.path.join(RANDOM_DIR, "globally_rigid"))
 
 
 def load_sparse_with_few_colorings_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_file(
-        os.path.join(RANDOM_DIR, "sparse_with_few_colorings.g6")
+    return load_graph6_graphs_from_dir(
+        os.path.join(RANDOM_DIR, "sparse_with_few_colorings")
     )
