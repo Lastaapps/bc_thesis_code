@@ -17,11 +17,7 @@ poetry.lock
 .venv
 venv
 
-# TODO remove later
-!NAC_search.ipynb
-!NAC_benchmark.ipynb
 !NAC_benchmark_presentation.ipynb
-!NAC_benchmark_latex_export.ipynb
 !NAC_playground.ipynb
 figures
 .vscode
