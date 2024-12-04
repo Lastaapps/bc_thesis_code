@@ -16,13 +16,14 @@ import networkx as nx
 import nac
 from nac.util import NiceGraph as Graph
 
-STORE_DIR = os.path.join("graphs_store")
-RANDOM_DIR = os.path.join(STORE_DIR, "random")
-LAMAN_DIR_NAUTY = os.path.join(STORE_DIR, "nauty")
-LAMAN_DIR = os.path.join(LAMAN_DIR_NAUTY, "laman_some")
-LAMAN_DIR_DEGREE_3_PLUS = os.path.join(LAMAN_DIR_NAUTY, "laman_some_degree_3_plus")
-LAMAN_DIR_RANDOM = os.path.join(RANDOM_DIR, "laman")
-GENERAL_DIR = os.path.join(STORE_DIR, "general-graphs")
+DIR_STORE = os.path.join("graphs_store")
+DIR_RANDOM = os.path.join(DIR_STORE, "random")
+DIR_EXTRACTED = os.path.join(DIR_STORE, "extracted")
+
+DIR_LAMAN_NAUTY = os.path.join(DIR_STORE, "nauty")
+DIR_LAMAN = os.path.join(DIR_LAMAN_NAUTY, "laman_some")
+DIR_LAMAN_DEGREE_3_PLUS = os.path.join(DIR_LAMAN_NAUTY, "laman_some_degree_3_plus")
+DIR_LAMAN_RANDOM = os.path.join(DIR_RANDOM, "laman")
 
 
 ################################################################################
@@ -42,7 +43,7 @@ def _filter_non_connected(graphs: Iterable[Graph]) -> Iterable[Graph]:
 ################################################################################
 
 
-def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Graph]:
+def load_laman_graphs(dir: str = DIR_LAMAN, shuffle: bool = True) -> Iterable[Graph]:
     graphs: List[Graph] = []
     for file in os.listdir(dir):
         if not file.endswith(".g6"):
@@ -60,16 +61,16 @@ def load_laman_graphs(dir: str = LAMAN_DIR, shuffle: bool = True) -> Iterable[Gr
 
 
 def load_laman_random_graphs(shuffle: bool = True) -> Iterable[Graph]:
-    return load_laman_graphs(dir=LAMAN_DIR_RANDOM, shuffle=shuffle)
+    return load_laman_graphs(dir=DIR_LAMAN_RANDOM, shuffle=shuffle)
 
 
 def load_laman_degree_3_plus(shuffle: bool = True) -> Iterable[Graph]:
-    return load_laman_graphs(dir=LAMAN_DIR_DEGREE_3_PLUS, shuffle=shuffle)
+    return load_laman_graphs(dir=DIR_LAMAN_DEGREE_3_PLUS, shuffle=shuffle)
 
 
-LAMAN_ALL_DIR = os.path.join(LAMAN_DIR_NAUTY, "laman_all")
+LAMAN_ALL_DIR = os.path.join(DIR_LAMAN_NAUTY, "laman_all")
 LAMAN_ALL_FILENAME = "laman_{}.g6"
-LAMAN_DEGREE_3_PLUS_ALL_DIR = os.path.join(STORE_DIR, "laman_degree_3_plus")
+LAMAN_DEGREE_3_PLUS_ALL_DIR = os.path.join(DIR_STORE, "laman_degree_3_plus")
 LAMAN_DEGREE_3_PLUS_ALL_FILENAME = "D3LamanGraphs{}.m"
 
 
@@ -151,7 +152,7 @@ def load_graph6_graphs_from_file(
         # print(f"Loading file {path}")
 
         graphs.extend(nx.read_graph6(path))
-    if path.endswith(".s6"):
+    elif path.endswith(".s6"):
         # print(f"Loading file {path}")
 
         with open(path, mode="rb") as input_file:
@@ -161,19 +162,28 @@ def load_graph6_graphs_from_file(
                     continue
                 g = nx.from_sparse6_bytes(line.__bytes__())
                 graphs.append(Graph(g))
+    else:
+        return load_graph6_graphs_from_file(f"{path}.g6")
 
     return graphs
 
 
+################################################################################
 def load_no_3_nor_4_cycle_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_dir(os.path.join(STORE_DIR, "no_3_nor_4_cycles"))
+    return load_graph6_graphs_from_dir(os.path.join(DIR_STORE, "no_3_nor_4_cycles"))
 
 
 def load_globally_rigid_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_dir(os.path.join(RANDOM_DIR, "globally_rigid"))
+    return load_graph6_graphs_from_dir(os.path.join(DIR_RANDOM, "globally_rigid"))
 
 
 def load_sparse_with_few_colorings_graphs() -> List[Graph]:
     return load_graph6_graphs_from_dir(
-        os.path.join(RANDOM_DIR, "sparse_with_few_colorings")
+        os.path.join(DIR_RANDOM, "sparse_with_few_colorings")
+    )
+
+
+def load_no_NAC_coloring_graphs() -> List[Graph]:
+    return load_graph6_graphs_from_file(
+        os.path.join(DIR_EXTRACTED, "no_nac_coloring")
     )

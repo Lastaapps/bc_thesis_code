@@ -60,8 +60,9 @@ def _generate_random_graphs_impl(
     for n, count in tqdm(configs):
         path = Path(os.path.join(dir, f"{filename_template.format(n)}.g6"))
 
+        graphs: List[nx.Graph]
         if path.is_file():
-            graphs = dataset.load_graph6_graphs_from_file(str(path))
+            graphs = list(dataset.load_graph6_graphs_from_file(str(path)))
         else:
             graphs = []
 
@@ -69,12 +70,18 @@ def _generate_random_graphs_impl(
         for _ in range(len(graphs)):
             rand.randint(0, 2**30)
 
-        graphs += [
-            generate_graph(n, rand.randint(0, 2**30))
-            for _ in range(count - len(graphs))
-        ]
+        with open(path, "ab") as f:
+            for _ in range(count - len(graphs)):
+                graph = generate_graph(n, rand.randint(0, 2**30))
+                graphs.append(graph)
 
-        _write_graphs_to_file(path, graphs)
+                f.write(nx.readwrite.graph6.to_graph6_bytes(graph, header=False))
+                f.flush()
+
+                import time
+                start = time.time()
+                while time.time() < start + 1:
+                    pass
 
         results.append((n, graphs))
     return results
