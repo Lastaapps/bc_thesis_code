@@ -14,6 +14,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+You can run tests by executing `pytest`.
+
 ## Structure
 - `nac` - code of our NAC implementation
 - `benchmarks` - Core related to benchmarks - graphs loading, generation, notebook utility functions
