@@ -523,6 +523,10 @@ def _group_and_plot(
         # ax.set_title(f"{rename_based_on[x_column]} {based_on} ({aggregation})")
         # ax.set_title(f"{rename_based_on[x_column]} ({aggregation})")
         ax.set_title(f"{aggregation.capitalize()}")
+        if "time" in value_columns[0]:
+            ax.set_ylabel("Time [ms]")
+        if "check" in value_columns[0]:
+            ax.set_ylabel("Checks [call]")
         ax.set_yscale("log")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_xlabel(rename_based_on[x_column])
@@ -626,6 +630,7 @@ def _plot_is_NAC_coloring_calls_groups(
     # display(aggregated)
     aggregated.plot(ax=ax)
     ax.set_title(f"{title} - {aggregation.capitalize()}")
+    ax.set_ylabel("Checks [call]")
     ax.set_yscale("log")
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xlabel(rename_based_on[x_column])
