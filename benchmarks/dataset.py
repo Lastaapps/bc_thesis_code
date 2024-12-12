@@ -82,7 +82,15 @@ def load_laman_all(
     if FILENAME is None:
         FILENAME = LAMAN_ALL_FILENAME.format(vertices_no)
     path = os.path.join(DIR, FILENAME)
-    return nx.read_graph6(path)
+    # this reads all the graphs and consumes to much memory
+    # return nx.read_graph6(path)
+    with open(path, mode="rb") as input_file:
+        for line in input_file:
+            line = line.strip()
+            if not len(line):
+                continue
+            g = nx.from_graph6_bytes(line.__bytes__())
+            yield Graph(g)
 
 
 def load_laman_degree_3_plus_all(
