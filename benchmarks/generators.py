@@ -79,6 +79,7 @@ def _generate_random_graphs_impl(
                 f.flush()
 
                 import time
+
                 start = time.time()
                 while time.time() < start + 1:
                     pass
@@ -89,7 +90,7 @@ def _generate_random_graphs_impl(
 
 # takes ~1h 30m on my laptop
 def generate_random_laman_graphs(
-    dir: str = dataset.LAMAN_DIR_RANDOM,
+    dir: str = dataset.DIR_LAMAN_RANDOM,
     filename_template: str = "laman_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
@@ -111,7 +112,7 @@ def generate_random_laman_graphs(
 
 
 def generate_random_globally_rigid_graphs(
-    dir: str = os.path.join(dataset.RANDOM_DIR, "globally_rigid"),
+    dir: str = os.path.join(dataset.DIR_RANDOM, "globally_rigid"),
     filename_template: str = "globally_rigid_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
@@ -133,7 +134,7 @@ def generate_random_globally_rigid_graphs(
 
 
 def generate_random_sparse_with_few_colorings_graphs(
-    dir: str = os.path.join(dataset.RANDOM_DIR, "sparse_with_few_colorings"),
+    dir: str = os.path.join(dataset.DIR_RANDOM, "sparse_with_few_colorings"),
     filename_template: str = "sparse_with_few_colorings_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:

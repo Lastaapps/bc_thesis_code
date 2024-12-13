@@ -192,6 +192,4 @@ def load_sparse_with_few_colorings_graphs() -> List[Graph]:
 
 
 def load_no_NAC_coloring_graphs() -> List[Graph]:
-    return load_graph6_graphs_from_file(
-        os.path.join(DIR_EXTRACTED, "no_nac_coloring")
-    )
+    return load_graph6_graphs_from_file(os.path.join(DIR_EXTRACTED, "no_nac_coloring"))

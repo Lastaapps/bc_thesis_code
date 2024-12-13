@@ -658,9 +658,9 @@ def plot_is_NAC_coloring_calls(
     df = df.loc[:, related_columns]
     # this does not help our algorithm to stand out, but the graphs can be drawn more easily
 
-    df["exp_edge_no"]               = 2**(df["edge_no"]-1)
-    df["exp_triangle_component_no"] = 2**(df["triangle_components_no"]-1)
-    df["exp_monochromatic_class_no"] = 2**(df["monochromatic_classes_no"]-1)
+    df["exp_edge_no"] = 2 ** (df["edge_no"] - 1)
+    df["exp_triangle_component_no"] = 2 ** (df["triangle_components_no"] - 1)
+    df["exp_monochromatic_class_no"] = 2 ** (df["monochromatic_classes_no"] - 1)
 
     df["scaled_edge_no"] = df["edge_no"] / df["nac_all_coloring_no"]
     df["scaled_triangle_component_no"] = (
