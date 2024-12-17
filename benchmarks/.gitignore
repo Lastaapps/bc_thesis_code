@@ -1,5 +1,7 @@
 graphs_store
 logs
-!Visualization.ipynb
 runs
 precomputed
+
+!NAC_benchmark.ipynb
+!NAC_latex_export.ipynb
