@@ -8,6 +8,7 @@ Interface of our code is also described in the notebooks, mainly in `NAC_benchma
 
 ## Setup
 
+Python 3.12 is required.
 ```bash
 pip -m venv .venv
 source .venv/bin/activate
