@@ -21,9 +21,6 @@ pip install -r requirements.txt
 ## Tests
 
 You can run tests by executing `pytest`.
-The packages also contains base for Cartesian NAC-coloring search,
-the related tests are skipped for now as it is not yet fully implemented
-for every approach.
 
 ## Structure
 - `nac` - the code of our NAC implementation

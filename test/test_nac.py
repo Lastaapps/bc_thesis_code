@@ -83,7 +83,6 @@ def SquareGrid2D(w: int, h: int):
     return G
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "result"),
     [
@@ -118,7 +117,6 @@ def test_sinlge_and_has_NAC_coloring(graph: nx.Graph, result: bool):
     )
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "result"),
     [
@@ -236,7 +234,6 @@ def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
     # assert result == res
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "result"),
     [
@@ -539,7 +536,6 @@ def test__find_useful_cycles_for_components(graph: nx.Graph, result: Set[Tuple])
     assert res == result
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "result"),
     [
@@ -1075,7 +1071,6 @@ NAC_TEST_CASES: List[NACTestCase] = [
 ]
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "colorings_no"),
     [
@@ -1135,7 +1130,6 @@ def test_all_NAC_colorings(
         assert nac.is_NAC_coloring(graph, coloring)
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring", "result"),
     [
@@ -1178,7 +1172,6 @@ def test_is_NAC_coloring(
     assert nac.is_NAC_coloring(graph, (blue, red)) == result
 
 
-@pytest.mark.nac_test
 @pytest.mark.parametrize(
     ("graph", "coloring"),
     [
@@ -1220,165 +1213,3 @@ def test__check_for_simple_stable_cut(graph: nx.Graph, coloring: Optional[NACCol
     coloring = nac.canonical_NAC_coloring(coloring)
     res2 = nac.canonical_NAC_coloring(res2)
     assert coloring == res2
-
-
-@pytest.mark.nac_test
-@pytest.mark.parametrize(
-    ("graph", "colorings_no"),
-    [
-        (case.graph, case.no_cartesian)
-        for case in NAC_TEST_CASES
-        if case.no_cartesian is not None
-    ],
-    ids=[case.name for case in NAC_TEST_CASES if case.no_cartesian is not None],
-)
-@pytest.mark.parametrize("algorithm", NAC_ALGORITHMS)
-@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
-@pytest.mark.parametrize("use_decompositions", [True, False])
-@pytest.mark.parametrize(
-    "class_type",
-    [
-        nac.MonochromaticClassType.MONOCHROMATIC,
-        nac.MonochromaticClassType.TRIANGLES,
-    ],
-)
-@pytest.mark.skip(
-    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
-)
-def test_all_cartesian_NAC_colorings(
-    graph,
-    colorings_no: int,
-    algorithm: str,
-    relabel_strategy: str,
-    use_decompositions: bool,
-    class_type: nac.MonochromaticClassType,
-):
-    # print(f"\nTested graph: {graph=}")
-    coloring_list = list(
-        nac.cartesian_NAC_colorings(
-            graph,
-            algorithm=algorithm,
-            relabel_strategy=relabel_strategy,
-            use_decompositions=use_decompositions,
-            monochromatic_class_type=class_type,
-            use_has_coloring_check=False,
-        )
-    )
-
-    # print(f"{coloring_list=}")
-
-    no_duplicates = {
-        nac.canonical_NAC_coloring(coloring, including_red_blue_order=False)
-        for coloring in coloring_list
-    }
-    assert len(coloring_list) == len(no_duplicates)
-
-    # for coloring in sorted([str(x) for x in coloringList]):
-    #     print(coloring)
-
-    assert colorings_no == len(coloring_list)
-
-    for coloring in coloring_list:
-        assert nac.is_NAC_coloring(graph, coloring)
-        assert nac.is_cartesian_NAC_coloring(graph, coloring)
-
-
-@pytest.mark.nac_test
-@pytest.mark.parametrize(
-    ("graph", "coloring"),
-    [
-        (
-            DiamondWithZeroExtension(),
-            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4), (3, 4)]), set([])),
-        ),
-        (
-            DiamondWithZeroExtension(),
-            (set([(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 4)]), set([(3, 4)])),
-        ),
-        (
-            DiamondWithZeroExtension(),
-            (set([(0, 1), (1, 2), (3, 0), (0, 2)]), set([(2, 3), (1, 4), (3, 4)])),
-        ),
-        # tests if everything works with non-integer vertices
-        (
-            Graph(
-                [
-                    ("0", "1"),
-                    ("1", "2"),
-                    ("2", "3"),
-                    ("3", "0"),
-                    ("0", "2"),
-                    ("1", "4"),
-                    ("3", "4"),
-                ]
-            ),
-            (
-                set([("0", "1"), ("1", "2"), ("3", "0"), ("0", "2")]),
-                set([("2", "3"), ("1", "4"), ("3", "4")]),
-            ),
-        ),
-    ],
-)
-@pytest.mark.skip(
-    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
-)
-def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
-    graph: nx.Graph, coloring: Tuple[Set[Edge], Set[Edge]]
-):
-    """
-    Cartesian NAC coloring is also NAC coloring. So if we pass invalid coloring,
-    cartesian NAC coloring result should be also negative.
-    """
-    red, blue = coloring
-    assert nac.is_cartesian_NAC_coloring(graph, (red, blue)) == False
-    assert nac.is_cartesian_NAC_coloring(graph, (blue, red)) == False
-
-
-@pytest.mark.nac_test
-@pytest.mark.parametrize(
-    ("graph", "coloring", "result"),
-    [
-        (
-            SquareGrid2D(4, 2),
-            (
-                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)]),
-                set([(0, 4), (1, 5), (2, 6), (3, 7)]),
-            ),
-            True,
-        ),
-        (
-            SquareGrid2D(4, 2),
-            (
-                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6)]),
-                set([(0, 4), (1, 5), (2, 6), (3, 7), (6, 7)]),
-            ),
-            False,
-        ),
-        (
-            SquareGrid2D(4, 2),
-            (
-                set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (3, 7)]),
-                set([(0, 4), (1, 5), (2, 6)]),
-            ),
-            False,
-        ),
-        (
-            SquareGrid2D(4, 2),
-            (
-                set([(0, 1), (1, 2), (4, 5), (5, 6), (0, 4), (1, 5)]),
-                set([(2, 6), (3, 7), (2, 3), (6, 7)]),
-            ),
-            False,
-        ),
-        # TODO more tests
-    ],
-)
-@pytest.mark.skip(
-    "Cartesian NAC coloring is slightly broken and I don't care at the moment"
-)
-def test_is_cartesian_NAC_coloring(
-    graph: nx.Graph, coloring: Tuple[Set[Edge], Set[Edge]], result: bool
-):
-    red, blue = coloring
-    assert nac.is_cartesian_NAC_coloring(graph, (red, blue)) == result
-    assert nac.is_cartesian_NAC_coloring(graph, (blue, red)) == result
