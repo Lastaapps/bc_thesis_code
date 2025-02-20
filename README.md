@@ -8,7 +8,7 @@ you can experiment with the algorithm and `NAC_presentation.ipynb`
 in which you can see how we run and analyze our benchmarks. You can also run them yourself.
 The interface of our code is also described in the notebooks, mainly in `NAC_presentation.ipynb`.
 
-The repository is a fork of PyRigi since we aim the code to be eventually incorporated into PyRigi.
+The repository was started as a fork of [PyRigi](https://github.com/PyRigi/PyRigi) since we aim the code to be eventually incorporated into PyRigi.
 
 ## Setup
 
