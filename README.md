@@ -8,8 +8,6 @@ you can experiment with the algorithm and `NAC_presentation.ipynb`
 in which you can see how we run and analyze our benchmarks. You can also run them yourself.
 The interface of our code is also described in the notebooks, mainly in `NAC_presentation.ipynb`.
 
-The repository was started as a fork of [PyRigi](https://github.com/PyRigi/PyRigi) since we aim the code to be eventually incorporated into PyRigi.
-
 ## Setup
 
 Python 3.12 is required.
@@ -20,7 +18,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Tests
+
 You can run tests by executing `pytest`.
+The packages also contains base for Cartesian NAC-coloring search,
+the related tests are skipped for now as it is not yet fully implemented
+for every approach.
 
 ## Structure
 - `nac` - the code of our NAC implementation
