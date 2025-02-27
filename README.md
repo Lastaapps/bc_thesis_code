@@ -10,10 +10,10 @@ The interface of our code is also described in the notebooks, mainly in `NAC_pre
 
 ## Setup
 
-Python 3.12 is required.
+Python 3.12 or higher is required.
 
 ```bash
-pip -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
