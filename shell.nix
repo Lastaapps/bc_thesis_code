@@ -8,7 +8,6 @@ pkgs.mkShell {
   packages =
     (with pkgs; [
       python312
-      graphviz
     ])
     ++ (with pkgs.python312Packages; [
       pip

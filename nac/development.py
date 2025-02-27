@@ -19,11 +19,9 @@ NAC_PRINT_SWITCH = False
 # NAC_PRINT_SWITCH = True
 
 
-def NAC_statistics_colorings_merge_wrapper[
-    T
-](func: Callable[..., Tuple[Iterable[T], int]]) -> Callable[
-    ..., Tuple[Iterable[T], int]
-]:
+def NAC_statistics_colorings_merge_wrapper[T](
+    func: Callable[..., Tuple[Iterable[T], int]],
+) -> Callable[..., Tuple[Iterable[T], int]]:
     return func
 
     def stats(*args, **kwargs) -> Tuple[List[T], int]:
@@ -39,9 +37,9 @@ def NAC_statistics_colorings_merge_wrapper[
     return stats
 
 
-def NAC_statistics_generator[
-    T
-](func: Callable[..., Iterable[T]]) -> Callable[..., Iterable[T]]:
+def NAC_statistics_generator[T](
+    func: Callable[..., Iterable[T]],
+) -> Callable[..., Iterable[T]]:
     return func
 
     def stats(*args, **kwargs) -> Iterable[T]:
@@ -103,7 +101,7 @@ def graphviz_components(
                 ]
             )
 
-    return nx.nx_agraph.to_agraph(my_graph)
+    return "Not supported"  # nx.nx_agraph.to_agraph(my_graph)
 
 
 def graphviz_graph(
@@ -133,7 +131,7 @@ def graphviz_graph(
                 ]
             )
 
-    return nx.nx_agraph.to_agraph(my_graph)
+    return "Not supported"  # nx.nx_agraph.to_agraph(my_graph)
 
 
 def graphviz_t_graph(
@@ -168,4 +166,4 @@ def graphviz_t_graph(
         {v: f"{component_to_edges[v]} ({v})" for v in my_t_graph.nodes()},
     )
 
-    return nx.nx_agraph.to_agraph(my_t_graph)
+    return "Not supported"  # nx.nx_agraph.to_agraph(my_t_graph)
