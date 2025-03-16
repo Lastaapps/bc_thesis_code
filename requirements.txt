@@ -1,12 +1,13 @@
-pyrigi~=0.4.0
+pyrigi~=1.0.0
 
-numpy~=2.1.0
-matplotlib~=3.9.0
+numpy~=2.2.0
+matplotlib~=3.10.0
 pandas~=2.2.0
 scipy~=1.14.0
 sympy~=1.13.0
 
 networkx~=3.4.0
+types-networkx~=3.4.0
 pygraphviz==1.14
 
 pytest~=8.3.0
@@ -23,6 +24,6 @@ ipycanvas~=0.13.0
 ipyevents~=2.0.0
 
 notebook~=7.2.0
-ipython~=8.29.0
+ipython~=8.32.0
 ipykernel~=6.29.0
 jupyterlab~=4.2.0
