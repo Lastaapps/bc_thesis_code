@@ -14,6 +14,7 @@ pkgs.mkShell {
       pip
       virtualenv
       black
+      ruff
     ]);
 
   shellHook = ''
