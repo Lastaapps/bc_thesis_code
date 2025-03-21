@@ -8,6 +8,7 @@ import pytest
 import numpy as np
 
 from stablecut.flexible_graphs import stable_cut_in_flexible_graph
+from stablecut.types import StableCut
 from stablecut.util import (
     is_cut_set,
     is_cut_set_separating,
@@ -15,6 +16,16 @@ from stablecut.util import (
     is_stable_cut_set_separating,
     stable_set_violation,
 )
+
+
+@pytest.mark.stablecut_test
+def test_stable_set_eq():
+    set1 = StableCut({1, 2}, {3, 4}, {5})
+    set2 = StableCut({3, 4}, {1, 2}, {5})
+    set2 = StableCut({3, 4}, {1, 2}, {6})
+    assert set1 == set1
+    assert set1 == set2
+    assert set1 != set2
 
 
 @pytest.mark.stablecut_test
@@ -133,7 +144,7 @@ def test_stable_cut_in_flexible_graph_prism():
 
 
 @pytest.mark.stablecut_test
-@pytest.mark.slow
+@pytest.mark.slow_main
 @pytest.mark.parametrize(
     ("n", "p"), [(4, 0.3), (8, 0.3), (13, 0.4), (16, 0.4), (16, 0.4)]
 )
