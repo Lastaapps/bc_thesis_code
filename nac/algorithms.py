@@ -30,7 +30,7 @@ from nac.data_type import NACColoring, Edge
 from nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
-    NAC_statistics_colorings_merge_wrapper,
+    NAC_statistics_colorings_merge,
     graphviz_graph,
     graphviz_t_graph,
 )
@@ -44,7 +44,7 @@ def NAC_colorings_naive(
     graph: nx.Graph,
     component_ids: List[int],
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
 ) -> Iterable[NACColoring]:
     """
     Naive implementation of the basic search algorithm
@@ -59,7 +59,7 @@ def NAC_colorings_naive(
             mask,
         )
 
-        if not check_selected_NAC_coloring(graph, coloring):
+        if not is_NAC_coloring_routine(graph, coloring):
             continue
 
         yield (coloring[0], coloring[1])
@@ -70,7 +70,7 @@ def NAC_colorings_cycles(
     graph: nx.Graph,
     components_ids: List[int],
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
     from_angle_preserving_components: bool,
     use_all_cycles: bool = False,
 ) -> Iterable[NACColoring]:
@@ -138,7 +138,7 @@ def NAC_colorings_cycles(
             mask,
         )
 
-        if not check_selected_NAC_coloring(graph, coloring):
+        if not is_NAC_coloring_routine(graph, coloring):
             continue
 
         yield (coloring[0], coloring[1])
@@ -511,7 +511,7 @@ def _subgraphs_join_epochs(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
     from_angle_preserving_components: bool,
     ordered_comp_ids: List[int],
     epoch1: Iterable[int],
@@ -591,7 +591,7 @@ def _subgraphs_join_epochs(
             subgraph_mask,
         )
 
-        if not check_selected_NAC_coloring(graph, coloring):
+        if not is_NAC_coloring_routine(graph, coloring):
             continue
 
         counter += 1
@@ -606,7 +606,7 @@ def _subgraph_colorings_generator(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
     ordered_comp_ids: List[int],
     chunk_size: int,
     offset: int,
@@ -617,7 +617,7 @@ def _subgraph_colorings_generator(
                 graph,
                 t_graph,
                 component_to_edges,
-                check_selected_NAC_coloring,
+                is_NAC_coloring_routine,
                 ordered_comp_ids,
                 chunk_size,
                 offset,
@@ -629,7 +629,7 @@ def _subgraph_colorings_generator(
                 graph,
                 t_graph,
                 component_to_edges,
-                check_selected_NAC_coloring,
+                is_NAC_coloring_routine,
                 ordered_comp_ids,
                 chunk_size,
                 offset,
@@ -641,7 +641,7 @@ def _subgraph_colorings_cycles_generator(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
     ordered_comp_ids: List[int],
     chunk_size: int,
     offset: int,
@@ -686,7 +686,7 @@ def _subgraph_colorings_cycles_generator(
             mask,
         )
 
-        if not check_selected_NAC_coloring(graph, coloring):
+        if not is_NAC_coloring_routine(graph, coloring):
             continue
 
         counter += 1
@@ -701,7 +701,7 @@ def _subgraph_colorings_removal_generator(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
     partitions: List[int],
     chunk_size: int,
     offset: int,
@@ -818,68 +818,19 @@ def _subgraph_colorings_removal_generator(
         print(f"Base yielded: {counter}")
 
 
-def NAC_colorings_subgraphs(
+def _apply_strategy_to_order_vertices(
     graph: nx.Graph,
     t_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
-    check_selected_NAC_coloring: Callable[[nx.Graph, NACColoring], bool],
+    preferred_chunk_size: int,
+    order_strategy: str,
+    use_smart_split: bool,
     seed: int,
-    from_angle_preserving_components: bool,
-    get_subgraphs_together: bool = True,
-    merge_strategy: (
-        str | Literal["linear", "log", "log_reverse", "min_max", "weight"]
-    ) = "linear",
-    preferred_chunk_size: int | None = None,
-    order_strategy: str = "neighbors_degree",
-) -> Iterable[NACColoring]:
-    """
-    This version of the algorithm splits the graphs into subgraphs,
-    find NAC colorings for each of them. The subgraphs are then merged
-    and new colorings are reevaluated till we reach the original graph again.
-    The algorithm tries to find optimal subgraphs and merge strategy.
-    """
-    # These values are taken from benchmarks as (almost) optimal
-    if preferred_chunk_size is None:
-        preferred_chunk_size = 5 if t_graph.number_of_nodes() < 12 else 6
-
-    preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
-    assert preferred_chunk_size >= 1
-
-    # Represents size (no. of vertices (components) of the t-graph) of a basic subgraph
-    components_no = t_graph.number_of_nodes()
-
-    def create_chunk_sizes() -> List[int]:
-        """
-        Makes sure all the chunks are the same size of 1 bigger
-
-        Could be probably significantly simpler,
-        like np.fill and add some bitmask, but this was my first idea,
-        get over it.
-        """
-        # chunk_size = max(
-        #     int(np.sqrt(components_no)), min(preferred_chunk_size, components_no)
-        # )
-        # chunk_no = (components_no + chunk_size - 1) // chunk_size
-        chunk_no = components_no // preferred_chunk_size
-        chunk_sizes = []
-        remaining_len = components_no
-        for _ in range(chunk_no):
-            # ceiling floats, scary
-            chunk_sizes.append(
-                min(
-                    math.ceil(remaining_len / (chunk_no - len(chunk_sizes))),
-                    remaining_len,
-                )
-            )
-            remaining_len -= chunk_sizes[-1]
-        return chunk_sizes
-
-    chunk_sizes = create_chunk_sizes()
-
+) -> List[int]:
     def process(
         search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
     ):
-        if get_subgraphs_together:
+        if use_smart_split:
             return _smart_split(
                 t_graph,
                 chunk_sizes,
@@ -1079,124 +1030,103 @@ def NAC_colorings_subgraphs(
             raise ValueError(
                 f"Unknown strategy: {order_strategy}, supported: none, degree, degree_cycles, cycles, cycles_match_chunks, bfs, beam_neighbors, components_biggest, components_spredded"
             )
+    return ordered_comp_ids
 
-    assert components_no == len(ordered_comp_ids)
 
-    if NAC_PRINT_SWITCH:
-        print("-" * 80)
-        print(
-            graphviz_graph(
-                order_strategy, component_to_edges, chunk_sizes, ordered_comp_ids
-            )
+@NAC_statistics_colorings_merge
+def _colorings_merge(
+    graph: nx.Graph,
+    t_graph: nx.Graph,
+    component_to_edges: List[List[Edge]],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
+    from_angle_preserving_components: bool,
+    ordered_comp_ids: List[int],
+    colorings_1: Tuple[Iterable[int], int],
+    colorings_2: Tuple[Iterable[int], int],
+) -> Tuple[Iterable[int], int]:
+    (epoch1, subgraph_mask_1) = colorings_1
+    (epoch2, subgraph_mask_2) = colorings_2
+    epoch1 = RepeatableIterator(epoch1)
+    epoch2 = RepeatableIterator(epoch2)
+    # epoch2_switched = ( # could be RepeatableIterator
+    epoch2_switched = RepeatableIterator(
+        # this has to be list so the iterator is not iterated concurrently
+        [coloring ^ subgraph_mask_2 for coloring in epoch2]
+    )
+
+    vertices_1 = _mask_to_vertices(ordered_comp_ids, component_to_edges, colorings_1[1])
+    vertices_2 = _mask_to_vertices(ordered_comp_ids, component_to_edges, colorings_2[1])
+
+    if len(vertices_1.intersection(vertices_2)) <= 1:
+        nac.check._NAC_SUBGRAPHS_NO_INTERSECTION += 1
+
+        def generator() -> Iterator[int]:
+            for c1 in epoch1:
+                for c2, c2s in zip(epoch2, epoch2_switched):
+                    yield c1 | c2
+                    yield c1 | c2s
+
+        return (
+            generator(),
+            subgraph_mask_1 | subgraph_mask_2,
         )
-        print("-" * 80)
-        print(
-            graphviz_t_graph(
+
+    # if at least two vertices are shared, we need to do the full check
+    return (
+        itertools.chain(
+            _subgraphs_join_epochs(
+                graph,
                 t_graph,
-                order_strategy,
                 component_to_edges,
-                chunk_sizes,
+                is_NAC_coloring_routine,
+                from_angle_preserving_components,
                 ordered_comp_ids,
-            )
-        )
+                epoch1,
+                subgraph_mask_1,
+                epoch2,
+                subgraph_mask_2,
+            ),
+            _subgraphs_join_epochs(
+                graph,
+                t_graph,
+                component_to_edges,
+                is_NAC_coloring_routine,
+                from_angle_preserving_components,
+                ordered_comp_ids,
+                epoch1,
+                subgraph_mask_1,
+                epoch2_switched,
+                subgraph_mask_2,
+            ),
+        ),
+        subgraph_mask_1 | subgraph_mask_2,
+    )
 
-        print("-" * 80)
-        print(f"Vertices no:  {nx.number_of_nodes(graph)}")
-        print(f"Edges no:     {nx.number_of_edges(graph)}")
-        print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
-        print(f"Comp. to ed.: {component_to_edges}")
-        print(f"Chunk no.:    {len(chunk_sizes)}")
-        print(f"Chunk sizes:  {chunk_sizes}")
-        print("-" * 80)
 
-    @NAC_statistics_colorings_merge_wrapper
+def _apply_merge_strategy(
+    graph: nx.Graph,
+    t_graph: nx.Graph,
+    component_to_edges: List[List[Edge]],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
+    from_angle_preserving_components: bool,
+    ordered_comp_ids: List[int],
+    merge_strategy: str,
+    all_epochs: List[Tuple[Iterable[int], int]],
+) -> List[Tuple[Iterable[int], int]]:
     def colorings_merge_wrapper(
         colorings_1: Tuple[Iterable[int], int],
         colorings_2: Tuple[Iterable[int], int],
     ) -> Tuple[Iterable[int], int]:
-        (epoch1, subgraph_mask_1) = colorings_1
-        (epoch2, subgraph_mask_2) = colorings_2
-        epoch1 = RepeatableIterator(epoch1)
-        epoch2 = RepeatableIterator(epoch2)
-        # epoch2_switched = ( # could be RepeatableIterator
-        epoch2_switched = RepeatableIterator(
-            # this has to be list so the iterator is not iterated concurrently
-            [coloring ^ subgraph_mask_2 for coloring in epoch2]
+        return _colorings_merge(
+            graph=graph,
+            t_graph=t_graph,
+            component_to_edges=component_to_edges,
+            is_NAC_coloring_routine=is_NAC_coloring_routine,
+            from_angle_preserving_components=from_angle_preserving_components,
+            ordered_comp_ids=ordered_comp_ids,
+            colorings_1=colorings_1,
+            colorings_2=colorings_2,
         )
-
-        vertices_1 = _mask_to_vertices(
-            ordered_comp_ids, component_to_edges, colorings_1[1]
-        )
-        vertices_2 = _mask_to_vertices(
-            ordered_comp_ids, component_to_edges, colorings_2[1]
-        )
-
-        if len(vertices_1.intersection(vertices_2)) <= 1:
-            nac.check._NAC_SUBGRAPHS_NO_INTERSECTION += 1
-
-            def generator() -> Iterator[int]:
-                for c1 in epoch1:
-                    for c2, c2s in zip(epoch2, epoch2_switched):
-                        yield c1 | c2
-                        yield c1 | c2s
-
-            return (
-                generator(),
-                subgraph_mask_1 | subgraph_mask_2,
-            )
-
-        # if at least two vertices are shared, we need to do the full check
-        return (
-            itertools.chain(
-                _subgraphs_join_epochs(
-                    graph,
-                    t_graph,
-                    component_to_edges,
-                    check_selected_NAC_coloring,
-                    from_angle_preserving_components,
-                    ordered_comp_ids,
-                    epoch1,
-                    subgraph_mask_1,
-                    epoch2,
-                    subgraph_mask_2,
-                ),
-                _subgraphs_join_epochs(
-                    graph,
-                    t_graph,
-                    component_to_edges,
-                    check_selected_NAC_coloring,
-                    from_angle_preserving_components,
-                    ordered_comp_ids,
-                    epoch1,
-                    subgraph_mask_1,
-                    epoch2_switched,
-                    subgraph_mask_2,
-                ),
-            ),
-            subgraph_mask_1 | subgraph_mask_2,
-        )
-
-    # Holds all the NAC colorings for a subgraph represented by the second bitmask
-    all_epochs: List[Tuple[Iterable[int], int]] = []
-    # No. of components already processed in previous chunks
-    offset = 0
-    for chunk_size in chunk_sizes:
-        subgraph_mask = 2**chunk_size - 1
-        all_epochs.append(
-            (
-                _subgraph_colorings_generator(
-                    graph,
-                    t_graph,
-                    component_to_edges,
-                    check_selected_NAC_coloring,
-                    ordered_comp_ids,
-                    chunk_size,
-                    offset,
-                ),
-                subgraph_mask << offset,
-            )
-        )
-        offset += chunk_size
 
     match merge_strategy:
         case "linear":
@@ -1651,6 +1581,141 @@ def NAC_colorings_subgraphs(
                 all_epochs.pop(ind2)
         case _:
             raise ValueError(f"Unknown merge strategy: {merge_strategy}")
+
+    return all_epochs
+
+
+def NAC_colorings_subgraphs(
+    graph: nx.Graph,
+    t_graph: nx.Graph,
+    component_to_edges: List[List[Edge]],
+    is_NAC_coloring_routine: Callable[[nx.Graph, NACColoring], bool],
+    seed: int,
+    from_angle_preserving_components: bool,
+    use_smart_split: bool = True,
+    merge_strategy: (
+        str | Literal["linear", "log", "log_reverse", "min_max", "weight"]
+    ) = "linear",
+    preferred_chunk_size: int | None = None,
+    order_strategy: str = "neighbors_degree",
+) -> Iterable[NACColoring]:
+    """
+    This version of the algorithm splits the graphs into subgraphs,
+    find NAC colorings for each of them. The subgraphs are then merged
+    and new colorings are reevaluated till we reach the original graph again.
+    The algorithm tries to find optimal subgraphs and merge strategy.
+    """
+    rand = random.Random(seed)
+
+    # These values are taken from benchmarks as (almost) optimal
+    if preferred_chunk_size is None:
+        preferred_chunk_size = 5 if t_graph.number_of_nodes() < 12 else 6
+
+    preferred_chunk_size = min(preferred_chunk_size, t_graph.number_of_nodes())
+    assert preferred_chunk_size >= 1
+
+    # Represents size (no. of vertices (components) of the t-graph) of a basic subgraph
+    components_no = t_graph.number_of_nodes()
+
+    def create_chunk_sizes() -> List[int]:
+        """
+        Makes sure all the chunks are the same size of 1 bigger
+
+        Could be probably significantly simpler,
+        like np.fill and add some bitmask, but this was my first idea,
+        get over it.
+        """
+        # chunk_size = max(
+        #     int(np.sqrt(components_no)), min(preferred_chunk_size, components_no)
+        # )
+        # chunk_no = (components_no + chunk_size - 1) // chunk_size
+        chunk_no = components_no // preferred_chunk_size
+        chunk_sizes = []
+        remaining_len = components_no
+        for _ in range(chunk_no):
+            # ceiling floats, scary
+            chunk_sizes.append(
+                min(
+                    math.ceil(remaining_len / (chunk_no - len(chunk_sizes))),
+                    remaining_len,
+                )
+            )
+            remaining_len -= chunk_sizes[-1]
+        return chunk_sizes
+
+    chunk_sizes = create_chunk_sizes()
+
+    ordered_comp_ids = _apply_strategy_to_order_vertices(
+        graph=graph,
+        t_graph=t_graph,
+        component_to_edges=component_to_edges,
+        preferred_chunk_size=preferred_chunk_size,
+        order_strategy=order_strategy,
+        use_smart_split=use_smart_split,
+        seed=rand.randint(0, 2**30),
+    )
+
+    assert components_no == len(ordered_comp_ids)
+
+    if NAC_PRINT_SWITCH:
+        print("-" * 80)
+        print(
+            graphviz_graph(
+                order_strategy, component_to_edges, chunk_sizes, ordered_comp_ids
+            )
+        )
+        print("-" * 80)
+        print(
+            graphviz_t_graph(
+                t_graph,
+                order_strategy,
+                component_to_edges,
+                chunk_sizes,
+                ordered_comp_ids,
+            )
+        )
+
+        print("-" * 80)
+        print(f"Vertices no:  {nx.number_of_nodes(graph)}")
+        print(f"Edges no:     {nx.number_of_edges(graph)}")
+        print(f"T-graph size: {nx.number_of_nodes(t_graph)}")
+        print(f"Comp. to ed.: {component_to_edges}")
+        print(f"Chunk no.:    {len(chunk_sizes)}")
+        print(f"Chunk sizes:  {chunk_sizes}")
+        print("-" * 80)
+
+    # Holds all the NAC colorings for a subgraph represented by the second bitmask
+    all_epochs: List[Tuple[Iterable[int], int]] = []
+    # No. of components already processed in previous chunks
+    offset = 0
+    for chunk_size in chunk_sizes:
+        subgraph_mask = 2**chunk_size - 1
+        all_epochs.append(
+            (
+                _subgraph_colorings_generator(
+                    graph,
+                    t_graph,
+                    component_to_edges,
+                    is_NAC_coloring_routine,
+                    ordered_comp_ids,
+                    chunk_size,
+                    offset,
+                ),
+                subgraph_mask << offset,
+            )
+        )
+        offset += chunk_size
+
+    all_epochs = _apply_merge_strategy(
+        graph=graph,
+        t_graph=t_graph,
+        component_to_edges=component_to_edges,
+        is_NAC_coloring_routine=is_NAC_coloring_routine,
+        from_angle_preserving_components=from_angle_preserving_components,
+        ordered_comp_ids=ordered_comp_ids,
+        merge_strategy=merge_strategy,
+        all_epochs=all_epochs,
+    )
 
     assert len(all_epochs) == 1
     expected_subgraph_mask = 2**components_no - 1
