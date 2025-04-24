@@ -223,8 +223,8 @@ def test_sinlge_and_has_NAC_coloring(graph: nx.Graph, result: bool):
         "large_problemist",
     ],
 )
-def test__find_cycles_in_T_graph(graph: nx.Graph, result: Set[Tuple]):
-    res = nac._find_cycles_in_T_graph(
+def test__find_cycles_in_component_graph(graph: nx.Graph, result: Set[Tuple]):
+    res = nac._find_cycles_in_component_graph(
         nx.Graph(),
         graph,
         [],

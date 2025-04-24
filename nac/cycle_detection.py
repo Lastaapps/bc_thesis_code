@@ -11,9 +11,9 @@ from nac.data_type import Edge
 
 
 # obsolete, left for legacy reasons
-def _find_cycles_in_T_graph(
+def _find_cycles_in_component_graph(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
     from_angle_preserving_components: bool,
     all: bool = False,
@@ -35,7 +35,7 @@ def _find_cycles_in_T_graph(
     """
     found_cycles: Set[Tuple[int, ...]] = set()
 
-    vertices = list(t_graph.nodes)
+    vertices = list(comp_graph.nodes)
 
     # disables vertices that represent a disconnected angle preserving
     # component. Search using these components is then disabled.
@@ -86,7 +86,7 @@ def _find_cycles_in_T_graph(
         parent_and_id[start] = (start, -1)
         local_cycle_len = -1
 
-        for u in t_graph.neighbors(start):
+        for u in comp_graph.neighbors(start):
             if u in disabled_vertices:
                 continue
 
@@ -123,7 +123,7 @@ def _find_cycles_in_T_graph(
             v, id = queue.popleft()
             parent = parent_and_id[v][0]
 
-            for u in t_graph.neighbors(v):
+            for u in comp_graph.neighbors(v):
                 # so I don't create cycle on 1 edge
                 # this could be done sooner, I know...
                 if u == parent:

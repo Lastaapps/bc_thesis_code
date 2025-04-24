@@ -155,7 +155,7 @@ def find_monochromatic_classes(
     return edge_to_component, component_to_edge
 
 
-def create_T_graph_from_components(
+def create_component_graph_from_components(
     graph: nx.Graph,
     edges_to_components: Dict[Edge, int],
 ) -> nx.Graph:
@@ -170,7 +170,7 @@ def create_T_graph_from_components(
     """
 
     # graph used to find NAC coloring easily
-    t_graph = nx.Graph()
+    comp_graph = nx.Graph()
 
     def get_edge_component(e: Edge) -> int:
         u, v = e
@@ -186,15 +186,15 @@ def create_T_graph_from_components(
             # this must be explicitly added in case
             # the edge has no neighboring edges
             # in that case this is a single node
-            t_graph.add_node(c1)
+            comp_graph.add_node(c1)
 
             for j in range(i + 1, len(edges)):
                 c2 = get_edge_component(edges[j])
                 if c1 == c2:
                     continue
                 elif c1 < c2:
-                    t_graph.add_edge(c1, c2)
+                    comp_graph.add_edge(c1, c2)
                 else:
-                    t_graph.add_edge(c2, c1)
+                    comp_graph.add_edge(c2, c1)
 
-    return t_graph
+    return comp_graph

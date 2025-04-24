@@ -19,9 +19,11 @@ NAC_PRINT_SWITCH = False
 # NAC_PRINT_SWITCH = True
 
 
-def NAC_statistics_colorings_merge_wrapper[
+def NAC_statistics_colorings_merge[
     T
-](func: Callable[..., Tuple[Iterable[T], int]]) -> Callable[
+](
+    func: Callable[..., Tuple[Iterable[T], int]],
+) -> Callable[
     ..., Tuple[Iterable[T], int]
 ]:
     return func
@@ -41,7 +43,7 @@ def NAC_statistics_colorings_merge_wrapper[
 
 def NAC_statistics_generator[
     T
-](func: Callable[..., Iterable[T]]) -> Callable[..., Iterable[T]]:
+](func: Callable[..., Iterable[T]],) -> Callable[..., Iterable[T]]:
     return func
 
     def stats(*args, **kwargs) -> Iterable[T]:
@@ -136,22 +138,22 @@ def graphviz_graph(
     return nx.nx_agraph.to_agraph(my_graph)
 
 
-def graphviz_t_graph(
-    t_graph: nx.Graph,
+def graphviz_component_graph(
+    comp_graph: nx.Graph,
     name: str,
     component_to_edges: List[List[Edge]],
     chunk_sizes: List[int],
     vertices: List[int],
 ) -> str:
-    my_t_graph = nx.Graph()
-    my_t_graph.name = name
+    my_comp_graph = nx.Graph()
+    my_comp_graph.name = name
     offset = 0
 
     for i, chunk_size in enumerate(chunk_sizes):
         local_vertices = vertices[offset : offset + chunk_size]
         offset += chunk_size
         for v in local_vertices:
-            my_t_graph.add_nodes_from(
+            my_comp_graph.add_nodes_from(
                 [
                     (
                         v,
@@ -162,10 +164,10 @@ def graphviz_t_graph(
                     )
                 ]
             )
-    my_t_graph.add_edges_from(t_graph.edges)
-    my_t_graph = nx.relabel_nodes(
-        my_t_graph,
-        {v: f"{component_to_edges[v]} ({v})" for v in my_t_graph.nodes()},
+    my_comp_graph.add_edges_from(comp_graph.edges)
+    my_comp_graph = nx.relabel_nodes(
+        my_comp_graph,
+        {v: f"{component_to_edges[v]} ({v})" for v in my_comp_graph.nodes()},
     )
 
-    return nx.nx_agraph.to_agraph(my_t_graph)
+    return nx.nx_agraph.to_agraph(my_comp_graph)

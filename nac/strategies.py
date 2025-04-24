@@ -27,7 +27,7 @@ def degree_ordered_nodes(graph: nx.Graph) -> List[int]:
 
 def _cycles_per_vertex(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[List[Tuple[int, ...]]]:
     """
@@ -36,13 +36,13 @@ def _cycles_per_vertex(
     """
     cycles = find_cycles(
         graph,
-        set(t_graph.nodes),
+        set(comp_graph.nodes),
         component_to_edges,
         all=True,
     )
 
-    # vertex_cycles = [[] for _ in range(t_graph.number_of_nodes())]
-    vertex_cycles = [[] for _ in range(max(t_graph.nodes) + 1)]
+    # vertex_cycles = [[] for _ in range(comp_graph.number_of_nodes())]
+    vertex_cycles = [[] for _ in range(max(comp_graph.nodes) + 1)]
     for cycle in cycles:
         for v in cycle:
             vertex_cycles[v].append(cycle)
@@ -52,11 +52,11 @@ def _cycles_per_vertex(
 ################################################################################
 def subgraphs_strategy_degree_cycles(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
-    degree_ordered_comp_ids = degree_ordered_nodes(t_graph)
-    vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
+    degree_ordered_comp_ids = degree_ordered_nodes(comp_graph)
+    vertex_cycles = _cycles_per_vertex(graph, comp_graph, component_to_edges)
 
     ordered_comp_ids: List[int] = []
     used_comp_ids: Set[int] = set()
@@ -77,11 +77,11 @@ def subgraphs_strategy_degree_cycles(
 
 def subgraphs_strategy_cycles(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
-    degree_ordered_comp_ids = degree_ordered_nodes(t_graph)
-    vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
+    degree_ordered_comp_ids = degree_ordered_nodes(comp_graph)
+    vertex_cycles = _cycles_per_vertex(graph, comp_graph, component_to_edges)
 
     ordered_comp_ids: List[int] = []
     used_comp_ids: Set[int] = set()
@@ -116,12 +116,12 @@ def subgraphs_strategy_cycles(
 def subgraphs_strategy_cycles_match_chunks(
     chunk_sizes: Sequence[int],
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
 ) -> List[int]:
     chunk_size = chunk_sizes[0]
-    degree_ordered_comp_ids = degree_ordered_nodes(t_graph)
-    vertex_cycles = _cycles_per_vertex(graph, t_graph, component_to_edges)
+    degree_ordered_comp_ids = degree_ordered_nodes(comp_graph)
+    vertex_cycles = _cycles_per_vertex(graph, comp_graph, component_to_edges)
 
     ordered_comp_ids: List[int] = []
     used_comp_ids: Set[int] = set()
@@ -172,10 +172,10 @@ def subgraphs_strategy_cycles_match_chunks(
 
 
 def subgraphs_strategy_bfs(
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     chunk_sizes: Sequence[int],
 ) -> List[int]:
-    graph = nx.Graph(t_graph)
+    graph = nx.Graph(comp_graph)
     used_comp_ids: Set[int] = set()
     ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
@@ -211,7 +211,7 @@ def subgraphs_strategy_bfs(
 
 def subgraphs_strategy_neighbors(
     graph: nx.Graph,
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
     chunk_sizes: Sequence[int],
     iterative: bool,
@@ -224,11 +224,11 @@ def subgraphs_strategy_neighbors(
     ------
         graph:
             TODO subgraph of the original graph that the algorithm operates on
-        t_graph:
+        comp_graph:
             holds monochromatic components TODO
         components_to_edges:
             mapping giving for a component id
-            (a vertex in t_graph) list of edges of the component
+            (a vertex in comp_graph) list of edges of the component
         chunk_sizes:
             target sizes of resulting subgraphs
         iterative:
@@ -250,9 +250,9 @@ def subgraphs_strategy_neighbors(
 
     # 'Component' stands for monochromatic classes as for legacy naming
 
-    # t_graph is just a peace of legacy code that we did not optimize away yet
+    # comp_graph is just a peace of legacy code that we did not optimize away yet
     # here it serves only as a set of monochromatic components to consider
-    t_graph = nx.Graph(t_graph)
+    comp_graph = nx.Graph(comp_graph)
     ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
 
     # if False, chunk does need to assign random component
@@ -263,13 +263,13 @@ def subgraphs_strategy_neighbors(
     }
 
     # start algo and fill a chunk
-    while t_graph.number_of_nodes() > 0:
+    while comp_graph.number_of_nodes() > 0:
         # TODO connected components
         # TODO run algorithm per component, not per vertex
         # TODO omit adding components with only single connection when
         #      the chunk is almost full
 
-        component_ids = list(t_graph.nodes)
+        component_ids = list(comp_graph.nodes)
         rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
 
         # could by avoided by having a proper subgraph
@@ -298,7 +298,7 @@ def subgraphs_strategy_neighbors(
                 # we find all the cycles of reasonable length in the graph
                 cycles = find_cycles(
                     graph,
-                    set(t_graph.nodes),
+                    set(comp_graph.nodes),
                     component_to_edges,
                     all=True,
                 )
@@ -440,28 +440,28 @@ def subgraphs_strategy_neighbors(
         if iteration_no == 0:
             is_random_component_required[chunk_index] = True
 
-        t_graph.remove_nodes_from(added_components)
+        comp_graph.remove_nodes_from(added_components)
     return [v for group in ordered_comp_ids_groups for v in group]
 
 
 def subgraphs_strategy_beam_neighbors_deprecated(
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     chunk_sizes: Sequence[int],
     start_with_triangles: bool,
     start_from_min: bool,
 ) -> List[int]:
-    t_graph = nx.Graph(t_graph)
+    comp_graph = nx.Graph(comp_graph)
     ordered_comp_ids_groups: List[List[int]] = [[] for _ in chunk_sizes]
     beam_size: int = min(chunk_sizes[0], 10)
     # beam_size: int = 1024
 
-    while t_graph.number_of_nodes() > 0:
+    while comp_graph.number_of_nodes() > 0:
         if start_from_min:
-            start = min(t_graph.degree(), key=lambda x: x[1])[0]
+            start = min(comp_graph.degree(), key=lambda x: x[1])[0]
         else:
-            start = max(t_graph.degree(), key=lambda x: x[1])[0]
+            start = max(comp_graph.degree(), key=lambda x: x[1])[0]
 
-        if start not in t_graph.nodes:
+        if start not in comp_graph.nodes:
             continue
 
         queue: List[int] = [start]
@@ -479,9 +479,12 @@ def subgraphs_strategy_beam_neighbors_deprecated(
         # in fact we just apply the same strategy as later
         # just for the first vertex added as it has no context yet
         if start_with_triangles:
-            start_neighbors = set(t_graph.neighbors(start))
+            start_neighbors = set(comp_graph.neighbors(start))
             for neighbor in start_neighbors:
-                if len(start_neighbors.intersection(t_graph.neighbors(neighbor))) > 0:
+                if (
+                    len(start_neighbors.intersection(comp_graph.neighbors(neighbor)))
+                    > 0
+                ):
                     queue.append(neighbor)
                     bfs_visited.add(neighbor)
                     break
@@ -493,9 +496,9 @@ def subgraphs_strategy_beam_neighbors_deprecated(
             # it's gonna be slow anyway (also the graphs are small)
 
             values = [
-                len(added_comp_ids.intersection(t_graph.neighbors(u))) for u in queue
+                len(added_comp_ids.intersection(comp_graph.neighbors(u))) for u in queue
             ]
-            # values = [(len(added_comp_ids.intersection(t_graph.neighbors(u))), -t_graph.degree(u)) for u in queue]
+            # values = [(len(added_comp_ids.intersection(comp_graph.neighbors(u))), -comp_graph.degree(u)) for u in queue]
 
             sorted_by_metric = sorted(
                 [i for i in range(len(values))],
@@ -514,30 +517,30 @@ def subgraphs_strategy_beam_neighbors_deprecated(
             added_comp_ids.add(v)
             target.append(v)
 
-            for u in t_graph.neighbors(v):
+            for u in comp_graph.neighbors(v):
                 if u in bfs_visited:
                     continue
                 bfs_visited.add(u)
                 queue.append(u)
 
-        t_graph.remove_nodes_from(added_comp_ids)
+        comp_graph.remove_nodes_from(added_comp_ids)
     return [v for group in ordered_comp_ids_groups for v in group]
 
 
 def subgraphs_strategy_components_deprecated(
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     chunk_sizes: Sequence[int],
     start_from_biggest_component: bool,
 ) -> List[int]:
     chunk_no = len(chunk_sizes)
     # NetworkX crashes otherwise
-    if t_graph.number_of_nodes() < 2:
-        return list(t_graph.nodes())
+    if comp_graph.number_of_nodes() < 2:
+        return list(comp_graph.nodes())
 
-    k_components = nx.connectivity.k_components(t_graph)
+    k_components = nx.connectivity.k_components(comp_graph)
 
     if len(k_components) == 0:
-        return list(t_graph.nodes())
+        return list(comp_graph.nodes())
 
     keys = sorted(k_components.keys(), reverse=True)
 
@@ -559,7 +562,7 @@ def subgraphs_strategy_components_deprecated(
                 used_comp_ids.add(v)
 
     # make sure all the nodes were added
-    for v in t_graph.nodes():
+    for v in comp_graph.nodes():
         if v in used_comp_ids:
             continue
         ordered_comp_ids.append(v)
@@ -568,7 +571,7 @@ def subgraphs_strategy_components_deprecated(
 
 
 def subgraphs_strategy_kernighan_lin(
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     preferred_chunk_size: int,
     seed: int,
     weight_key: str | None = None,
@@ -580,7 +583,7 @@ def subgraphs_strategy_kernighan_lin(
             return [list(t_subgraph.nodes)]
 
         a, b = kernighan_lin_bisection(
-            t_graph,
+            comp_graph,
             weight=weight_key,
             seed=rand.randint(0, 2**30),
         )
@@ -594,11 +597,11 @@ def subgraphs_strategy_kernighan_lin(
 
         return do_split(a) + do_split(b)
 
-    return do_split(t_graph)
+    return do_split(comp_graph)
 
 
 def subgraphs_strategy_cuts(
-    t_graph: nx.Graph,
+    comp_graph: nx.Graph,
     preferred_chunk_size: int,
     seed: int,
 ) -> List[List[int]]:
@@ -659,4 +662,4 @@ def subgraphs_strategy_cuts(
 
         return do_split(a) + do_split(b)
 
-    return do_split(t_graph)
+    return do_split(comp_graph)

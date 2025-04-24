@@ -37,7 +37,7 @@ from nac.data_type import NACColoring, Edge
 from nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
-    create_T_graph_from_components,
+    create_component_graph_from_components,
 )
 from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
 from nac.check import (
@@ -359,7 +359,7 @@ def NAC_colorings_impl(
             is_cartesian_NAC_coloring=is_cartesian,
         )
 
-        t_graph = create_T_graph_from_components(graph, edge_to_component)
+        comp_graph = create_component_graph_from_components(graph, edge_to_component)
 
         algorithm_parts = list(algorithm.split("-"))
         match algorithm_parts[0]:
@@ -371,7 +371,7 @@ def NAC_colorings_impl(
                 )
                 return NAC_colorings_naive(
                     graph,
-                    list(t_graph.nodes),
+                    list(comp_graph.nodes),
                     component_to_edge,
                     is_NAC_coloring,
                 )
@@ -385,14 +385,14 @@ def NAC_colorings_impl(
                 if len(algorithm_parts) == 1:
                     return NAC_colorings_cycles(
                         graph,
-                        list(t_graph.nodes),
+                        list(comp_graph.nodes),
                         component_to_edge,
                         is_NAC_coloring,
                         is_cartesian,
                     )
                 return NAC_colorings_cycles(
                     graph,
-                    list(t_graph.nodes),
+                    list(comp_graph.nodes),
                     component_to_edge,
                     is_NAC_coloring,
                     from_angle_preserving_components=is_cartesian,
@@ -408,7 +408,7 @@ def NAC_colorings_impl(
                 if len(algorithm_parts) == 1:
                     return NAC_colorings_subgraphs(
                         graph,
-                        t_graph,
+                        comp_graph,
                         component_to_edge,
                         is_NAC_coloring,
                         from_angle_preserving_components=is_cartesian,
@@ -416,7 +416,7 @@ def NAC_colorings_impl(
                     )
                 return NAC_colorings_subgraphs(
                     graph,
-                    t_graph,
+                    comp_graph,
                     component_to_edge,
                     is_NAC_coloring,
                     from_angle_preserving_components=is_cartesian,
@@ -428,7 +428,7 @@ def NAC_colorings_impl(
                         if algorithm_parts[3] != "auto"
                         else None
                     ),
-                    get_subgraphs_together=(
+                    use_smart_split=(
                         algorithm_parts[4] == "smart"
                         if len(algorithm_parts) == 5
                         else False

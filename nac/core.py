@@ -17,7 +17,7 @@ from nac.data_type import NACColoring, Edge
 from nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
-    create_T_graph_from_components,
+    create_component_graph_from_components,
 )
 from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
 from nac.check import (
@@ -28,9 +28,9 @@ from nac.check import (
 from nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
-    NAC_statistics_colorings_merge_wrapper,
+    NAC_statistics_colorings_merge,
     graphviz_graph,
-    graphviz_t_graph,
+    graphviz_component_graph,
 )
 from nac.util import NiceGraph
 
@@ -91,7 +91,7 @@ def coloring_from_mask(
 
 
 ################################################################################
-def create_bitmask_for_t_graph_cycle(
+def create_bitmask_for_component_graph_cycle(
     graph: nx.Graph,
     component_to_edges: Callable[[int], List[Edge]],
     cycle: Tuple[int, ...],
@@ -174,7 +174,7 @@ def mask_matches_templates(
     Parameters
     ----------
         templates:
-            list of outputs of the create_bitmask_for_t_graph_cycle
+            list of outputs of the create_bitmask_for_component_graph_cycle
             graph method - mask representing vertices presence in a cycle
             and validity mask noting which of them exclude NAC coloring
             if present.
