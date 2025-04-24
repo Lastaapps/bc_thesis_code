@@ -23,14 +23,14 @@ class SeparatingCut[T: Vertex](NamedTuple):
     cut: set[T]
 
     def __repr__(self) -> str:
-        return f"VertexCut({self.a}, {self.b} - {self.cut})"
+        return f"SeparatingCut({self.a}, {self.b} - {self.cut})"
 
     def __eq__(self, other) -> bool:
         if self.cut != other.cut:
             return False
-        if self.a != other.a:
-            return self.a == other.b and self.b == other.a
-        return self.a == other.b
+        if self.a == other.a:
+            return self.b == other.b
+        return self.a == other.b and self.b == other.a
 
 
 class StableCut[T: Vertex](SeparatingCut[T]):
@@ -47,6 +47,9 @@ class StableCut[T: Vertex](SeparatingCut[T]):
         vertices of the cut
     """
 
+    def __repr__(self) -> str:
+        return f"StableCut({self.a}, {self.b} - {self.cut})"
+
     def validate(self, graph: nx.Graph) -> bool:
         """
         Checks if the this cut is a stable cut of the given graph
@@ -55,6 +58,6 @@ class StableCut[T: Vertex](SeparatingCut[T]):
         ----------
 
         """
-        from stablecut.util import is_stable_cut_set
+        from stablecut.util import is_stable_cutset
 
-        return is_stable_cut_set(graph, self)
+        return is_stable_cutset(graph, self)

@@ -16,7 +16,6 @@ def stable_cut_in_flexible_graph[T: Vertex](
     graph: nx.Graph,
     u: Optional[T] = None,
     v: Optional[T] = None,
-    copy: bool = True,
 ) -> Optional[StableCut[T]]:
     """
     Finds a stable cut in a flexible graph
@@ -33,8 +32,6 @@ def stable_cut_in_flexible_graph[T: Vertex](
         The second vertex indicating the other rigid component used
         arbitrary vertex is chosen otherwise.
         Cannot share a same rigid component as ``u``.
-    copy:
-        Whether to make a copy of the graph before destructive modifications
 
     Returns
     -------
@@ -70,7 +67,7 @@ def stable_cut_in_flexible_graph[T: Vertex](
 
     # if there is only a single component, fallback to a faster algorithm
     if len(connected_components) == 1:
-        return stable_cut_in_flexible_graph_fast(graph, u, v, copy=copy)
+        return stable_cut_in_flexible_graph_fast(graph, u, v)
 
     # if the graph is not connected, we can possibly reduce the work needed
     # by finding a connected component that contains u
@@ -93,9 +90,8 @@ def stable_cut_in_flexible_graph[T: Vertex](
         case _:
             v = v
 
-    if not copy:
-        logging.warning("Copy is not avoidable for disconnected graphs")
-    graph = PRGraph(subgraph)
+    if not isinstance(graph, PRGraph):
+        graph = PRGraph(subgraph)
 
     cut = _process(graph, u, v)
     StableCut(a=cut.a, b=cut.b | set(x for c in other for x in c), cut=cut.cut)
@@ -111,16 +107,9 @@ def stable_cut_in_flexible_graph_fast[T: Vertex](
 ) -> Optional[StableCut[T]]:
     """
     Same as stable_cut_in_flexible_graph but faster.
-    Checks for connectivity are removed, the algorithm may fail in those cases
-
-    Parameters
-    ----------
-    """
-    """
-    Finds a stable cut in a flexible graph
-    according to Algorithm 1 in 2412.16018v1.
-    The input graph needs to be connected otherwise
-    the output of the algorithm undefined.
+    Checks for connectivity and assurance,
+    that vertices are in different rigid components,
+    are removed, the algorithm may fail in those cases
 
     Parameters
     ----------
@@ -133,8 +122,6 @@ def stable_cut_in_flexible_graph_fast[T: Vertex](
         The second vertex indicating the other rigid component used
         arbitrary vertex is chosen otherwise.
         Cannot share a same rigid component as ``u``.
-    copy:
-        Whether to make a copy of the graph before destructive modifications
     ensure_rigid_components:
         Whether to ensure that ``u`` and ``v``
         are not in the same rigid component.
@@ -161,7 +148,7 @@ def stable_cut_in_flexible_graph_fast[T: Vertex](
     assert ensure_rigid_components or v is not None
 
     # graph will be modified in place
-    if copy or not isinstance(graph, PRGraph):
+    if not isinstance(graph, PRGraph):
         graph = PRGraph(graph)
 
     if ensure_rigid_components:
@@ -281,6 +268,8 @@ def _process[T: Vertex](
         if problem_found:
             continue
 
-        return _process(graph, u, v)
+        res = _process(graph, u, v)
+        restore(graph, u, x, u_neigh, x_neigh)
+        return res
 
     raise RuntimeError("Rigid components are not maximal")
