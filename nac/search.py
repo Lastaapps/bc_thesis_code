@@ -299,7 +299,6 @@ def _NAC_colorings_cycles(
     # iterate all the coloring variants
     # division by 2 is used as the problem is symmetrical
     for mask in range(1, 2 ** len(components_ids) // 2):
-
         # This is part of a slower implementation using numpy
         # TODO remove before the final merge
         # my_mask = (demasking & mask).astype(np.bool)
@@ -555,6 +554,8 @@ def _subgraphs_strategy_neighbors(
 
         for each component
     """
+    rand = random.Random(seed)
+
     # 'Component' stands for monochromatic classes as for legacy naming
 
     # t_graph is just a peace of legacy code that we did not optimize away yet
@@ -577,7 +578,6 @@ def _subgraphs_strategy_neighbors(
         #      the chunk is almost full
 
         component_ids = list(t_graph.nodes)
-        rand = random.Random(seed)
         rand_comp = component_ids[rand.randint(0, len(component_ids) - 1)]
 
         # could by avoided by having a proper subgraph
@@ -1657,7 +1657,6 @@ def _NAC_colorings_subgraphs(
         colorings_1: Tuple[Iterable[int], int],
         colorings_2: Tuple[Iterable[int], int],
     ) -> Tuple[Iterable[int], int]:
-
         (epoch1, subgraph_mask_1) = colorings_1
         (epoch2, subgraph_mask_2) = colorings_2
         epoch1 = RepeatableIterator(epoch1)
@@ -1725,7 +1724,6 @@ def _NAC_colorings_subgraphs(
     # No. of components already processed in previous chunks
     offset = 0
     for chunk_size in chunk_sizes:
-
         subgraph_mask = 2**chunk_size - 1
         all_epochs.append(
             (
@@ -1816,7 +1814,6 @@ def _NAC_colorings_subgraphs(
                 all_epochs = sorted(all_epochs, key=lambda x: x[1].bit_count())
 
                 for batch_id in range(len(all_epochs) // 2):
-
                     iterable, mask = colorings_merge_wrapper(
                         all_epochs[batch_id],
                         all_epochs[-(batch_id + 1)],
@@ -2042,7 +2039,6 @@ def _NAC_colorings_subgraphs(
                 all_epochs[best_pair[0]] = (list(iterable), mask)
 
         case "shared_vertices":
-
             while len(all_epochs) > 1:
                 best = (0, 0, 1)
                 subgraph_vertices: List[Set[int]] = [
@@ -2510,7 +2506,6 @@ def _NAC_colorings_without_vertex(
     graph: nx.Graph,
     vertex: int | None,
 ) -> Iterable[NACColoring]:
-
     if graph.number_of_nodes() <= 1:
         return
 
