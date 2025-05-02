@@ -96,6 +96,7 @@ class LazyList[T](List[T]):
 
 ###############################################################################
 COLUMNS: List[str] = [
+    "timestamp",
     "graph",
     "dataset",
     "vertex_no",
@@ -106,6 +107,7 @@ COLUMNS: List[str] = [
     "split",
     "merging",
     "subgraph_size",
+    "use_smart_split",
     "used_monochromatic_classes",
     "nac_any_finished",
     "nac_first_coloring_no",
@@ -113,16 +115,21 @@ COLUMNS: List[str] = [
     "nac_first_rounds",
     "nac_first_check_is_NAC",
     "nac_first_check_cycle_mask",
+    "nac_first_merge",
+    "nac_first_merge_no_common_vertex",
     "nac_all_coloring_no",
     "nac_all_mean_time",
     "nac_all_rounds",
     "nac_all_check_is_NAC",
     "nac_all_check_cycle_mask",
+    "nac_all_merge",
+    "nac_all_merge_no_common_vertex",
 ]
 
 
 @dataclass
 class MeasurementResult:
+    timestamp: datetime.datetime
     graph: str
     dataset: str
     vertex_no: int
@@ -133,6 +140,7 @@ class MeasurementResult:
     split: str
     merging: str
     subgraph_size: int
+    use_smart_split: bool
     used_monochromatic_classes: bool
     nac_any_finished: bool
     nac_first_coloring_no: Optional[int]
@@ -140,14 +148,19 @@ class MeasurementResult:
     nac_first_rounds: Optional[int]
     nac_first_check_is_NAC: Optional[int]
     nac_first_check_cycle_mask: Optional[int]
+    nac_first_merge: Optional[int]
+    nac_first_merge_no_common_vertex: Optional[int]
     nac_all_coloring_no: Optional[int]
     nac_all_mean_time: Optional[int]
     nac_all_rounds: Optional[int]
     nac_all_check_is_NAC: Optional[int]
     nac_all_check_cycle_mask: Optional[int]
+    nac_all_merge: Optional[int]
+    nac_all_merge_no_common_vertex: Optional[int]
 
     def to_list(self) -> List:
         return [
+            self.timestamp,
             self.graph,
             self.dataset,
             self.vertex_no,
@@ -158,6 +171,7 @@ class MeasurementResult:
             self.split,
             self.merging,
             self.subgraph_size,
+            self.use_smart_split,
             self.used_monochromatic_classes,
             self.nac_any_finished,
             self.nac_first_coloring_no,
@@ -165,11 +179,15 @@ class MeasurementResult:
             self.nac_first_rounds,
             self.nac_first_check_is_NAC,
             self.nac_first_check_cycle_mask,
+            self.nac_first_merge,
+            self.nac_first_merge_no_common_vertex,
             self.nac_all_coloring_no,
             self.nac_all_mean_time,
             self.nac_all_rounds,
             self.nac_all_check_is_NAC,
             self.nac_all_check_cycle_mask,
+            self.nac_all_merge,
+            self.nac_all_merge_no_common_vertex,
         ]
 
 
@@ -196,14 +214,14 @@ def graph_from_id(id: str) -> nx.Graph:
 ###############################################################################
 
 OUTPUT_DIR: str = None
-_BENCH_FILE_START = "bench_res"
-
+OUTPUT_BENCH_FILE_START = "bench_res"
+OUTPUT_VERBOSE: bool = False
 
 def get_output_dir() -> str:
     return OUTPUT_DIR
 
 
-def _find_latest_record_file(
+def find_latest_record_file(
     prefix: str,
     dir: str,
 ) -> str | None:
@@ -221,16 +239,16 @@ def _find_latest_record_file(
 def load_records(
     file_name: str | None = None,
     dir: str | None = None,
-    allow_output: bool = False,
+    allow_output: bool | None = None,
 ) -> pd.DataFrame:
     """
     Loads the results from the last run or the run specified by `file_name` in the `dir` given.
     """
     dir = dir or OUTPUT_DIR
     if file_name == None:
-        file_name = _find_latest_record_file(_BENCH_FILE_START, dir)
+        file_name = find_latest_record_file(OUTPUT_BENCH_FILE_START, dir)
         if file_name is None:
-            if allow_output:
+            if allow_output or OUTPUT_VERBOSE:
                 print(f"No file with results found in {dir}!")
             return toBenchmarkResults()
         print(f"Found file: {file_name}")
@@ -253,7 +271,7 @@ def store_results(
     dir = dir or OUTPUT_DIR
     if file_name is None:
         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        file_name = f"{_BENCH_FILE_START}_{current_time}.csv"
+        file_name = f"{OUTPUT_BENCH_FILE_START}_{current_time}.csv"
     path = os.path.join(dir, file_name)
 
     # Filter out outliers (over 60s) that run when I put my laptor into sleep mode
@@ -311,12 +329,11 @@ def with_timeout[
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(time_limit)
 
-            res = function(*args, **kwargs)
-
-            signal.alarm(0)
-            return res
+            return function(*args, **kwargs)
         except BenchmarkTimeoutException:
             return default
+        finally:
+            signal.alarm(0)
 
     return impl
 
@@ -333,6 +350,8 @@ class MeasuredRecord:
     rounds: int = 0
     checks_is_NAC: int = 0
     checks_cycle_mask: int = 0
+    merge: int = 0
+    merge_no_common_vetex: int = 0
 
     @property
     def mean_time(self) -> int:
@@ -400,6 +419,8 @@ def nac_benchmark_core(
             rounds=result.first.rounds + 1,
             checks_is_NAC=nac.NAC_check_called()[0],
             checks_cycle_mask=nac.NAC_check_called()[1],
+            merge=nac.NAC_check_called()[2],
+            merge_no_common_vetex=nac.NAC_check_called()[3],
         )
 
         if first_only:
@@ -418,6 +439,8 @@ def nac_benchmark_core(
             rounds=result.all.rounds + 1,
             checks_is_NAC=nac.NAC_check_called()[0],
             checks_cycle_mask=nac.NAC_check_called()[1],
+            merge=nac.NAC_check_called()[2],
+            merge_no_common_vetex=nac.NAC_check_called()[3],
         )
 
     def run() -> None:
@@ -444,7 +467,9 @@ def create_measurement_result(
     split_strategy: str,
     merge_strategy: str,
     subgraph_size: int,
+    use_smart_split: bool,
     used_monochromatic_classes: bool,
+    timestamp: datetime.datetime = datetime.datetime.now(datetime.UTC),
 ) -> MeasurementResult:
     vertex_no = nx.number_of_nodes(graph)
     edge_no = nx.number_of_edges(graph)
@@ -454,6 +479,7 @@ def create_measurement_result(
     nac_all = nac_all or MeasuredRecord()
 
     return MeasurementResult(
+        timestamp=timestamp,
         graph=graph_to_id(graph),
         dataset=dataset_name,
         vertex_no=vertex_no,
@@ -464,6 +490,7 @@ def create_measurement_result(
         split=split_strategy,
         merging=merge_strategy,
         subgraph_size=subgraph_size,
+        use_smart_split=use_smart_split,
         used_monochromatic_classes=used_monochromatic_classes,
         nac_any_finished=nac_any_finished,
         nac_first_coloring_no=nac_first.coloring_no,
@@ -471,11 +498,15 @@ def create_measurement_result(
         nac_first_rounds=nac_first.rounds,
         nac_first_check_is_NAC=nac_first.checks_is_NAC,
         nac_first_check_cycle_mask=nac_first.checks_cycle_mask,
+        nac_first_merge=nac_first.merge,
+        nac_first_merge_no_common_vertex=nac_first.merge_no_common_vetex,
         nac_all_coloring_no=nac_all.coloring_no,
         nac_all_mean_time=nac_all.mean_time,
         nac_all_rounds=nac_all.rounds,
         nac_all_check_is_NAC=nac_all.checks_is_NAC,
         nac_all_check_cycle_mask=nac_all.checks_cycle_mask,
+        nac_all_merge=nac_all.merge,
+        nac_all_merge_no_common_vertex=nac_all.merge_no_common_vetex,
     )
 
 

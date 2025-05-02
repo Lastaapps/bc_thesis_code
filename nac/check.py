@@ -17,20 +17,28 @@ from nac.util import NiceGraph
 # how many times was the routine called
 _NAC_CHECK_IS_NAC_COLORING = 0
 _NAC_CHECK_CYCLE_MASK = 0
-_NAC_SUBGRAPHS_NO_INTERSECTION = 0
+_NAC_MERGE = 0
+_NAC_MERGE_NO_COMMON_VERTEX = 0
 
 
 def _NAC_check_called_reset():
     global _NAC_CHECK_IS_NAC_COLORING
     global _NAC_CHECK_CYCLE_MASK
-    global _NAC_SUBGRAPHS_NO_INTERSECTION
+    global _NAC_MERGE
+    global _NAC_MERGE_NO_COMMON_VERTEX
     _NAC_CHECK_IS_NAC_COLORING = 0
     _NAC_CHECK_CYCLE_MASK = 0
-    _NAC_SUBGRAPHS_NO_INTERSECTION = 0
+    _NAC_MERGE = 0
+    _NAC_MERGE_NO_COMMON_VERTEX = 0
 
 
-def NAC_check_called() -> Tuple[int, int]:
-    return (_NAC_CHECK_IS_NAC_COLORING, _NAC_CHECK_CYCLE_MASK)
+def NAC_check_called() -> Tuple[int, int, int, int]:
+    return (
+        _NAC_CHECK_IS_NAC_COLORING,
+        _NAC_CHECK_CYCLE_MASK,
+        _NAC_MERGE,
+        _NAC_MERGE_NO_COMMON_VERTEX,
+    )
 
 
 def _check_for_almost_red_cycles(

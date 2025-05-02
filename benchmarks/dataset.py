@@ -19,6 +19,7 @@ from nac.util import NiceGraph as Graph
 DIR_STORE = os.path.join("graphs_store")
 DIR_RANDOM = os.path.join(DIR_STORE, "random")
 DIR_EXTRACTED = os.path.join(DIR_STORE, "extracted")
+DIR_NO_NAC = os.path.join(DIR_STORE, "no_NAC_coloring_graphs")
 
 DIR_LAMAN_NAUTY = os.path.join(DIR_STORE, "nauty")
 DIR_LAMAN = os.path.join(DIR_LAMAN_NAUTY, "laman_some")
@@ -191,5 +192,17 @@ def load_sparse_with_few_colorings_graphs() -> List[Graph]:
     )
 
 
-def load_no_NAC_coloring_graphs() -> List[Graph]:
+def load_no_NAC_coloring_graphs_gathered() -> List[Graph]:
     return load_graph6_graphs_from_file(os.path.join(DIR_EXTRACTED, "no_nac_coloring"))
+
+
+def load_no_NAC_coloring_graphs_generated(
+    start: int, length: int = 10, seed: int | None = 42
+) -> List[Graph]:
+    graphs: List[Graph] = []
+    for i in range(start, start + length):
+        graphs += load_graph6_graphs_from_file(
+            os.path.join(DIR_NO_NAC, f"no_NAC_coloring-{i}-TRIANGLES.g6")
+        )
+    random.Random(seed).shuffle(graphs)
+    return graphs[:1000]

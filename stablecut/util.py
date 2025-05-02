@@ -17,10 +17,9 @@ def _to_vertices[T](vertices: Iterable[T] | SeparatingCut[T]) -> set[T]:
     return set(vertices)
 
 
-def stable_set_violation[T: Vertex](
-    graph: nx.Graph,
-    vertices: Iterable[T] | SeparatingCut[T],
-) -> Optional[tuple[T, T]]:
+def stable_set_violation[
+    T: Vertex
+](graph: nx.Graph, vertices: Iterable[T] | SeparatingCut[T],) -> Optional[tuple[T, T]]:
     """
     Checks if the given set of vertices is stable in the given graph.
 
@@ -40,10 +39,9 @@ def stable_set_violation[T: Vertex](
     return None
 
 
-def is_stable_set[T: Vertex](
-    graph: nx.Graph,
-    vertices: Iterable[T] | SeparatingCut[T],
-) -> bool:
+def is_stable_set[
+    T: Vertex
+](graph: nx.Graph, vertices: Iterable[T] | SeparatingCut[T],) -> bool:
     """
     Checks if the given set of vertices is stable in the given graph.
 
@@ -57,11 +55,9 @@ def is_stable_set[T: Vertex](
     return stable_set_violation(graph, vertices) is None
 
 
-def _revertable_set_removal[T: Vertex, R](
-    graph: nx.Graph,
-    vertices: set[T],
-    opt: Callable[[nx.Graph], R],
-) -> R:
+def _revertable_set_removal[
+    T: Vertex, R
+](graph: nx.Graph, vertices: set[T], opt: Callable[[nx.Graph], R],) -> R:
     """
     Remove given vertices from the graph, perform operation,
     return vertices along with edges back.
@@ -97,10 +93,9 @@ def _revertable_set_removal[T: Vertex, R](
     return res
 
 
-def is_separating_set[T: Vertex](
-    graph: nx.Graph,
-    vertices: Iterable[T] | SeparatingCut[T],
-) -> bool:
+def is_separating_set[
+    T: Vertex
+](graph: nx.Graph, vertices: Iterable[T] | SeparatingCut[T],) -> bool:
     """
     Checks if the given set of vertices is a separator in the given graph.
 
@@ -116,7 +111,9 @@ def is_separating_set[T: Vertex](
     return _revertable_set_removal(graph, vertices, lambda g: not nx.is_connected(g))
 
 
-def is_separating_set_dividing[T: Vertex](
+def is_separating_set_dividing[
+    T: Vertex
+](
     graph: nx.Graph,
     vertices: Iterable[T] | SeparatingCut[T],
     u: T,
@@ -158,7 +155,9 @@ def is_separating_set_dividing[T: Vertex](
     return _revertable_set_removal(graph, vertices, check_graph)
 
 
-def is_stable_cutset[T: Vertex](
+def is_stable_cutset[
+    T: Vertex
+](
     graph: nx.Graph,
     vertices: Iterable[T] | SeparatingCut[T],
     copy: bool = True,
@@ -178,7 +177,9 @@ def is_stable_cutset[T: Vertex](
     )
 
 
-def is_stable_cutset_dividing[T: Vertex](
+def is_stable_cutset_dividing[
+    T: Vertex
+](
     graph: nx.Graph,
     vertices: Iterable[T] | SeparatingCut[T],
     u: T,

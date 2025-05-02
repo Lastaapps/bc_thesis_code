@@ -32,7 +32,7 @@ from nac.development import (
     NAC_statistics_generator,
     NAC_statistics_colorings_merge,
     graphviz_graph,
-    graphviz_componencomp_graph,
+    graphviz_component_graph,
 )
 
 from nac.cycle_detection import find_cycles
@@ -828,11 +828,12 @@ def _apply_strategy_to_order_vertices(
     graph: nx.Graph,
     comp_graph: nx.Graph,
     component_to_edges: List[List[Edge]],
+    chunk_sizes: List[int],
     preferred_chunk_size: int,
     order_strategy: str,
     use_smart_split: bool,
     seed: int,
-) -> List[int]:
+) -> Tuple[List[int], List[int]]:
     def process(
         search_func: Callable[[nx.Graph, Sequence[int]], List[int]],
     ):
@@ -1036,7 +1037,7 @@ def _apply_strategy_to_order_vertices(
             raise ValueError(
                 f"Unknown strategy: {order_strategy}, supported: none, degree, degree_cycles, cycles, cycles_match_chunks, bfs, beam_neighbors, components_biggest, components_spredded"
             )
-    return ordered_comp_ids
+    return ordered_comp_ids, chunk_sizes
 
 
 @NAC_statistics_colorings_merge
@@ -1050,6 +1051,8 @@ def _colorings_merge(
     colorings_1: Tuple[Iterable[int], int],
     colorings_2: Tuple[Iterable[int], int],
 ) -> Tuple[Iterable[int], int]:
+    nac.check._NAC_MERGE += 1
+
     (epoch1, subgraph_mask_1) = colorings_1
     (epoch2, subgraph_mask_2) = colorings_2
     epoch1 = RepeatableIterator(epoch1)
@@ -1064,7 +1067,7 @@ def _colorings_merge(
     vertices_2 = _mask_to_vertices(ordered_comp_ids, component_to_edges, colorings_2[1])
 
     if len(vertices_1.intersection(vertices_2)) <= 1:
-        nac.check._NAC_SUBGRAPHS_NO_INTERSECTION += 1
+        nac.check._NAC_MERGE_NO_COMMON_VERTEX += 1
 
         def generator() -> Iterator[int]:
             for c1 in epoch1:
@@ -1197,6 +1200,9 @@ def _apply_merge_strategy(
                 all_epochs = next_all_epochs
 
         case "min_max":
+            """
+            Joins smallest and largest subgraphs first
+            """
             # Joins the subgraphs like a tree
             all_epochs: List[Tuple[List[int], int]] = [
                 (list(i), m) for i, m in all_epochs
@@ -1450,7 +1456,7 @@ def _apply_merge_strategy(
                 all_epochs[best[1]] = res
                 all_epochs.pop(best[2])
 
-        case "promising_cycles":
+        case "promising_cycles":  # really slow
             """
             This strategy looks for edges that when added
             to a subgraph can cause a cycle.
@@ -1651,10 +1657,11 @@ def NAC_colorings_subgraphs(
 
     chunk_sizes = create_chunk_sizes()
 
-    ordered_comp_ids = _apply_strategy_to_order_vertices(
+    ordered_comp_ids, chunk_sizes = _apply_strategy_to_order_vertices(
         graph=graph,
         comp_graph=comp_graph,
         component_to_edges=component_to_edges,
+        chunk_sizes=chunk_sizes,
         preferred_chunk_size=preferred_chunk_size,
         order_strategy=order_strategy,
         use_smart_split=use_smart_split,
@@ -1672,7 +1679,7 @@ def NAC_colorings_subgraphs(
         )
         print("-" * 80)
         print(
-            graphviz_componencomp_graph(
+            graphviz_component_graph(
                 comp_graph,
                 order_strategy,
                 component_to_edges,

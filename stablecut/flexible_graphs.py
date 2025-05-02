@@ -12,11 +12,15 @@ from pyrigi.data_type import Vertex
 from pyrigi import Graph as PRGraph
 
 
-def stable_cut_in_flexible_graph[T: Vertex](
+def stable_cut_in_flexible_graph[
+    T: Vertex
+](
     graph: nx.Graph,
     u: Optional[T] = None,
     v: Optional[T] = None,
-) -> Optional[StableCut[T]]:
+) -> Optional[
+    StableCut[T]
+]:
     """
     Finds a stable cut in a flexible graph
     according to Algorithm 1 in 2412.16018v1
@@ -98,7 +102,9 @@ def stable_cut_in_flexible_graph[T: Vertex](
     return cut
 
 
-def stable_cut_in_flexible_graph_fast[T: Vertex](
+def stable_cut_in_flexible_graph_fast[
+    T: Vertex
+](
     graph: nx.Graph,
     u: Optional[T] = None,
     v: Optional[T] = None,
@@ -161,11 +167,9 @@ def stable_cut_in_flexible_graph_fast[T: Vertex](
     return _process(graph, u, v)
 
 
-def _find_and_validate_u_and_v[T: Vertex](
-    graph: PRGraph,
-    u: T,
-    v: Optional[T],
-) -> Optional[T]:
+def _find_and_validate_u_and_v[
+    T: Vertex
+](graph: PRGraph, u: T, v: Optional[T],) -> Optional[T]:
     """
     Makes sure ``u`` and ``v`` are in different rigid components and
     finds such ``v`` if not provided.
@@ -205,11 +209,9 @@ def _find_and_validate_u_and_v[T: Vertex](
     return v
 
 
-def _process[T: Vertex](
-    graph: PRGraph,
-    u: T,
-    v: T,
-) -> StableCut[T]:
+def _process[
+    T: Vertex
+](graph: PRGraph, u: T, v: T,) -> StableCut[T]:
     """
     Finds a stable cut in a flexible graph
     """
