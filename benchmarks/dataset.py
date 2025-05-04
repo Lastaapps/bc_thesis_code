@@ -19,7 +19,7 @@ from nac.util import NiceGraph as Graph
 DIR_STORE = os.path.join("graphs_store")
 DIR_RANDOM = os.path.join(DIR_STORE, "random")
 DIR_EXTRACTED = os.path.join(DIR_STORE, "extracted")
-DIR_NO_NAC = os.path.join(DIR_STORE, "no_NAC_coloring_graphs")
+DIR_NO_NAC = os.path.join(DIR_RANDOM, "no_NAC_coloring_graphs")
 
 DIR_LAMAN_NAUTY = os.path.join(DIR_STORE, "nauty")
 DIR_LAMAN = os.path.join(DIR_LAMAN_NAUTY, "laman_some")

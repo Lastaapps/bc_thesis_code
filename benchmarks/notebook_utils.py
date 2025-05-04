@@ -1,10 +1,7 @@
 from typing import *
 from dataclasses import dataclass
-from collections import defaultdict, deque
 import random
-import importlib
-from random import Random
-from enum import Enum
+import itertools
 
 import matplotlib.pyplot as plt
 import matplotlib_inline.backend_inline as backend_inline
@@ -19,20 +16,13 @@ import os
 import time
 import datetime
 import signal
-import itertools
 import base64
 
 from tqdm import tqdm
 
 import nac as nac
 import nac.util
-from nac import MonochromaticClassType
 from benchmarks import dataset
-
-importlib.reload(nac)
-importlib.reload(nac.util)
-importlib.reload(dataset)
-
 
 ###############################################################################
 # https://stackoverflow.com/a/75898999
@@ -50,7 +40,6 @@ def copy_doc(wrapper: Callable[P, T]):
         return func
 
     return decorator
-
 
 @copy_doc(plt.figure)
 def figure(num: Any = 1, *args, **kwargs) -> Figure:
@@ -511,18 +500,131 @@ def create_measurement_result(
 
 
 ###############################################################################
+# ANALYTICS
 ###############################################################################
+def drop_outliers(
+    df: pd.DataFrame,
+    var: str = "nac_first_mean_time",
+    bottom_perc: float = 0.01,
+    top_perc: float = 0.01,
+) -> pd.DataFrame:
+    bottom = df[var].quantile(bottom_perc)
+    top = df[var].quantile(1-top_perc)
+    return df.query(f"{var} >= {bottom} and {var} =< {top_perc}")
+
+################################################################################
+# LaTeX export tooling
+#
+# Resources:
+# https://jwalton.info/Embed-Publication-Matplotlib-Latex/
+################################################################################
+
+DEFAULT_FIG_WIDTH = 398.33858
+LATEX_ENABLED = False
+
+def fig_size(
+        width: float = DEFAULT_FIG_WIDTH,
+        fraction: float = 2,
+        subplots: Tuple[int,int] = (1, 1),
+    ):
+    """Set figure dimensions to avoid scaling in LaTeX.
+
+    Parameters
+    ----------
+    width: float or string
+            Document width in points, or string of predined document type
+    fraction: float, optional
+            Fraction of the width which you wish the figure to occupy
+    subplots: array-like, optional
+            The number of rows and columns of subplots.
+    Returns
+    -------
+    fig_dim: tuple
+            Dimensions of figure in inches
+    """
+
+    # Width of figure (in pts)
+    fig_width_pt = width * fraction
+    # Convert from pt to inches
+    inches_per_pt = 1 / 72.27
+
+    # Golden ratio to set aesthetic figure height
+    # https://disq.us/p/2940ij3
+    golden_ratio = (5**.5 - 1) / 2
+
+    # Figure width in inches
+    fig_width_in = fig_width_pt * inches_per_pt
+    # Figure height in inches
+    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+
+    if subplots == (1, 1):
+        fig_width_in *= 3/4
+        fig_height_in *= 2/5
+
+    return (fig_width_in, fig_height_in)
+
+def export_figure(
+    fig: Figure,
+    dataset: str,
+    dir: str = "figures",
+) -> None:
+    if not LATEX_ENABLED:
+        return
+    mode = "first" if "first" in fig.value_columns else "all"
+    groupped_by = {
+        "vertex_no": "vertex",
+        "monochromatic_classes_no": "monochromatic",
+        "triangle_components_no": "triangle",
+    }[fig.x_column]
+    metric = "runtime" if "time" in fig.value_columns else "checks"
+    kind = fig.based_on
+    os.makedirs(dir, exist_ok=True)
+    fig.savefig(os.path.join(dir, f'graph_export_{dataset}_{mode}_{groupped_by}_{metric}_{kind}.pgf'), format='pgf', bbox_inches='tight')
+
+def export_standard_figure_list(
+    dataset: str,
+    figs: Sequence[Figure],
+    dir: str = "figures",
+) -> None:
+    if not LATEX_ENABLED:
+        return
+    for fig in tqdm(figs):
+        export_figure(fig, dataset, dir)
+
+def enable_latex_output():
+    from matplotlib.backends import backend_pgf # for LaTeX output
+    LATEX_ENABLED = True
+
+    # import seaborn as sns
+    # sns.set_style("whitegrid")
+    # sns.set_theme("paper")
+    # matplotlib.style.use("ggplot")
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            # Use LaTeX default serif font.
+            "font.serif": [],
+            "text.usetex": True,
+            # "font.size": 6,
+            # "savefig.dpi": 600,
+            "legend.fontsize": 9,
+            "figure.titlesize": 18,
+            # "axes.labelsize": 6,
+            # "xtick.labelsize": 6,
+            # "ytick.labelsize": 6
+        }
+    )
+
 ###############################################################################
-
-
 def _group_and_plot(
     df: pd.DataFrame,
+    log_scale: bool,
     axs: List[plt.Axes],
+    aggregations: List[Literal["mean", "median", "3rd quartile"]],
     x_column: Literal["vertex_no", "monochromatic_classes_no"],
     based_on: Literal["relabel", "split", "merging"],
     value_columns: List[Literal["nac_first_mean_time", "nac_all_mean_time"]],
 ):
-    aggregations = ["mean", "median", "3rd quartile"]
     df = df.loc[:, [x_column, based_on, *value_columns]]
     groupped = df.groupby([x_column, based_on])
 
@@ -554,32 +656,37 @@ def _group_and_plot(
         # ax.set_title(f"{rename_based_on[x_column]} {based_on} ({aggregation})")
         # ax.set_title(f"{rename_based_on[x_column]} ({aggregation})")
         ax.set_title(f"{aggregation.capitalize()}")
-        if "time" in value_columns[0]:
-            ax.set_ylabel("Time [ms]")
-        if "check" in value_columns[0]:
-            ax.set_ylabel("Checks [call]")
-        ax.set_yscale("log")
+        if log_scale:
+            ax.set_yscale("log")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_xlabel(rename_based_on[x_column])
-        ax.legend()
+
+        if "time" in value_columns[0]:
+            ax.set_ylabel(r"Time [ms]")
+        elif "check" in value_columns[0]:
+            ax.set_ylabel(r"Checks [call]")
+        else:
+            ax.set_ylabel("FIX ME!")
+
+        if len(aggregations) == 1:
+            ax.legend(
+                bbox_to_anchor=(1.0, 1.0),
+                loc='upper left',
+            )
+        else:
+            ax.legend(
+                loc='upper left',
+            )
 
 
 def plot_frame(
     title: str,
     df: pd.DataFrame,
     ops_value_columns_sets=[
-        [
-            "nac_first_mean_time",
-        ],
-        [
-            "nac_first_check_cycle_mask",
-        ],
-        [
-            "nac_all_mean_time",
-        ],
-        [
-            "nac_all_check_cycle_mask",
-        ],
+        [ "nac_first_mean_time", ],
+        [ "nac_first_check_cycle_mask", ],
+        [ "nac_all_mean_time", ],
+        [ "nac_all_check_cycle_mask", ],
     ],
     ops_x_column=[
         "vertex_no",
@@ -590,13 +697,17 @@ def plot_frame(
         # "split",
         # "merging",
         "split_merging",
+        # "use_smart_split",
+        # "subgraph_size",
     ],
     ops_aggregation=[
         "mean",
         "median",
-    ],  #  "3rd quartile",
+        "3rd quartile",
+    ],
+    log_scale: bool = True,
 ) -> List[Figure]:
-    print(f"Plotting {df.shape[0]} records...")
+    print(f"Plotting {df.shape[0]} records and {df["graph"].nunique()} graphs...")
     figs = []
 
     title_rename = {
@@ -611,23 +722,37 @@ def plot_frame(
         if local_df.shape[0] == 0:
             continue
 
-        nrows = len(ops_x_column) * len(ops_based_on)
-        ncols = len(ops_aggregation)
-        fig = figure(nrows * ncols, (20, 6 * nrows), layout="constrained")
-        title_detail = " | ".join(
-            title_rename[value_column] for value_column in value_columns
-        )
-        fig.suptitle(f"{title} ({title_detail})", fontsize=20)
-        figs.append(fig)
-
-        row = 0
         for x_column in ops_x_column:
             for based_on in ops_based_on:
+                nrows = 1
+                ncols = len(ops_aggregation)
+
+                if not LATEX_ENABLED:
+                    fig = figure(nrows * ncols, (20, 6 * nrows), layout='constrained')
+                else:
+                    fig = figure(
+                        nrows * ncols,
+                        figsize=fig_size(
+                            # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
+                            subplots=(nrows, ncols),
+                        ) if LATEX_ENABLED else None,
+                        layout='constrained',
+                    )
+                title_detail = " | ".join(title_rename[value_column] for value_column in value_columns)
+                fig.suptitle(f"{title} ({title_detail})") # , fontsize=20
+
+                # Used later to safe the figue to the correct file
+                fig.value_columns = value_columns
+                fig.x_column = x_column
+                fig.based_on = based_on
+
+                figs.append(fig)
+                row = 0
                 axs = [
-                    fig.add_subplot(nrows, ncols, i + ncols * row + 1)
-                    for i in range(len(ops_aggregation))
-                ]
-                _group_and_plot(local_df, axs, x_column, based_on, value_columns)
+                    fig.add_subplot(nrows, ncols, i+ncols*row+1)
+                    for i in range(len(ops_aggregation))]
+
+                _group_and_plot(local_df, log_scale, axs, ops_aggregation, x_column, based_on, value_columns)
                 row += 1
     return figs
 
@@ -641,6 +766,7 @@ def _plot_is_NAC_coloring_calls_groups(
     value_columns: List[Literal["nac_first_mean_time", "nac_all_mean_time"]],
     aggregation: Literal["mean", "median", "3rd quartile"],
     legend_rename_dict: Dict[str, str] = {},
+    legend_outside: bool = False,
 ):
     df = df.loc[:, [x_column, *value_columns]]
     groupped = df.groupby([x_column])
@@ -666,7 +792,19 @@ def _plot_is_NAC_coloring_calls_groups(
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xlabel(rename_based_on[x_column])
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles, [legend_rename_dict[l] for l in labels], loc="upper left")
+    if legend_outside:
+        ax.legend(
+        handles,
+        [legend_rename_dict[l] for l in labels],
+            bbox_to_anchor=(1.0, 1.0),
+            loc='upper left',
+        )
+    else:
+        ax.legend(
+            handles,
+            [legend_rename_dict[l] for l in labels],
+            # loc = 'upper left',
+        )
 
 
 def plot_is_NAC_coloring_calls(
@@ -730,24 +868,28 @@ def plot_is_NAC_coloring_calls(
     )
 
     rename_dict = {
-        "exp_edge_no": "Naive - edges",
-        "exp_triangle_component_no": "Naive - triangle-components",
-        "exp_monochromatic_class_no": "Naive - monochromatic classes",
+        "exp_edge_no": "Naive - Edges",
+        "exp_triangle_component_no": "Naive - Triangle-components",
+        "exp_monochromatic_class_no": "Naive - Monochromatic classes",
         "nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
-        "scaled_edge_no": "Naive - edges",
-        "scaled_triangle_component_no": "Naive - triangle-components",
-        "scaled_monochromatic_class_no": "Naive - monochromatic classes",
+
+        "scaled_edge_no": "Naive - Edges",
+        "scaled_triangle_component_no": "Naive - Triangle-components",
+        "scaled_monochromatic_class_no": "Naive - Monochromatic classes",
         "scaled_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
-        "inv_edge_no": "Naive - edges",
-        "inv_triangle_component_no": "Naive - triangle-components",
-        "inv_monochromatic_class_no": "Naive - monochromatic classes",
+
+        "inv_edge_no": "Naive - Edges",
+        "inv_triangle_component_no": "Naive - Triangle-components",
+        "inv_monochromatic_class_no": "Naive - Monochromatic classes",
         "inv_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
-        "new_edge_no": "Naive - edges",
-        "new_triangle_component_no": "Naive - triangle-components",
-        "new_monochromatic_class_no": "Naive - monochromatic classes",
+
+        "new_edge_no": "Naive - Edges",
+        "new_triangle_component_no": "Naive - Triangle-components",
+        "new_monochromatic_class_no": "Naive - Monochromatic classes",
         "new_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
+        "new_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
     }
 
     ops_x_column = [
@@ -755,27 +897,16 @@ def plot_is_NAC_coloring_calls(
         "monochromatic_classes_no",
     ]
     ops_value_groups = [
-        [
-            "exp_edge_no",
-            "exp_triangle_component_no",
-            "exp_monochromatic_class_no",
-            "nac_all_check_cycle_mask",
-            "nac_all_check_is_NAC",
-        ],
+        ["exp_edge_no",    "exp_triangle_component_no",    "exp_monochromatic_class_no",    "nac_all_check_cycle_mask",        "nac_all_check_is_NAC",],
         # ["scaled_edge_no", "scaled_triangle_component_no", "scaled_monochromatic_class_no", "scaled_nac_all_check_cycle_mask"],
-        [
-            "inv_edge_no",
-            "inv_triangle_component_no",
-            "inv_monochromatic_class_no",
-            "inv_nac_all_check_cycle_mask",
-            "inv_nac_all_check_is_NAC",
-        ],
+        ["inv_edge_no",    "inv_triangle_component_no",    "inv_monochromatic_class_no",    "inv_nac_all_check_cycle_mask",    "inv_nac_all_check_is_NAC", ],
         # ["new_edge_no",    "new_triangle_component_no",    "new_monochromatic_class_no",    "new_nac_all_check_cycle_mask" ],
     ]
     ops_aggregation = [
         "mean",
         "median",
-    ]  # "3rd quartile",
+        # "3rd quartile",
+    ]
 
     nrows = len(ops_value_groups)
     ncols = len(ops_aggregation)
@@ -791,10 +922,10 @@ def plot_is_NAC_coloring_calls(
 
         for title, value_columns in zip(
             [
-                "The number of checks",
-                # "#is_NAC_coloring() calls/#NAC(G)",
-                "The number of NAC-colorings / The number of checks",
-                # "Count: metric / monochromatic classes number",
+                r"The number of checks",
+                # r"\#is_NAC_coloring() calls/\#NAC(G)",
+                r"The number of NAC-colorings / The number of checks",
+                # r"Checks / triangle components number",
             ],
             ops_value_groups,
         ):

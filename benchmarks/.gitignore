@@ -1,7 +1,5 @@
-graphs_store
 logs
 runs
 precomputed
 
 !NAC_benchmark.ipynb
-!NAC_latex_export.ipynb
