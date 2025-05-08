@@ -510,7 +510,7 @@ def drop_outliers(
 ) -> pd.DataFrame:
     bottom = df[var].quantile(bottom_perc)
     top = df[var].quantile(1-top_perc)
-    return df.query(f"{var} >= {bottom} and {var} =< {top_perc}")
+    return df[(df[var] >= bottom) & (df[var] <= top)]
 
 ################################################################################
 # LaTeX export tooling
@@ -570,16 +570,33 @@ def export_figure(
 ) -> None:
     if not LATEX_ENABLED:
         return
-    mode = "first" if "first" in fig.value_columns else "all"
+    mode = "first" if "first" in fig.value_column else "all" if "all" in  fig.value_column else fig.value_column
     groupped_by = {
         "vertex_no": "vertex",
         "monochromatic_classes_no": "monochromatic",
         "triangle_components_no": "triangle",
     }[fig.x_column]
-    metric = "runtime" if "time" in fig.value_columns else "checks"
+    metric = "runtime" if "time" in fig.value_column else "checks"
     kind = fig.based_on
+    aggregations = fig.aggregations.replace(" ", "-")
+    export_figure_impl(fig, dataset, mode, groupped_by, metric, kind, aggregations, dir)
+
+def export_figure_impl(
+    fig: Figure,
+    dataset: str,
+    mode: Literal["first", "all"],
+    groupped_by: Literal["vertex", "monochromatic", "triangle"],
+    metric: Literal["runtime", "checks", "reduction"],
+    kind: Literal["relabel", "split", "merging", "use_smart_split", "subgraph_size"],
+    aggregations: Literal["mean", "median", "3rd quartile"],
+    dir: str = "figures",
+) -> None:
+    if not LATEX_ENABLED:
+        return
     os.makedirs(dir, exist_ok=True)
-    fig.savefig(os.path.join(dir, f'graph_export_{dataset}_{mode}_{groupped_by}_{metric}_{kind}.pgf'), format='pgf', bbox_inches='tight')
+    file_name = f'graph_export_{dataset}_{mode}_{groupped_by}_{metric}_{kind}_{aggregations}.pgf'
+    # print(f"Exporting: {file_name}")
+    fig.savefig(os.path.join(dir, file_name), format='pgf', bbox_inches='tight')
 
 def export_standard_figure_list(
     dataset: str,
@@ -593,6 +610,7 @@ def export_standard_figure_list(
 
 def enable_latex_output():
     from matplotlib.backends import backend_pgf # for LaTeX output
+    global LATEX_ENABLED
     LATEX_ENABLED = True
 
     # import seaborn as sns
@@ -616,6 +634,24 @@ def enable_latex_output():
     )
 
 ###############################################################################
+def _legend_order_key(label: str) -> int:
+    label = label.lower()
+    if "naive cycles" in label:
+        return 0
+    if "cycles\\_match" in label:
+        return 1
+    if "neighbors\\_degree" in label:
+        return 3
+    if "neighbors" in label:
+        return 2
+    if "none" in label:
+        return 4
+    if "cuts" in label:
+        return 5
+    if "kernighan" in label:
+        return 6
+    return 99
+
 def _group_and_plot(
     df: pd.DataFrame,
     log_scale: bool,
@@ -668,13 +704,23 @@ def _group_and_plot(
         else:
             ax.set_ylabel("FIX ME!")
 
+        # Sort legend labels according to our rules
+        handles, labels = ax.get_legend_handles_labels()
+        order = sorted([(_legend_order_key(lab), i) for i, lab in enumerate(labels)])
+        order = [i for _, i in order]
+        handles = [handles[i] for i in order]
+        labels = [labels[i] for i in order]
+
         if len(aggregations) == 1:
             ax.legend(
+                handles, labels,
                 bbox_to_anchor=(1.0, 1.0),
                 loc='upper left',
             )
         else:
             ax.legend(
+                handles, labels,
+                bbox_to_anchor=(1.0, 1.0),
                 loc='upper left',
             )
 
@@ -724,36 +770,48 @@ def plot_frame(
 
         for x_column in ops_x_column:
             for based_on in ops_based_on:
-                nrows = 1
-                ncols = len(ops_aggregation)
-
                 if not LATEX_ENABLED:
+                    nrows = 1
+                    ncols = len(ops_aggregation)
+
                     fig = figure(nrows * ncols, (20, 6 * nrows), layout='constrained')
+                    title_detail = " | ".join(title_rename[value_column] for value_column in value_columns)
+                    fig.suptitle(f"{title} ({title_detail})") # , fontsize=20
+
+                    figs.append(fig)
+                    row = 0
+                    axs = [
+                        fig.add_subplot(nrows, ncols, i+ncols*row+1)
+                        for i in range(len(ops_aggregation))]
+
+                    _group_and_plot(local_df, log_scale, axs, ops_aggregation, x_column, based_on, value_columns)
+                    row += 1
                 else:
-                    fig = figure(
-                        nrows * ncols,
-                        figsize=fig_size(
-                            # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
-                            subplots=(nrows, ncols),
-                        ) if LATEX_ENABLED else None,
-                        layout='constrained',
-                    )
-                title_detail = " | ".join(title_rename[value_column] for value_column in value_columns)
-                fig.suptitle(f"{title} ({title_detail})") # , fontsize=20
+                    for aggregation in ops_aggregation:
+                        nrows = 1
+                        ncols = 1
 
-                # Used later to safe the figue to the correct file
-                fig.value_columns = value_columns
-                fig.x_column = x_column
-                fig.based_on = based_on
+                        fig = figure(
+                            nrows * ncols,
+                            figsize=fig_size(
+                                # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
+                                subplots=(nrows, ncols),
+                            ),
+                            layout='constrained',
+                        )
 
-                figs.append(fig)
-                row = 0
-                axs = [
-                    fig.add_subplot(nrows, ncols, i+ncols*row+1)
-                    for i in range(len(ops_aggregation))]
+                        # Used later to safe the figue to the correct file
+                        fig.value_column = value_columns[0]
+                        fig.x_column = x_column
+                        fig.based_on = based_on
+                        fig.aggregations = aggregation #"+".join(ops_aggregation)
 
-                _group_and_plot(local_df, log_scale, axs, ops_aggregation, x_column, based_on, value_columns)
-                row += 1
+                        figs.append(fig)
+                        row = 0
+                        axs = [ fig.add_subplot(nrows, ncols, ncols*row+1) ]
+
+                        _group_and_plot(local_df, log_scale, axs, [aggregation], x_column, based_on, value_columns)
+                        row += 1
     return figs
 
 
@@ -786,7 +844,8 @@ def _plot_is_NAC_coloring_calls_groups(
 
     # display(aggregated)
     aggregated.plot(ax=ax)
-    ax.set_title(f"{title} - {aggregation.capitalize()}")
+    if not LATEX_ENABLED:
+        ax.set_title(f"{title} - {aggregation.capitalize()}")
     ax.set_ylabel("Checks [call]")
     ax.set_yscale("log")
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -904,7 +963,7 @@ def plot_is_NAC_coloring_calls(
     ]
     ops_aggregation = [
         "mean",
-        "median",
+        # "median",
         # "3rd quartile",
     ]
 
@@ -912,39 +971,85 @@ def plot_is_NAC_coloring_calls(
     ncols = len(ops_aggregation)
 
     for x_column in ops_x_column:
-        row = 0
-        fig = figure(nrows * ncols, (20, 4 * nrows), layout="constrained")
-        fig.suptitle(
-            f"Reduction of CycleMask and IsNACColoring checks against the naive algorithm",
-            fontsize=20,
-        )
-        figs.append(fig)
+        if not LATEX_ENABLED:
+            row = 0
+            for title, value_columns in zip(
+                [
+                    r"The number of checks",
+                    # r"\#is_NAC_coloring() calls/\#NAC(G)",
+                    r"The number of NAC-colorings / The number of checks",
+                    # r"Checks / triangle components number",
+                ],
+                ops_value_groups,
+            ):
+                fig = figure(nrows * ncols, (20, 4 * nrows), layout="constrained")
+                # fig.suptitle(
+                #     f"Reduction of CycleMask and IsNACColoring checks against the naive algorithm",
+                #     fontsize=20,
+                # )
+                figs.append(fig)
 
-        for title, value_columns in zip(
-            [
-                r"The number of checks",
-                # r"\#is_NAC_coloring() calls/\#NAC(G)",
-                r"The number of NAC-colorings / The number of checks",
-                # r"Checks / triangle components number",
-            ],
-            ops_value_groups,
-        ):
-            axs = [
-                fig.add_subplot(nrows, ncols, i + ncols * row + 1)
-                for i in range(len(ops_aggregation))
-            ]
-            for ax, aggregation in zip(axs, ops_aggregation):
-                _plot_is_NAC_coloring_calls_groups(
-                    title,
-                    df,
-                    ax,
-                    x_column,
-                    value_columns,
-                    aggregation,
-                    legend_rename_dict=rename_dict,
-                )
-            row += 1
+                axs = [
+                    fig.add_subplot(nrows, ncols, i + ncols * row + 1)
+                    for i in range(len(ops_aggregation))
+                ]
+                for ax, aggregation in zip(axs, ops_aggregation):
+                    _plot_is_NAC_coloring_calls_groups(
+                        title,
+                        df,
+                        ax,
+                        x_column,
+                        value_columns,
+                        aggregation,
+                        legend_rename_dict=rename_dict,
+                    )
+                row += 1
+        ################################################################################
+        else:
+            row = 0
+            for title, value_columns in zip(
+                [
+                    r"The number of checks",
+                    # r"\#is_NAC_coloring() calls/\#NAC(G)",
+                    r"The number of NAC-colorings / The number of checks",
+                    # r"Checks / triangle components number",
+                ],
+                ops_value_groups,
+            ):
+                for aggregation in ops_aggregation:
+                    nrows = 1
+                    ncols = 1
 
+                    fig = figure(
+                        nrows * ncols,
+                        figsize=fig_size(
+                            # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
+                            subplots=(nrows, ncols),
+                        ),
+                        layout='constrained',
+                    )
+
+                    # Used later to safe the figue to the correct file
+                    fig.value_column = value_columns[0]
+                    fig.x_column = x_column
+                    fig.based_on = "checks"
+                    fig.aggregations = aggregation #"+".join(ops_aggregation)
+
+                    figs.append(fig)
+                    row = 0
+                    axs = [ fig.add_subplot(nrows, ncols, ncols*row+1) ]
+
+                    for ax, aggregation in zip(axs, [aggregation]):
+                        _plot_is_NAC_coloring_calls_groups(
+                            title,
+                            df,
+                            ax,
+                            x_column,
+                            value_columns,
+                            aggregation,
+                            legend_rename_dict=rename_dict,
+                        )
+                    row += 1
     return figs
 
 
