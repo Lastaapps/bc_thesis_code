@@ -182,6 +182,9 @@ class MeasurementResult:
 
 ###############################################################################
 def toBenchmarkResults(data: List[MeasurementResult] = []) -> pd.DataFrame:
+    """
+    Converts the list of measurements into a dataframe
+    """
     return pd.DataFrame(
         [x.to_list() for x in data],
         columns=COLUMNS,
@@ -189,12 +192,18 @@ def toBenchmarkResults(data: List[MeasurementResult] = []) -> pd.DataFrame:
 
 
 def graph_to_id(graph: nx.Graph) -> str:
+    """
+    Encodes a graph as a base64 string
+    """
     return base64.standard_b64encode(
         nx.graph6.to_graph6_bytes(graph, header=False).strip()
     ).decode()
 
 
 def graph_from_id(id: str) -> nx.Graph:
+    """
+    Encodes a graph from a base64 string
+    """
     return nac.util.NiceGraph(
         nx.graph6.from_graph6_bytes(base64.standard_b64decode(id))
     )
@@ -214,6 +223,9 @@ def find_latest_record_file(
     prefix: str,
     dir: str,
 ) -> str | None:
+    """
+    Finds the latest record file name according to the sorted order
+    """
     def filter_cond(name: str) -> bool:
         return name.startswith(prefix) and name.endswith(".csv")
 
@@ -273,6 +285,9 @@ def store_results(
 def update_stored_data(
     dfs: List[pd.DataFrame] = [], head_loaded: bool = True
 ) -> pd.DataFrame:
+    """
+    Adds the given dataframes to the stored data clearing any duplicates
+    """
     df = load_records()
     if head_loaded:
         display(df)
@@ -296,6 +311,9 @@ def update_stored_data(
 
 ###############################################################################
 class BenchmarkTimeoutException(Exception):
+    """
+    Exception raised when the benchmark timed out
+    """
     def __init__(self, msg: str = "The benchmark timed out", *args, **kwargs):
         super().__init__(msg, *args, **kwargs)
 
@@ -460,6 +478,9 @@ def create_measurement_result(
     used_monochromatic_classes: bool,
     timestamp: datetime.datetime = datetime.datetime.now(datetime.UTC),
 ) -> MeasurementResult:
+    """
+    Constructor for a MeasurementResult
+    """
     vertex_no = nx.number_of_nodes(graph)
     edge_no = nx.number_of_edges(graph)
 
@@ -508,9 +529,48 @@ def drop_outliers(
     bottom_perc: float = 0.01,
     top_perc: float = 0.01,
 ) -> pd.DataFrame:
+    """
+    Drop top and bottom percent of outliers
+    """
     bottom = df[var].quantile(bottom_perc)
     top = df[var].quantile(1-top_perc)
     return df[(df[var] >= bottom) & (df[var] <= top)]
+
+def filter_graphs_that_finished_for_all_strategies(df: pd.DataFrame) -> pd.Series:
+    """
+    Keep only graphs where all the tested strategies finished
+    """
+    all_strategies_groups = df[["nac_any_finished"]].groupby("graph")
+    all_strategies_finished = all_strategies_groups.all()
+    return all_strategies_finished[all_strategies_finished == True].index.unique()
+
+def finished_graphs(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returs runs where there are only graphs wholse all runs finished
+    """
+    return df.loc[filter_graphs_that_finished_for_all_strategies(df)]
+
+def finished_graphs_no_naive(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returs runs where there are only graphs wholse all runs finished excluding the naive-cycles algorithm
+    """
+    return df.loc[filter_graphs_that_finished_for_all_strategies(df.query("split != 'naive-cycles'"))]
+
+# Tries to preserve graphs that partially failed
+def replace_failed_results(df: pd.DataFrame, replace_with: int = 5_000) -> pd.DataFrame:
+    """
+    Replaces failed runs with dummy data and marks such data for later processing
+    """
+    df = df.copy()
+    df_failed = df["nac_any_finished"] == False
+    df[NAC_DUMMY_MEAN_TIME_USED] = False
+    df.loc[df_failed, NAC_DUMMY_MEAN_TIME_USED] = True
+    df.loc[df_failed, "nac_first_mean_time"] = replace_with
+    df.loc[df_failed, "nac_all_mean_time"] = replace_with
+    df.loc[df_failed, "nac_first_check_cycle_mask"] = 0 # these results will be automatically filtered out
+    df.loc[df_failed, "nac_all_check_cycle_mask"] = 0
+    df.loc[df_failed, "nac_any_finished"] = True
+    return df
 
 ################################################################################
 # LaTeX export tooling
@@ -634,6 +694,8 @@ def enable_latex_output():
     )
 
 ###############################################################################
+NAC_DUMMY_MEAN_TIME_USED = "nac_dummy_mean_time_used"
+
 def _legend_order_key(label: str) -> int:
     label = label.lower()
     if "naive cycles" in label:
@@ -661,22 +723,34 @@ def _group_and_plot(
     based_on: Literal["relabel", "split", "merging"],
     value_columns: List[Literal["nac_first_mean_time", "nac_all_mean_time"]],
 ):
-    df = df.loc[:, [x_column, based_on, *value_columns]]
+    # In case we are using only dummy values for a x-axes tick, we do not plot it
+    is_using_dummy = NAC_DUMMY_MEAN_TIME_USED in df.columns
+
+    if is_using_dummy:
+        df = df.loc[:, [x_column, based_on, *value_columns, NAC_DUMMY_MEAN_TIME_USED]]
+    else:
+        df = df.loc[:, [x_column, based_on, *value_columns]]
     groupped = df.groupby([x_column, based_on])
 
     for ax, aggregation in zip(axs, aggregations):
         match aggregation:
             case "mean":
-                aggregated = groupped.mean()
+                action = lambda x: x.mean()
             case "median":
-                aggregated = groupped.median()
+                action = lambda x: x.median()
             case "3rd quartile":
-                aggregated = groupped.quantile(0.75)
+                action = lambda x: x.quantile(0.75)
+        aggregated = groupped.agg(
+            { col: action for col in value_columns }
+            | ({NAC_DUMMY_MEAN_TIME_USED: 'all'} if is_using_dummy else {})
+        )
 
         aggregated = aggregated.reorder_levels([based_on, x_column], axis=0)
 
         for name in aggregated.index.get_level_values(based_on).unique():
             data = aggregated.loc[name]
+            if is_using_dummy:
+                data = data.query(f"{NAC_DUMMY_MEAN_TIME_USED} == False")
             for value_column in value_columns:
                 title = (
                     ",".join([name, value_column]) if len(value_columns) > 1 else name
@@ -711,18 +785,14 @@ def _group_and_plot(
         handles = [handles[i] for i in order]
         labels = [labels[i] for i in order]
 
-        if len(aggregations) == 1:
+        if len(aggregations) == 1 or LATEX_ENABLED:
             ax.legend(
                 handles, labels,
                 bbox_to_anchor=(1.0, 1.0),
                 loc='upper left',
             )
         else:
-            ax.legend(
-                handles, labels,
-                bbox_to_anchor=(1.0, 1.0),
-                loc='upper left',
-            )
+            ax.legend(handles, labels,)
 
 
 def plot_frame(
@@ -753,7 +823,25 @@ def plot_frame(
     ],
     log_scale: bool = True,
 ) -> List[Figure]:
-    print(f"Plotting {df.shape[0]} records and {df["graph"].nunique()} graphs...")
+    """
+    Plot a dataframe
+
+    Parameters
+    ---------
+    title: str
+        The title of the plot
+    df: pd.DataFrame
+        The dataframe to plot
+    ops_value_columns_sets:
+        Lists of columns to plot at once
+    ops_x_column:
+        Name of the X-axis columns
+    ops_based_on:
+        Group based on these columns - separate lines are produced
+    ops_aggregation:
+        Aggregation functions to apply on columns from ops_value_columns_sets
+    """
+    print(f"Plotting {df.shape[0]} records and {df.index.nunique()} graphs...")
     figs = []
 
     title_rename = {
@@ -774,7 +862,7 @@ def plot_frame(
                     nrows = 1
                     ncols = len(ops_aggregation)
 
-                    fig = figure(nrows * ncols, (20, 6 * nrows), layout='constrained')
+                    fig = figure(nrows * ncols, (20, 4 * nrows), layout='constrained')
                     title_detail = " | ".join(title_rename[value_column] for value_column in value_columns)
                     fig.suptitle(f"{title} ({title_detail})") # , fontsize=20
 
