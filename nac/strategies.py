@@ -578,12 +578,12 @@ def subgraphs_strategy_kernighan_lin(
 ) -> List[List[int]]:
     rand = random.Random(seed)
 
-    def do_split(t_subgraph: nx.Graph) -> List[List[int]]:
-        if t_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
-            return [list(t_subgraph.nodes)]
+    def do_split(comp_subgraph: nx.Graph) -> List[List[int]]:
+        if comp_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
+            return [list(comp_subgraph.nodes)]
 
         a, b = kernighan_lin_bisection(
-            comp_graph,
+            comp_subgraph,
             weight=weight_key,
             seed=rand.randint(0, 2**30),
         )
@@ -592,8 +592,8 @@ def subgraphs_strategy_kernighan_lin(
         if len(a) == 0 or len(b) == 0:
             return [list(a | b)]
 
-        a = nx.induced_subgraph(t_subgraph, a)
-        b = nx.induced_subgraph(t_subgraph, b)
+        a = nx.induced_subgraph(comp_subgraph, a)
+        b = nx.induced_subgraph(comp_subgraph, b)
 
         return do_split(a) + do_split(b)
 

@@ -9,10 +9,47 @@ from typing import List, Optional, Set, Tuple
 import pyrigi.graphDB as graphs
 from pyrigi import Graph
 import networkx as nx
+import random
+from tqdm import tqdm
 
 import nac as nac
 
 import pytest
+
+NAC_MERGING_ALL = [
+    "linear",
+    "log",
+    "sorted_bits",
+    "sorted_size",
+    "min_max",
+    "score",
+    "shared_vertices",
+    "promising_cycles",
+]
+NAC_MERGING_GOOD = [
+    "linear",
+    "shared_vertices",
+]
+NAC_SPLIT_ALL = [
+    "none",
+    "random",
+    # "degree",
+    # "degree_cycles",
+    "cycles",
+    "cycles_match_chunks",
+    # "bfs",
+    "neighbors",
+    # "neighbors_cycle",
+    "neighbors_degree",
+    "kernighan_lin",
+    "cuts",
+]
+NAC_SPLIT_GOOD = [
+    "none",
+    "cycles_match_chunks",
+    "neighbors",
+    "neighbors_degree",
+]
 
 
 # TODO move into PyRigi
@@ -1167,7 +1204,6 @@ def test_all_NAC_colorings(
             ),
             True,
         ),
-        # TODO more tests
     ],
 )
 def test_is_NAC_coloring(
@@ -1382,3 +1418,133 @@ def test_is_cartesian_NAC_coloring(
     red, blue = coloring
     assert nac.is_cartesian_NAC_coloring(graph, (red, blue)) == result
     assert nac.is_cartesian_NAC_coloring(graph, (blue, red)) == result
+
+
+################################################################################
+# Fuzzy tests
+################################################################################
+@pytest.mark.parametrize("relabel_strategy", NAC_RELABEL_STRATEGIES)
+@pytest.mark.parametrize(
+    ("n", "graph_no", "reference_algorithm", "tested_algorithms"),
+    [
+        (11, 32, "naive", ["cycles"]),
+        (16, 32, "cycles", ["subgraphs-linear-none-4"]),
+        (
+            18,
+            32,
+            "subgraphs-linear-none-4",
+            (
+                ["subgraphs-{}-none-4".format(merge) for merge in NAC_MERGING_ALL]
+                + ["subgraphs-linear-{}-4".format(split) for split in NAC_SPLIT_ALL]
+            ),
+        ),
+        (
+            26,
+            32,
+            "subgraphs-linear-none-4",
+            (
+                ["subgraphs-{}-none-4".format(merge) for merge in NAC_MERGING_GOOD]
+                + ["subgraphs-linear-{}-4".format(split) for split in NAC_SPLIT_GOOD]
+            ),
+        ),
+    ],
+    ids=[
+        "ensure cycles work based on naive",
+        "ensure subgraphs work based on cycles",
+        "ensure subgraphs strategies",
+        "ensure good subgraphs strategies",
+    ],
+)
+@pytest.mark.nac_test
+@pytest.mark.parametrize("graph_class", ["NAC_critical"])
+@pytest.mark.parametrize("seed", [42, random.randint(0, 2**30)])
+def test_fuzzy_NAC_coloring(
+    n: int,
+    graph_no: int,
+    reference_algorithm: str,
+    tested_algorithms: List[str],
+    graph_class: str,
+    seed: int,
+    relabel_strategy: str,
+):
+    """
+    Checks algorithm validity against the naive implementation
+    (that is hopefully correct) and checks that outputs are the same.
+    Large number of smaller graphs is used (naive implementation is really slow for larger ones).
+    """
+    from benchmarks.generators import _generate_NAC_critical_graph
+
+    verbose = False
+
+    if reference_algorithm in tested_algorithms:
+        tested_algorithms.remove(reference_algorithm)
+
+    rand = random.Random(seed)
+
+    # print()  # prevent tqdm from overlapping test name
+    # for _ in tqdm(range(graph_no)):
+    for _ in range(graph_no):
+        match graph_class:
+            case "NAC_critical":
+                graph_seed = rand.randint(0, 2**30)
+                graph = Graph(_generate_NAC_critical_graph(n, seed=graph_seed))
+                if verbose:
+                    print(graph)
+            case _:
+                raise ValueError
+
+        baseline_seed = rand.randint(0, 2**30)
+        if verbose:
+            print(reference_algorithm, "-", baseline_seed)
+        baseline = list(
+            nac.NAC_colorings(
+                graph=graph,
+                algorithm=reference_algorithm,
+                remove_vertices_cnt=0,
+                # without this naive search is really slow
+                # use_chromatic_partitions=False,
+                use_decompositions=False,
+                relabel_strategy="none",
+                use_has_coloring_check=False,
+                seed=baseline_seed,
+            )
+        )
+
+        for coloring in baseline:
+            nac.is_NAC_coloring(graph, coloring)
+
+        baseline = {
+            nac.canonical_NAC_coloring(coloring, including_red_blue_order=False)
+            for coloring in baseline
+        }
+
+        for tested_algorithm in tested_algorithms:
+            tested_seed = rand.randint(0, 2**30)
+            if verbose:
+                print(tested_algorithm, "-", tested_seed)
+            tested = list(
+                nac.NAC_colorings(
+                    graph=graph,
+                    algorithm=tested_algorithm,
+                    relabel_strategy=relabel_strategy,
+                    use_has_coloring_check=False,
+                    seed=tested_seed,
+                )
+            )
+
+            l1, l2 = len(baseline), len(tested)
+            assert l1 == l2
+
+            # for coloring in tested:
+            #     graph.is_NAC_coloring(coloring)
+
+            tested = {
+                nac.canonical_NAC_coloring(coloring, including_red_blue_order=False)
+                for coloring in tested
+            }
+
+            s1, s2 = len(baseline), len(tested)
+            assert s1 == s2
+            assert l1 == s1
+            assert l2 == s2
+            assert baseline == tested
