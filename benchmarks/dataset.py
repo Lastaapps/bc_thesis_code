@@ -14,7 +14,7 @@ from typing import *
 
 import networkx as nx
 import nac
-from nac.util import NiceGraph as Graph
+from nac import NiceGraph as Graph
 
 DIR_STORE = os.path.join("graphs_store")
 DIR_RANDOM = os.path.join(DIR_STORE, "random")
@@ -22,9 +22,11 @@ DIR_EXTRACTED = os.path.join(DIR_STORE, "extracted")
 DIR_NO_NAC = os.path.join(DIR_RANDOM, "no_NAC_coloring_graphs")
 
 DIR_LAMAN_NAUTY = os.path.join(DIR_STORE, "nauty")
-DIR_LAMAN = os.path.join(DIR_LAMAN_NAUTY, "laman_some")
-DIR_LAMAN_DEGREE_3_PLUS = os.path.join(DIR_LAMAN_NAUTY, "laman_some_degree_3_plus")
-DIR_LAMAN_RANDOM = os.path.join(DIR_RANDOM, "laman")
+DIR_LAMAN = os.path.join(DIR_LAMAN_NAUTY, "minimally_rigid_some")
+DIR_LAMAN_DEGREE_3_PLUS = os.path.join(
+    DIR_LAMAN_NAUTY, "minimally_rigid_some_degree_3_plus"
+)
+DIR_LAMAN_RANDOM = os.path.join(DIR_RANDOM, "minimally_rigid")
 
 
 ################################################################################

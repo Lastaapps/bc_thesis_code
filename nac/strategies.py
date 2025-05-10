@@ -6,8 +6,7 @@ import networkx as nx
 from networkx.algorithms.community import kernighan_lin_bisection
 import numpy as np
 
-from nac.data_type import Edge
-from nac.util import NiceGraph
+from nac import Edge, NiceGraph
 
 from nac.cycle_detection import find_cycles
 
@@ -607,37 +606,37 @@ def subgraphs_strategy_cuts(
 ) -> List[List[int]]:
     rand = random.Random(seed)
 
-    def do_split(t_subgraph: nx.Graph) -> List[List[int]]:
+    def do_split(comp_subgraph: nx.Graph) -> List[List[int]]:
         # required as induced subgraphs are frozen
-        t_subgraph = NiceGraph(t_subgraph)
+        comp_subgraph = NiceGraph(comp_subgraph)
 
-        if t_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
-            return [list(t_subgraph.nodes)]
+        if comp_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
+            return [list(comp_subgraph.nodes)]
 
         # choose all the vertices
-        vert_deg = list(t_subgraph.degree)
+        vert_deg = list(comp_subgraph.degree)
         first_deg = max(d for _, d in vert_deg)
         second_deg = max((d for _, d in vert_deg if d != first_deg), default=first_deg)
         perspective = [v for v, d in vert_deg if d == first_deg or d == second_deg]
 
         # n/2 iterations are fun as result of s->t and t->s may differ
-        the_best_cut: Tuple[Set[int], Set[int]] = (set(t_subgraph.nodes), set())
+        the_best_cut: Tuple[Set[int], Set[int]] = (set(comp_subgraph.nodes), set())
         for s in range(len(perspective)):
             for t in range(len(perspective)):
                 if s == t:
                     continue
                 cut_edges = nx.algorithms.connectivity.minimum_st_edge_cut(
-                    t_subgraph,
+                    comp_subgraph,
                     perspective[s],
                     perspective[t],
                 )
-                t_subgraph.remove_edges_from(cut_edges)
+                comp_subgraph.remove_edges_from(cut_edges)
 
                 # there may be multiple if the graph is disconnected
-                components = nx.connected_components(t_subgraph)
+                components = nx.connected_components(comp_subgraph)
                 component = next(components)
 
-                score = np.abs(2 * len(component) - t_subgraph.number_of_nodes())
+                score = np.abs(2 * len(component) - comp_subgraph.number_of_nodes())
                 curr_score = np.abs(len(the_best_cut[0]) - len(the_best_cut[1]))
 
                 # choose the partitioning with the most balanced halves
@@ -650,15 +649,15 @@ def subgraphs_strategy_cuts(
                         component,
                         set(v for comp in components for v in comp),
                     )
-                t_subgraph.add_edges_from(cut_edges)
+                comp_subgraph.add_edges_from(cut_edges)
 
         a, b = the_best_cut
         # subgraphs may be empty
         if len(a) == 0 or len(b) == 0:
             return [list(a | b)]
 
-        a = nx.induced_subgraph(t_subgraph, a)
-        b = nx.induced_subgraph(t_subgraph, b)
+        a = nx.induced_subgraph(comp_subgraph, a)
+        b = nx.induced_subgraph(comp_subgraph, b)
 
         return do_split(a) + do_split(b)
 

@@ -9,7 +9,7 @@ from nac.monochromatic_classes import (
     create_component_graph_from_components,
 )
 from nac.entry import *
-from nac.util import canonical_NAC_coloring
+from nac.core import canonical_NAC_coloring
 
 from nac.cycle_detection import (
     _find_cycles_in_component_graph,

@@ -12,7 +12,7 @@ import numpy as np
 from nac.data_type import NACColoring, Edge
 
 from nac.existence import check_NAC_constrains
-from nac.util import NiceGraph
+from nac.data_type import NiceGraph
 
 # how many times was the routine called
 _NAC_CHECK_IS_NAC_COLORING = 0

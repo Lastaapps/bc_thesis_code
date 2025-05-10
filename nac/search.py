@@ -33,7 +33,7 @@ from nac.algorithms import (
 )
 from nac.util.repetable_iterator import RepeatableIterator
 
-from nac.data_type import NACColoring, Edge
+from nac.data_type import NACColoring, Edge, NiceGraph
 from nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
@@ -45,7 +45,6 @@ from nac.check import (
     _is_NAC_coloring_impl,
     _NAC_check_called_reset,
 )
-from nac.util import NiceGraph
 
 
 def _NAC_colorings_cross_product(

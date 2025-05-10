@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 import networkx as nx
 import nac
-from nac.util import NiceGraph as Graph
+from nac import NiceGraph as Graph
 from benchmarks import dataset
 
 # TODO import PyRigi
@@ -94,7 +94,6 @@ def generate_random_laman_graphs(
     filename_template: str = "laman_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
-
     ranges = (
         RangeWithCount(10, 20, 128),
         RangeWithCount(20, 30, 64),
@@ -116,7 +115,6 @@ def generate_random_globally_rigid_graphs(
     filename_template: str = "globally_rigid_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
-
     ranges = (
         RangeWithCount(10, 20, 100),
         RangeWithCount(20, 30, 100),
@@ -138,7 +136,6 @@ def generate_random_sparse_with_few_colorings_graphs(
     filename_template: str = "sparse_with_few_colorings_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
-
     ranges = (
         RangeWithCount(10, 20, 100),
         RangeWithCount(20, 30, 100),

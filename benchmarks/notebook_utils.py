@@ -41,6 +41,7 @@ def copy_doc(wrapper: Callable[P, T]):
 
     return decorator
 
+
 @copy_doc(plt.figure)
 def figure(num: Any = 1, *args, **kwargs) -> Figure:
     """Creates a figure that is independent on the global plt state"""
@@ -204,9 +205,7 @@ def graph_from_id(id: str) -> nx.Graph:
     """
     Encodes a graph from a base64 string
     """
-    return nac.util.NiceGraph(
-        nx.graph6.from_graph6_bytes(base64.standard_b64decode(id))
-    )
+    return nac.NiceGraph(nx.graph6.from_graph6_bytes(base64.standard_b64decode(id)))
 
 
 ###############################################################################
@@ -214,6 +213,7 @@ def graph_from_id(id: str) -> nx.Graph:
 OUTPUT_DIR: str = None
 OUTPUT_BENCH_FILE_START = "bench_res"
 OUTPUT_VERBOSE: bool = False
+
 
 def get_output_dir() -> str:
     return OUTPUT_DIR
@@ -226,6 +226,7 @@ def find_latest_record_file(
     """
     Finds the latest record file name according to the sorted order
     """
+
     def filter_cond(name: str) -> bool:
         return name.startswith(prefix) and name.endswith(".csv")
 
