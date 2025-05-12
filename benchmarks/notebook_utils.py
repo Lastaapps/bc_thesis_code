@@ -259,6 +259,8 @@ def load_records(
     df = pd.read_csv(path)
     df = df[COLUMNS]
     assert len(df) > 0
+    if df.isna().sum().sum() > 0:
+        print(f"File {file_name} has missing values!")
     return df
 
 
@@ -284,7 +286,8 @@ def store_results(
 
 
 def update_stored_data(
-    dfs: List[pd.DataFrame] = [], head_loaded: bool = True
+    dfs: List[pd.DataFrame] = [],
+    head_loaded: bool = True,
 ) -> pd.DataFrame:
     """
     Adds the given dataframes to the stored data clearing any duplicates
@@ -293,7 +296,14 @@ def update_stored_data(
     if head_loaded:
         display(df)
     if len(dfs) != 0:
-        df = pd.concat((df, pd.concat(dfs)))
+        new_df = pd.concat(dfs)
+
+        if new_df.isna().sum().sum() > 0:
+            print("Empty values found!")
+            display(new_df[new_df.isna().any(axis=1)])
+            new_df = new_df[~(new_df.isna().any(axis=1))]
+
+        df = pd.concat((df, new_df))
     df = df.drop_duplicates(
         subset=[
             "graph",
@@ -315,13 +325,14 @@ class BenchmarkTimeoutException(Exception):
     """
     Exception raised when the benchmark timed out
     """
+
     def __init__(self, msg: str = "The benchmark timed out", *args, **kwargs):
         super().__init__(msg, *args, **kwargs)
 
 
-def with_timeout[
-    **T, R, D
-](function: Callable[T, R], time_limit: int | None, default: D) -> Callable[T, R | D]:
+def with_timeout[**T, R, D](
+    function: Callable[T, R], time_limit: int | None, default: D
+) -> Callable[T, R | D]:
     """
     Stops the function execution after a specified timeout in seconds is reached.
     """
@@ -534,8 +545,9 @@ def drop_outliers(
     Drop top and bottom percent of outliers
     """
     bottom = df[var].quantile(bottom_perc)
-    top = df[var].quantile(1-top_perc)
+    top = df[var].quantile(1 - top_perc)
     return df[(df[var] >= bottom) & (df[var] <= top)]
+
 
 def filter_graphs_that_finished_for_all_strategies(df: pd.DataFrame) -> pd.Series:
     """
@@ -545,33 +557,55 @@ def filter_graphs_that_finished_for_all_strategies(df: pd.DataFrame) -> pd.Serie
     all_strategies_finished = all_strategies_groups.all()
     return all_strategies_finished[all_strategies_finished == True].index.unique()
 
+
 def finished_graphs(df: pd.DataFrame) -> pd.DataFrame:
     """
     Returs runs where there are only graphs wholse all runs finished
     """
     return df.loc[filter_graphs_that_finished_for_all_strategies(df)]
 
+
 def finished_graphs_no_naive(df: pd.DataFrame) -> pd.DataFrame:
     """
     Returs runs where there are only graphs wholse all runs finished excluding the naive-cycles algorithm
     """
-    return df.loc[filter_graphs_that_finished_for_all_strategies(df.query("split != 'naive-cycles'"))]
+    return df.loc[
+        filter_graphs_that_finished_for_all_strategies(
+            df.query("split != 'naive-cycles'")
+        )
+    ]
+
 
 # Tries to preserve graphs that partially failed
-def replace_failed_results(df: pd.DataFrame, replace_with: int = 5_000) -> pd.DataFrame:
+def replace_failed_results(
+    df: pd.DataFrame, replace_with: int | None = None
+) -> pd.DataFrame:
     """
     Replaces failed runs with dummy data and marks such data for later processing
     """
+    # Chooses the expected time that was actually used
+    if replace_with is None:
+        max_runtime = df.query("nac_any_finished == True")[
+            ["nac_first_mean_time", "nac_all_mean_time"]
+        ].max(axis=None)
+        if max_runtime > 25_000:
+            replace_with = 5_000
+        else:
+            replace_with = ((max_runtime + 4_999) // 5_000) * 5_000
+
     df = df.copy()
     df_failed = df["nac_any_finished"] == False
     df[NAC_DUMMY_MEAN_TIME_USED] = False
     df.loc[df_failed, NAC_DUMMY_MEAN_TIME_USED] = True
     df.loc[df_failed, "nac_first_mean_time"] = replace_with
     df.loc[df_failed, "nac_all_mean_time"] = replace_with
-    df.loc[df_failed, "nac_first_check_cycle_mask"] = 0 # these results will be automatically filtered out
+    df.loc[df_failed, "nac_first_check_cycle_mask"] = (
+        0  # these results will be automatically filtered out
+    )
     df.loc[df_failed, "nac_all_check_cycle_mask"] = 0
     df.loc[df_failed, "nac_any_finished"] = True
     return df
+
 
 ################################################################################
 # LaTeX export tooling
@@ -582,12 +616,15 @@ def replace_failed_results(df: pd.DataFrame, replace_with: int = 5_000) -> pd.Da
 
 DEFAULT_FIG_WIDTH = 398.33858
 LATEX_ENABLED = False
+FIGURES_DIR = "figures"
+GOLDEN_RATIO = (5**0.5 - 1) / 2
 
 def fig_size(
-        width: float = DEFAULT_FIG_WIDTH,
-        fraction: float = 2,
-        subplots: Tuple[int,int] = (1, 1),
-    ):
+    width: float = DEFAULT_FIG_WIDTH,
+    fraction: float = 2,
+    height_ratio: float = GOLDEN_RATIO,
+    subplots: Tuple[int, int] = (1, 1),
+):
     """Set figure dimensions to avoid scaling in LaTeX.
 
     Parameters
@@ -611,27 +648,33 @@ def fig_size(
 
     # Golden ratio to set aesthetic figure height
     # https://disq.us/p/2940ij3
-    golden_ratio = (5**.5 - 1) / 2
 
     # Figure width in inches
     fig_width_in = fig_width_pt * inches_per_pt
     # Figure height in inches
-    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+    fig_height_in = fig_width_in * height_ratio * (subplots[0] / subplots[1])
 
     if subplots == (1, 1):
-        fig_width_in *= 3/4
-        fig_height_in *= 2/5
+        fig_width_in *= 3 / 4
+        fig_height_in *= 2 / 5
 
     return (fig_width_in, fig_height_in)
+
 
 def export_figure(
     fig: Figure,
     dataset: str,
-    dir: str = "figures",
+    dir: str = FIGURES_DIR,
 ) -> None:
     if not LATEX_ENABLED:
         return
-    mode = "first" if "first" in fig.value_column else "all" if "all" in  fig.value_column else fig.value_column
+    mode = (
+        "first"
+        if "first" in fig.value_column
+        else "all"
+        if "all" in fig.value_column
+        else fig.value_column
+    )
     groupped_by = {
         "vertex_no": "vertex",
         "monochromatic_classes_no": "monochromatic",
@@ -642,6 +685,7 @@ def export_figure(
     aggregations = fig.aggregations.replace(" ", "-")
     export_figure_impl(fig, dataset, mode, groupped_by, metric, kind, aggregations, dir)
 
+
 def export_figure_impl(
     fig: Figure,
     dataset: str,
@@ -650,27 +694,41 @@ def export_figure_impl(
     metric: Literal["runtime", "checks", "reduction"],
     kind: Literal["relabel", "split", "merging", "use_smart_split", "subgraph_size"],
     aggregations: Literal["mean", "median", "3rd quartile"],
-    dir: str = "figures",
+    dir: str = FIGURES_DIR,
 ) -> None:
     if not LATEX_ENABLED:
         return
     os.makedirs(dir, exist_ok=True)
-    file_name = f'graph_export_{dataset}_{mode}_{groupped_by}_{metric}_{kind}_{aggregations}.pgf'
+    file_name = f"graph_export_{dataset}_{mode}_{groupped_by}_{metric}_{kind}_{aggregations}.pgf"
     # print(f"Exporting: {file_name}")
-    fig.savefig(os.path.join(dir, file_name), format='pgf', bbox_inches='tight')
+    fig.savefig(os.path.join(dir, file_name), format="pgf", bbox_inches="tight")
+
+def export_monochromatic_vs_triangle(
+        fig: Figure,
+        dataset: str,
+        dir: str = FIGURES_DIR,
+    ):
+    if not LATEX_ENABLED:
+        return
+    os.makedirs(dir, exist_ok=True)
+    file_name = f"monochromatic_vs_triangle_{dataset}.pgf"
+    fig.savefig(os.path.join(dir, file_name), format="pgf", bbox_inches="tight")
+
 
 def export_standard_figure_list(
     dataset: str,
     figs: Sequence[Figure],
-    dir: str = "figures",
+    dir: str = FIGURES_DIR,
 ) -> None:
     if not LATEX_ENABLED:
         return
     for fig in tqdm(figs):
         export_figure(fig, dataset, dir)
 
+
 def enable_latex_output():
-    from matplotlib.backends import backend_pgf # for LaTeX output
+    from matplotlib.backends import backend_pgf  # for LaTeX output
+
     global LATEX_ENABLED
     LATEX_ENABLED = True
 
@@ -695,7 +753,38 @@ def enable_latex_output():
     )
 
 ###############################################################################
+def plot_monochromatic_vs_triangle(df: pd.DataFrame, dataset: str | None = None, n: int = 10):
+    """
+    Compares effectivness of triangle-connected components and monochromatic classes
+    """
+    if dataset is not None:
+        df = df.query(f"dataset == '{dataset}'")
+    df = df
+    df = df.reset_index()[["graph", Columns.MONOCHROMATIC_CLASSES_NO, Columns.TRIANGLE_COMPONENTS_NO]].drop_duplicates().set_index("graph")
+    graph_no = df.index.nunique()
+    graph_no_bellow_monoch_n = df.query(f"monochromatic_classes_no < {n}").index.nunique()
+    graph_no_bellow_triang_n = df.query(f"triangle_components_no < {n}").index.nunique()
+    print(f"Graphs with less then {n} Monochromatic classes: {graph_no_bellow_monoch_n}/{graph_no} ({graph_no_bellow_monoch_n/graph_no*100}%)")
+    print(f"Graphs with less then {n} Triangle-connected components: {graph_no_bellow_triang_n}/{graph_no} ({graph_no_bellow_triang_n/graph_no*100}%)")
+
+    dist = 1+df[Columns.TRIANGLE_COMPONENTS_NO].max()-df[Columns.TRIANGLE_COMPONENTS_NO].min()
+    dist = (dist+1)//4
+    alpha = 0.6
+    fig = figure(
+        figsize=fig_size(DEFAULT_FIG_WIDTH//2, height_ratio=1),
+    )
+    ax = fig.subplots(1,1)
+    ax.hist(df[Columns.MONOCHROMATIC_CLASSES_NO], bins=dist, alpha=alpha, stacked=True, label="Monochromatic classes")
+    ax.hist(df[Columns.TRIANGLE_COMPONENTS_NO], bins=dist, alpha=alpha, stacked=True, label="Triangle-connected components")
+    ax.set_xlabel("Number of m. classes or t. components")
+    ax.set_ylabel("Number of graphs")
+    if not LATEX_ENABLED and dataset:
+        ax.set_title(dataset)
+    return fig
+
+###############################################################################
 NAC_DUMMY_MEAN_TIME_USED = "nac_dummy_mean_time_used"
+
 
 def _legend_order_key(label: str) -> int:
     label = label.lower()
@@ -714,6 +803,7 @@ def _legend_order_key(label: str) -> int:
     if "kernighan" in label:
         return 6
     return 99
+
 
 def _group_and_plot(
     df: pd.DataFrame,
@@ -742,8 +832,8 @@ def _group_and_plot(
             case "3rd quartile":
                 action = lambda x: x.quantile(0.75)
         aggregated = groupped.agg(
-            { col: action for col in value_columns }
-            | ({NAC_DUMMY_MEAN_TIME_USED: 'all'} if is_using_dummy else {})
+            {col: action for col in value_columns}
+            | ({NAC_DUMMY_MEAN_TIME_USED: "all"} if is_using_dummy else {})
         )
 
         aggregated = aggregated.reorder_levels([based_on, x_column], axis=0)
@@ -752,6 +842,8 @@ def _group_and_plot(
             data = aggregated.loc[name]
             if is_using_dummy:
                 data = data.query(f"{NAC_DUMMY_MEAN_TIME_USED} == False")
+            if len(data) == 0:
+                continue
             for value_column in value_columns:
                 title = (
                     ",".join([name, value_column]) if len(value_columns) > 1 else name
@@ -766,7 +858,8 @@ def _group_and_plot(
 
         # ax.set_title(f"{rename_based_on[x_column]} {based_on} ({aggregation})")
         # ax.set_title(f"{rename_based_on[x_column]} ({aggregation})")
-        ax.set_title(f"{aggregation.capitalize()}")
+        if len(aggregations) > 1:
+            ax.set_title(f"{aggregation.capitalize()}")
         if log_scale:
             ax.set_yscale("log")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -780,7 +873,9 @@ def _group_and_plot(
             ax.set_ylabel("FIX ME!")
 
         # Sort legend labels according to our rules
-        handles, labels = ax.get_legend_handles_labels()
+        handles, labels = zip(
+            *sorted(zip(*ax.get_legend_handles_labels()), key=lambda x: x[1])
+        )
         order = sorted([(_legend_order_key(lab), i) for i, lab in enumerate(labels)])
         order = [i for _, i in order]
         handles = [handles[i] for i in order]
@@ -788,26 +883,41 @@ def _group_and_plot(
 
         if len(aggregations) == 1 or LATEX_ENABLED:
             ax.legend(
-                handles, labels,
+                handles,
+                labels,
                 bbox_to_anchor=(1.0, 1.0),
-                loc='upper left',
+                loc="upper left",
             )
         else:
-            ax.legend(handles, labels,)
+            ax.legend(
+                handles,
+                labels,
+            )
 
+class Columns:
+    FIRST_TIME = "nac_first_mean_time"
+    FIRST_CHECKS = "nac_first_check_cycle_mask"
+    ALL_TIME = "nac_all_mean_time"
+    ALL_CHECKS = "nac_all_check_cycle_mask"
+    VERTEX_NO = "vertex_no"
+    MONOCHROMATIC_CLASSES_NO = "monochromatic_classes_no"
+    TRIANGLE_COMPONENTS_NO = "triangle_components_no"
+
+    first = [FIRST_TIME, FIRST_CHECKS]
+    all = [ALL_TIME, ALL_CHECKS]
 
 def plot_frame(
     title: str,
     df: pd.DataFrame,
-    ops_value_columns_sets=[
-        [ "nac_first_mean_time", ],
-        [ "nac_first_check_cycle_mask", ],
-        [ "nac_all_mean_time", ],
-        [ "nac_all_check_cycle_mask", ],
+    ops_value_columns_sets: List[str | List[str]]=[
+        Columns.FIRST_TIME,
+        Columns.FIRST_CHECKS,
+        Columns.ALL_TIME,
+        Columns.ALL_CHECKS,
     ],
     ops_x_column=[
-        "vertex_no",
-        "monochromatic_classes_no",
+        Columns.VERTEX_NO,
+        Columns.MONOCHROMATIC_CLASSES_NO,
     ],
     ops_based_on=[
         #  "relabel",
@@ -823,6 +933,7 @@ def plot_frame(
         "3rd quartile",
     ],
     log_scale: bool = True,
+    filter_out_exhaustive_mergin_strategies_for_first: bool = True,
 ) -> List[Figure]:
     """
     Plot a dataframe
@@ -845,6 +956,8 @@ def plot_frame(
     print(f"Plotting {df.shape[0]} records and {df.index.nunique()} graphs...")
     figs = []
 
+    ops_value_columns_sets = [[item,] if isinstance(item, str) else list(item) for item in ops_value_columns_sets]
+
     title_rename = {
         "nac_first_mean_time": "First NAC-coloring, Runtime",
         "nac_first_check_cycle_mask": "First NAC-coloring, Checks number",
@@ -854,6 +967,10 @@ def plot_frame(
 
     for value_columns in ops_value_columns_sets:
         local_df = df[(df[value_columns] != 0).all(axis=1)]
+
+        if filter_out_exhaustive_mergin_strategies_for_first and "first" in value_columns[0]:
+            local_df = local_df.query("merging != 'sorted_size' and merging != 'score'")
+
         if local_df.shape[0] == 0:
             continue
 
@@ -863,17 +980,28 @@ def plot_frame(
                     nrows = 1
                     ncols = len(ops_aggregation)
 
-                    fig = figure(nrows * ncols, (20, 4 * nrows), layout='constrained')
-                    title_detail = " | ".join(title_rename[value_column] for value_column in value_columns)
-                    fig.suptitle(f"{title} ({title_detail})") # , fontsize=20
+                    fig = figure(nrows * ncols, (20, 4 * nrows), layout="constrained")
+                    title_detail = " | ".join(
+                        title_rename[value_column] for value_column in value_columns
+                    )
+                    fig.suptitle(f"{title} ({title_detail})")  # , fontsize=20
 
                     figs.append(fig)
                     row = 0
                     axs = [
-                        fig.add_subplot(nrows, ncols, i+ncols*row+1)
-                        for i in range(len(ops_aggregation))]
+                        fig.add_subplot(nrows, ncols, i + ncols * row + 1)
+                        for i in range(len(ops_aggregation))
+                    ]
 
-                    _group_and_plot(local_df, log_scale, axs, ops_aggregation, x_column, based_on, value_columns)
+                    _group_and_plot(
+                        local_df,
+                        log_scale,
+                        axs,
+                        ops_aggregation,
+                        x_column,
+                        based_on,
+                        value_columns,
+                    )
                     row += 1
                 else:
                     for aggregation in ops_aggregation:
@@ -886,20 +1014,28 @@ def plot_frame(
                                 # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
                                 subplots=(nrows, ncols),
                             ),
-                            layout='constrained',
+                            layout="constrained",
                         )
 
                         # Used later to safe the figue to the correct file
                         fig.value_column = value_columns[0]
                         fig.x_column = x_column
                         fig.based_on = based_on
-                        fig.aggregations = aggregation #"+".join(ops_aggregation)
+                        fig.aggregations = aggregation  # "+".join(ops_aggregation)
 
                         figs.append(fig)
                         row = 0
-                        axs = [ fig.add_subplot(nrows, ncols, ncols*row+1) ]
+                        axs = [fig.add_subplot(nrows, ncols, ncols * row + 1)]
 
-                        _group_and_plot(local_df, log_scale, axs, [aggregation], x_column, based_on, value_columns)
+                        _group_and_plot(
+                            local_df,
+                            log_scale,
+                            axs,
+                            [aggregation],
+                            x_column,
+                            based_on,
+                            value_columns,
+                        )
                         row += 1
     return figs
 
@@ -942,10 +1078,10 @@ def _plot_is_NAC_coloring_calls_groups(
     handles, labels = ax.get_legend_handles_labels()
     if legend_outside:
         ax.legend(
-        handles,
-        [legend_rename_dict[l] for l in labels],
+            handles,
+            [legend_rename_dict[l] for l in labels],
             bbox_to_anchor=(1.0, 1.0),
-            loc='upper left',
+            loc="upper left",
         )
     else:
         ax.legend(
@@ -1021,18 +1157,15 @@ def plot_is_NAC_coloring_calls(
         "exp_monochromatic_class_no": "Naive - Monochromatic classes",
         "nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
-
         "scaled_edge_no": "Naive - Edges",
         "scaled_triangle_component_no": "Naive - Triangle-components",
         "scaled_monochromatic_class_no": "Naive - Monochromatic classes",
         "scaled_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
-
         "inv_edge_no": "Naive - Edges",
         "inv_triangle_component_no": "Naive - Triangle-components",
         "inv_monochromatic_class_no": "Naive - Monochromatic classes",
         "inv_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
-
         "new_edge_no": "Naive - Edges",
         "new_triangle_component_no": "Naive - Triangle-components",
         "new_monochromatic_class_no": "Naive - Monochromatic classes",
@@ -1045,9 +1178,21 @@ def plot_is_NAC_coloring_calls(
         "monochromatic_classes_no",
     ]
     ops_value_groups = [
-        ["exp_edge_no",    "exp_triangle_component_no",    "exp_monochromatic_class_no",    "nac_all_check_cycle_mask",        "nac_all_check_is_NAC",],
+        [
+            "exp_edge_no",
+            "exp_triangle_component_no",
+            "exp_monochromatic_class_no",
+            "nac_all_check_cycle_mask",
+            "nac_all_check_is_NAC",
+        ],
         # ["scaled_edge_no", "scaled_triangle_component_no", "scaled_monochromatic_class_no", "scaled_nac_all_check_cycle_mask"],
-        ["inv_edge_no",    "inv_triangle_component_no",    "inv_monochromatic_class_no",    "inv_nac_all_check_cycle_mask",    "inv_nac_all_check_is_NAC", ],
+        [
+            "inv_edge_no",
+            "inv_triangle_component_no",
+            "inv_monochromatic_class_no",
+            "inv_nac_all_check_cycle_mask",
+            "inv_nac_all_check_is_NAC",
+        ],
         # ["new_edge_no",    "new_triangle_component_no",    "new_monochromatic_class_no",    "new_nac_all_check_cycle_mask" ],
     ]
     ops_aggregation = [
@@ -1115,18 +1260,18 @@ def plot_is_NAC_coloring_calls(
                             # width=DEFAULT_FIG_WIDTH if len(ops_aggregation) > 1 else DEFAULT_FIG_WIDTH * 3/4,
                             subplots=(nrows, ncols),
                         ),
-                        layout='constrained',
+                        layout="constrained",
                     )
 
                     # Used later to safe the figue to the correct file
                     fig.value_column = value_columns[0]
                     fig.x_column = x_column
                     fig.based_on = "checks"
-                    fig.aggregations = aggregation #"+".join(ops_aggregation)
+                    fig.aggregations = aggregation  # "+".join(ops_aggregation)
 
                     figs.append(fig)
                     row = 0
-                    axs = [ fig.add_subplot(nrows, ncols, ncols*row+1) ]
+                    axs = [fig.add_subplot(nrows, ncols, ncols * row + 1)]
 
                     for ax, aggregation in zip(axs, [aggregation]):
                         _plot_is_NAC_coloring_calls_groups(
