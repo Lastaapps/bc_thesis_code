@@ -91,6 +91,49 @@ def coloring_from_mask(
 
 
 ################################################################################
+def mask_to_vertices(
+    ordered_comp_ids: List[int],
+    component_to_edges: List[List[Edge]],
+    subgraph_mask: int,
+) -> Set[int]:
+    """
+    Returns vertices in the original graph
+    that are
+    """
+    graph_vertices: Set[int] = set()
+
+    for i, v in enumerate(ordered_comp_ids):
+        if (1 << i) & subgraph_mask == 0:
+            continue
+
+        edges = component_to_edges[v]
+        for u, w in edges:
+            graph_vertices.add(u)
+            graph_vertices.add(w)
+    return graph_vertices
+
+
+################################################################################
+def mask_to_graph(
+    ordered_comp_ids: List[int],
+    component_to_edges: List[List[Edge]],
+    subgraph_mask: int,
+) -> nx.Graph:
+    """
+    Reconstructs the graph represented by the mask given
+    """
+    graph = nx.Graph()
+
+    for i, v in enumerate(ordered_comp_ids):
+        if (1 << i) & subgraph_mask == 0:
+            continue
+
+        edges = component_to_edges[v]
+        graph.add_edges_from(edges)
+    return graph
+
+
+################################################################################
 def create_bitmask_for_component_graph_cycle(
     graph: nx.Graph,
     component_to_edges: Callable[[int], List[Edge]],
