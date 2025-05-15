@@ -755,7 +755,7 @@ def enable_latex_output():
 ###############################################################################
 def plot_monochromatic_vs_triangle(df: pd.DataFrame, dataset: str | None = None, n: int = 10):
     """
-    Compares effectivness of triangle-connected components and monochromatic classes
+    Compares effectivness of △-connected components and monochromatic classes
     """
     if dataset is not None:
         df = df.query(f"dataset == '{dataset}'")
@@ -765,19 +765,20 @@ def plot_monochromatic_vs_triangle(df: pd.DataFrame, dataset: str | None = None,
     graph_no_bellow_monoch_n = df.query(f"monochromatic_classes_no < {n}").index.nunique()
     graph_no_bellow_triang_n = df.query(f"triangle_components_no < {n}").index.nunique()
     print(f"Graphs with less then {n} Monochromatic classes: {graph_no_bellow_monoch_n}/{graph_no} ({graph_no_bellow_monoch_n/graph_no*100}%)")
-    print(f"Graphs with less then {n} Triangle-connected components: {graph_no_bellow_triang_n}/{graph_no} ({graph_no_bellow_triang_n/graph_no*100}%)")
+    print(f"Graphs with less then {n} △-connected components: {graph_no_bellow_triang_n}/{graph_no} ({graph_no_bellow_triang_n/graph_no*100}%)")
 
     dist = 1+df[Columns.TRIANGLE_COMPONENTS_NO].max()-df[Columns.TRIANGLE_COMPONENTS_NO].min()
-    dist = (dist+1)//4
+    dist = (dist+3)//4
     alpha = 0.6
     fig = figure(
         figsize=fig_size(DEFAULT_FIG_WIDTH//2, height_ratio=1),
     )
     ax = fig.subplots(1,1)
     ax.hist(df[Columns.MONOCHROMATIC_CLASSES_NO], bins=dist, alpha=alpha, stacked=True, label="Monochromatic classes")
-    ax.hist(df[Columns.TRIANGLE_COMPONENTS_NO], bins=dist, alpha=alpha, stacked=True, label="Triangle-connected components")
-    ax.set_xlabel("Number of m. classes or t. components")
+    ax.hist(df[Columns.TRIANGLE_COMPONENTS_NO], bins=dist, alpha=alpha, stacked=True, label="△-connected components")
+    ax.set_xlabel("Number of m. classes or △-con. components")
     ax.set_ylabel("Number of graphs")
+    ax.legend()
     if not LATEX_ENABLED and dataset:
         ax.set_title(dataset)
     return fig
@@ -852,7 +853,7 @@ def _group_and_plot(
 
         rename_based_on = {
             "vertex_no": "Vertices",
-            "triangle_components_no": "Triangle components",
+            "triangle_components_no": "△-connected components",
             "monochromatic_classes_no": "Monochromatic classes",
         }
 
@@ -1063,7 +1064,7 @@ def _plot_is_NAC_coloring_calls_groups(
 
     rename_based_on = {
         "vertex_no": "Vertices",
-        "triangle_components_no": "Triangle components",
+        "triangle_components_no": "△-connected components",
         "monochromatic_classes_no": "Monochromatic classes",
     }
 
@@ -1153,21 +1154,21 @@ def plot_is_NAC_coloring_calls(
 
     rename_dict = {
         "exp_edge_no": "Naive - Edges",
-        "exp_triangle_component_no": "Naive - Triangle-components",
+        "exp_triangle_component_no": "Naive - △-connected components",
         "exp_monochromatic_class_no": "Naive - Monochromatic classes",
         "nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
         "scaled_edge_no": "Naive - Edges",
-        "scaled_triangle_component_no": "Naive - Triangle-components",
+        "scaled_triangle_component_no": "Naive - △-connected components",
         "scaled_monochromatic_class_no": "Naive - Monochromatic classes",
         "scaled_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_edge_no": "Naive - Edges",
-        "inv_triangle_component_no": "Naive - Triangle-components",
+        "inv_triangle_component_no": "Naive - △-connected components",
         "inv_monochromatic_class_no": "Naive - Monochromatic classes",
         "inv_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
         "new_edge_no": "Naive - Edges",
-        "new_triangle_component_no": "Naive - Triangle-components",
+        "new_triangle_component_no": "Naive - △-connected components",
         "new_monochromatic_class_no": "Naive - Monochromatic classes",
         "new_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "new_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
@@ -1212,7 +1213,7 @@ def plot_is_NAC_coloring_calls(
                     r"The number of checks",
                     # r"\#is_NAC_coloring() calls/\#NAC(G)",
                     r"The number of NAC-colorings / The number of checks",
-                    # r"Checks / triangle components number",
+                    # r"Checks / △-connected components number",
                 ],
                 ops_value_groups,
             ):
@@ -1246,7 +1247,7 @@ def plot_is_NAC_coloring_calls(
                     r"The number of checks",
                     # r"\#is_NAC_coloring() calls/\#NAC(G)",
                     r"The number of NAC-colorings / The number of checks",
-                    # r"Checks / triangle components number",
+                    # r"Checks / △-connected components number",
                 ],
                 ops_value_groups,
             ):

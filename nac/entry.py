@@ -22,7 +22,6 @@ def NAC_colorings(
     relabel_strategy: str = "none",
     monochromatic_class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
     use_decompositions: bool = True,
-    remove_vertices_cnt: int = 0,
     use_has_coloring_check: bool = True,
     seed: int | None = None,
 ) -> Iterable[NACColoring]:
@@ -33,7 +32,7 @@ def NAC_colorings(
         monochromatic_class_type=monochromatic_class_type,
         use_decompositions=use_decompositions,
         is_cartesian=False,
-        remove_vertices_cnt=remove_vertices_cnt,
+        remove_vertices_cnt=0,
         use_has_coloring_check=use_has_coloring_check,
         seed=seed,
     )

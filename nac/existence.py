@@ -6,8 +6,7 @@ from typing import *
 
 import networkx as nx
 
-from nac.exception import LoopError
-from nac.data_type import NACColoring
+from nac.data_type import NACColoring, LoopError
 from nac.monochromatic_classes import find_monochromatic_classes
 
 
