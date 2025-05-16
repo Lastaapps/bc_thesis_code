@@ -22,7 +22,6 @@ from tqdm import tqdm
 
 import nac as nac
 import nac.util
-from benchmarks import dataset
 
 ###############################################################################
 # https://stackoverflow.com/a/75898999
@@ -744,13 +743,24 @@ def enable_latex_output():
             "text.usetex": True,
             # "font.size": 6,
             # "savefig.dpi": 600,
-            "legend.fontsize": 9,
+            "legend.fontsize": 10, # 12 is to large for some graph
             "figure.titlesize": 18,
             # "axes.labelsize": 6,
             # "xtick.labelsize": 6,
             # "ytick.labelsize": 6
         }
     )
+
+def trcon(short: bool = False) -> str:
+    if LATEX_ENABLED:
+        base = r"$\triangle$"
+    else:
+        base = "△"
+
+    if not short:
+        return base + "-connected"
+    else:
+        return base + "-conn."
 
 ###############################################################################
 def plot_monochromatic_vs_triangle(df: pd.DataFrame, dataset: str | None = None, n: int = 10):
@@ -775,8 +785,8 @@ def plot_monochromatic_vs_triangle(df: pd.DataFrame, dataset: str | None = None,
     )
     ax = fig.subplots(1,1)
     ax.hist(df[Columns.MONOCHROMATIC_CLASSES_NO], bins=dist, alpha=alpha, stacked=True, label="Monochromatic classes")
-    ax.hist(df[Columns.TRIANGLE_COMPONENTS_NO], bins=dist, alpha=alpha, stacked=True, label="△-connected components")
-    ax.set_xlabel("Number of m. classes or △-con. components")
+    ax.hist(df[Columns.TRIANGLE_COMPONENTS_NO], bins=dist, alpha=alpha, stacked=True, label=f"{trcon()} components")
+    ax.set_xlabel(f"Number of m. classes or {trcon(short=True)} components")
     ax.set_ylabel("Number of graphs")
     ax.legend()
     if not LATEX_ENABLED and dataset:
@@ -853,7 +863,7 @@ def _group_and_plot(
 
         rename_based_on = {
             "vertex_no": "Vertices",
-            "triangle_components_no": "△-connected components",
+            "triangle_components_no": f"{trcon()} components",
             "monochromatic_classes_no": "Monochromatic classes",
         }
 
@@ -1064,7 +1074,7 @@ def _plot_is_NAC_coloring_calls_groups(
 
     rename_based_on = {
         "vertex_no": "Vertices",
-        "triangle_components_no": "△-connected components",
+        "triangle_components_no": f"{trcon()} components",
         "monochromatic_classes_no": "Monochromatic classes",
     }
 
@@ -1154,21 +1164,21 @@ def plot_is_NAC_coloring_calls(
 
     rename_dict = {
         "exp_edge_no": "Naive - Edges",
-        "exp_triangle_component_no": "Naive - △-connected components",
+        "exp_triangle_component_no": f"Naive - {trcon()} components",
         "exp_monochromatic_class_no": "Naive - Monochromatic classes",
         "nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
         "scaled_edge_no": "Naive - Edges",
-        "scaled_triangle_component_no": "Naive - △-connected components",
+        "scaled_triangle_component_no": f"Naive - {trcon()} components",
         "scaled_monochromatic_class_no": "Naive - Monochromatic classes",
         "scaled_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_edge_no": "Naive - Edges",
-        "inv_triangle_component_no": "Naive - △-connected components",
+        "inv_triangle_component_no": f"Naive - {trcon()} components",
         "inv_monochromatic_class_no": "Naive - Monochromatic classes",
         "inv_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "inv_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
         "new_edge_no": "Naive - Edges",
-        "new_triangle_component_no": "Naive - △-connected components",
+        "new_triangle_component_no": f"Naive - {trcon()} components",
         "new_monochromatic_class_no": "Naive - Monochromatic classes",
         "new_nac_all_check_cycle_mask": "Subgraphs - CycleMask",
         "new_nac_all_check_is_NAC": "Subgraphs - IsNACColoring",
@@ -1198,7 +1208,7 @@ def plot_is_NAC_coloring_calls(
     ]
     ops_aggregation = [
         "mean",
-        # "median",
+        "median",
         # "3rd quartile",
     ]
 
@@ -1210,10 +1220,10 @@ def plot_is_NAC_coloring_calls(
             row = 0
             for title, value_columns in zip(
                 [
-                    r"The number of checks",
+                    "The number of checks",
                     # r"\#is_NAC_coloring() calls/\#NAC(G)",
-                    r"The number of NAC-colorings / The number of checks",
-                    # r"Checks / △-connected components number",
+                    "The number of NAC-colorings / The number of checks",
+                    # f"Checks / {triang()}-connected components number",
                 ],
                 ops_value_groups,
             ):
@@ -1247,7 +1257,7 @@ def plot_is_NAC_coloring_calls(
                     r"The number of checks",
                     # r"\#is_NAC_coloring() calls/\#NAC(G)",
                     r"The number of NAC-colorings / The number of checks",
-                    # r"Checks / △-connected components number",
+                    # f"Checks / {triang()}-connected components number",
                 ],
                 ops_value_groups,
             ):

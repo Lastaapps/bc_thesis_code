@@ -15,7 +15,7 @@ from tqdm import tqdm
 import networkx as nx
 import nac
 from nac import NiceGraph as Graph
-from benchmarks import dataset
+from benchmarks import datasets
 
 # TODO import PyRigi
 
@@ -62,7 +62,7 @@ def _generate_random_graphs_impl(
 
         graphs: List[nx.Graph]
         if path.is_file():
-            graphs = list(dataset.load_graph6_graphs_from_file(str(path)))
+            graphs = list(datasets.load_graph6_graphs_from_file(str(path)))
         else:
             graphs = []
 
@@ -90,7 +90,7 @@ def _generate_random_graphs_impl(
 
 # takes ~1h 30m on my laptop
 def generate_random_laman_graphs(
-    dir: str = dataset.DIR_LAMAN_RANDOM,
+    dir: str = datasets.DIR_LAMAN_RANDOM,
     filename_template: str = "laman_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
@@ -111,7 +111,7 @@ def generate_random_laman_graphs(
 
 
 def generate_random_globally_rigid_graphs(
-    dir: str = os.path.join(dataset.DIR_RANDOM, "globally_rigid"),
+    dir: str = os.path.join(datasets.DIR_RANDOM, "globally_rigid"),
     filename_template: str = "globally_rigid_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
@@ -132,7 +132,7 @@ def generate_random_globally_rigid_graphs(
 
 
 def generate_random_sparse_with_few_colorings_graphs(
-    dir: str = os.path.join(dataset.DIR_RANDOM, "sparse_with_few_colorings"),
+    dir: str = os.path.join(datasets.DIR_RANDOM, "sparse_with_few_colorings"),
     filename_template: str = "sparse_with_few_colorings_{0}",
     seed: int | None = 42,
 ) -> List[Tuple[int, List[nx.Graph]]]:
