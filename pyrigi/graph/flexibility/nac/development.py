@@ -10,7 +10,7 @@ from typing import *
 import networkx as nx
 import time
 
-from nac.data_type import Edge
+from pyrigi.data_type import Edge
 
 statistics_storage: Dict[int, List[Any]] = defaultdict(list)
 
@@ -19,13 +19,9 @@ NAC_PRINT_SWITCH = False
 # NAC_PRINT_SWITCH = True
 
 
-def NAC_statistics_colorings_merge[
-    T
-](
+def NAC_statistics_colorings_merge[T](
     func: Callable[..., Tuple[Iterable[T], int]],
-) -> Callable[
-    ..., Tuple[Iterable[T], int]
-]:
+) -> Callable[..., Tuple[Iterable[T], int]]:
     return func
 
     def stats(*args, **kwargs) -> Tuple[List[T], int]:
@@ -41,9 +37,9 @@ def NAC_statistics_colorings_merge[
     return stats
 
 
-def NAC_statistics_generator[
-    T
-](func: Callable[..., Iterable[T]],) -> Callable[..., Iterable[T]]:
+def NAC_statistics_generator[T](
+    func: Callable[..., Iterable[T]],
+) -> Callable[..., Iterable[T]]:
     return func
 
     def stats(*args, **kwargs) -> Iterable[T]:

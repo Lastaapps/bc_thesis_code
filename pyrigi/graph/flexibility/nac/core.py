@@ -10,32 +10,35 @@ from networkx.algorithms.community import kernighan_lin_bisection
 import math
 import numpy as np
 
-from nac.util.union_find import UnionFind
-from nac.util.repetable_iterator import RepeatableIterator
+from pyrigi.util.union_find import UnionFind
+from pyrigi.util.repetable_iterator import RepeatableIterator
 
-from nac.data_type import NACColoring, Edge
-from nac.monochromatic_classes import (
+from pyrigi.data_type import Edge
+from pyrigi.graph.flexibility.nac.data_type import NACColoring
+from pyrigi.graph.flexibility.nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
     create_component_graph_from_components,
 )
-from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
-from nac.check import (
+from pyrigi.graph.flexibility.nac.existence import (
+    has_NAC_coloring_checks,
+    check_NAC_constrains,
+)
+from pyrigi.graph.flexibility.nac.check import (
     _is_cartesian_NAC_coloring_impl,
     _is_NAC_coloring_impl,
     _NAC_check_called_reset,
 )
-from nac.development import (
+from pyrigi.graph.flexibility.nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
     NAC_statistics_colorings_merge,
     graphviz_graph,
     graphviz_component_graph,
 )
-from nac import NiceGraph
 
-from nac.cycle_detection import find_cycles
-import nac.check
+from pyrigi.graph.flexibility.nac.cycle_detection import find_cycles
+import pyrigi.graph.flexibility.nac.check
 
 
 def coloring_from_mask(
@@ -228,7 +231,7 @@ def mask_matches_templates(
             bit mask representing all the vertices of the current subgraph.
     ----------
     """
-    nac.check._NAC_CHECK_CYCLE_MASK += 1
+    pyrigi.graph.flexibility.nac.check._NAC_CHECK_CYCLE_MASK += 1
 
     for template, validity in templates:
         stamp1, stamp2 = mask & template, (mask ^ subgraph_mask) & template

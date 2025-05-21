@@ -9,10 +9,10 @@ from typing import *
 import networkx as nx
 import numpy as np
 
-from nac.data_type import NACColoring, Edge
+from pyrigi.data_type import Edge
+from pyrigi.graph.flexibility.nac.data_type import NACColoring
 
-from nac.existence import check_NAC_constrains
-from nac.data_type import NiceGraph
+from pyrigi.graph.flexibility.nac.existence import check_NAC_constrains
 
 # how many times was the routine called
 _NAC_CHECK_IS_NAC_COLORING = 0
@@ -108,7 +108,7 @@ def _is_NAC_coloring_impl(
     #     graph._graph_is_NAC_coloring = G
 
     # Workaround
-    G = NiceGraph()
+    G = nx.Graph()
     G.add_nodes_from(graph.nodes)
 
     return _check_for_almost_red_cycles(G, red, blue) and _check_for_almost_red_cycles(
@@ -192,7 +192,7 @@ def _is_cartesian_NAC_coloring_impl(
     #     G = nx.Graph()
     #     G.add_nodes_from(graph.nodes)
     #     graph._graph_is_NAC_coloring = G
-    G = NiceGraph()
+    G = nx.Graph()
     G.add_nodes_from(graph.nodes)
 
     red, blue = coloring

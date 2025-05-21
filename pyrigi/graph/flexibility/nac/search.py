@@ -24,23 +24,26 @@ from typing import *
 import networkx as nx
 import numpy as np
 
-from nac.algorithms import (
+from pyrigi.graph.flexibility.nac.algorithms import (
     NAC_colorings_cycles,
     NAC_colorings_naive,
     NAC_colorings_subgraphs,
     NAC_colorings_with_non_surjective,
     NAC_colorings_without_vertex,
 )
-from nac.util.repetable_iterator import RepeatableIterator
+from pyrigi.util.repetable_iterator import RepeatableIterator
 
-from nac.data_type import NACColoring, Edge, NiceGraph
-from nac.monochromatic_classes import (
+from pyrigi.graph.flexibility.nac.data_type import NACColoring, Edge
+from pyrigi.graph.flexibility.nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
     create_component_graph_from_components,
 )
-from nac.existence import has_NAC_coloring_checks, check_NAC_constrains
-from nac.check import (
+from pyrigi.graph.flexibility.nac.existence import (
+    has_NAC_coloring_checks,
+    check_NAC_constrains,
+)
+from pyrigi.graph.flexibility.nac.check import (
     _is_cartesian_NAC_coloring_impl,
     _is_NAC_coloring_impl,
     _NAC_check_called_reset,
@@ -345,7 +348,7 @@ def NAC_colorings_impl(
 
     def run(graph: nx.Graph) -> Iterable[NACColoring]:
         # TODO NAC not sure if copy is needed, but I used it before
-        graph = NiceGraph(graph)
+        graph = nx.Graph(graph)
 
         # in case graph has no edges because of some previous optimizations,
         # there are no NAC colorings

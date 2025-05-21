@@ -6,9 +6,8 @@ import networkx as nx
 from networkx.algorithms.community import kernighan_lin_bisection
 import numpy as np
 
-from nac import Edge, NiceGraph
-
-from nac.cycle_detection import find_cycles
+from pyrigi.data_type import Edge
+from pyrigi.graph.flexibility.nac.cycle_detection import find_cycles
 
 
 def degree_ordered_nodes(graph: nx.Graph) -> List[int]:
@@ -608,7 +607,7 @@ def subgraphs_strategy_cuts(
 
     def do_split(comp_subgraph: nx.Graph) -> List[List[int]]:
         # required as induced subgraphs are frozen
-        comp_subgraph = NiceGraph(comp_subgraph)
+        comp_subgraph = comp_subgraph
 
         if comp_subgraph.number_of_nodes() <= max(2, preferred_chunk_size * 3 // 2):
             return [list(comp_subgraph.nodes)]

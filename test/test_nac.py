@@ -2,8 +2,6 @@
 Tests for all the NAC coloring search related functions
 """
 
-from nac import NACColoring, Edge
-
 from dataclasses import dataclass
 from typing import List, Optional, Set, Tuple
 import pyrigi.graphDB as graphs
@@ -12,7 +10,8 @@ import networkx as nx
 import random
 from tqdm import tqdm
 
-import nac as nac
+from pyrigi.graph.flexibility import nac
+from pyrigi.graph.flexibility.nac import NACColoring, Edge
 
 import pytest
 

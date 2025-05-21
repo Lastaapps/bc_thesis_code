@@ -7,7 +7,7 @@ from typing import *
 
 import networkx as nx
 
-from nac.data_type import Edge
+from pyrigi.data_type import Edge
 
 
 # obsolete, left for legacy reasons

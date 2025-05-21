@@ -6,14 +6,17 @@ from typing import *
 
 import networkx as nx
 
-from nac.data_type import NACColoring
-from nac.search import NAC_colorings_impl
-from nac.single import has_NAC_coloring_impl, single_NAC_coloring_impl
-from nac.single import (
+from pyrigi.graph.flexibility.nac.data_type import NACColoring
+from pyrigi.graph.flexibility.nac.search import NAC_colorings_impl
+from pyrigi.graph.flexibility.nac.single import (
+    has_NAC_coloring_impl,
+    single_NAC_coloring_impl,
+)
+from pyrigi.graph.flexibility.nac.single import (
     has_cartesian_NAC_coloring_impl,
     single_cartesian_NAC_coloring_impl,
 )
-from nac.monochromatic_classes import MonochromaticClassType
+from pyrigi.graph.flexibility.nac.monochromatic_classes import MonochromaticClassType
 
 
 def NAC_colorings(

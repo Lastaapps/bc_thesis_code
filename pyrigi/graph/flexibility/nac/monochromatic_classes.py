@@ -8,8 +8,8 @@ from typing import *
 from enum import Enum
 import networkx as nx
 
-from nac.util.union_find import UnionFind
-from nac.data_type import Edge
+from pyrigi.util.union_find import UnionFind
+from pyrigi import Edge
 
 
 class MonochromaticClassType(Enum):

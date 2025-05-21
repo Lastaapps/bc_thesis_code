@@ -4,8 +4,8 @@ from typing import *
 
 import networkx as nx
 
-from nac.core import mask_to_graph, mask_to_vertices
-from nac.data_type import Edge
+from pyrigi.graph.flexibility.nac.core import mask_to_graph, mask_to_vertices
+from pyrigi.data_type import Edge
 
 Epoch: TypeAlias = Tuple[Iterable[int], int]
 

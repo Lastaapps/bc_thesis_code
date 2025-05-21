@@ -9,10 +9,10 @@ from typing import *
 
 import networkx as nx
 
-from nac.data_type import NACColoring
+from pyrigi.graph.flexibility.nac.data_type import NACColoring
 
-from nac.search import NAC_colorings
-from nac.existence import (
+from pyrigi.graph.flexibility.nac.search import NAC_colorings
+from pyrigi.graph.flexibility.nac.existence import (
     check_NAC_constrains,
     _check_for_simple_stable_cut,
     _can_have_flexible_labeling,
