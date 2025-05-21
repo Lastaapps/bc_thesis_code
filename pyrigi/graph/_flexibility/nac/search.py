@@ -24,7 +24,7 @@ from typing import *
 import networkx as nx
 import numpy as np
 
-from pyrigi.graph.flexibility.nac.algorithms import (
+from pyrigi.graph._flexibility.nac.algorithms import (
     NAC_colorings_cycles,
     NAC_colorings_naive,
     NAC_colorings_subgraphs,
@@ -33,21 +33,20 @@ from pyrigi.graph.flexibility.nac.algorithms import (
 )
 from pyrigi.util.repetable_iterator import RepeatableIterator
 
-from pyrigi.graph.flexibility.nac.data_type import NACColoring, Edge
-from pyrigi.graph.flexibility.nac.monochromatic_classes import (
+from pyrigi.data_type import Edge
+from pyrigi.graph._flexibility.nac.monochromatic_classes import (
     MonochromaticClassType,
     find_monochromatic_classes,
     create_component_graph_from_components,
 )
-from pyrigi.graph.flexibility.nac.existence import (
+from pyrigi.graph._flexibility.nac.existence import (
     has_NAC_coloring_checks,
     check_NAC_constrains,
 )
-from pyrigi.graph.flexibility.nac.check import (
-    _is_cartesian_NAC_coloring_impl,
+from pyrigi.graph._flexibility.nac.check import (
     _is_NAC_coloring_impl,
-    _NAC_check_called_reset,
 )
+from pyrigi.graph._flexibility.nac.core import NACColoring
 
 
 def _NAC_colorings_cross_product(

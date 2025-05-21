@@ -7,7 +7,7 @@ from networkx.algorithms.community import kernighan_lin_bisection
 import numpy as np
 
 from pyrigi.data_type import Edge
-from pyrigi.graph.flexibility.nac.cycle_detection import find_cycles
+from pyrigi.graph._flexibility.nac.cycle_detection import find_cycles
 
 
 def degree_ordered_nodes(graph: nx.Graph) -> List[int]:

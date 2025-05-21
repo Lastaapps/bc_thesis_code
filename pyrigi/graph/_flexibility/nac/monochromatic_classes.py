@@ -9,7 +9,7 @@ from enum import Enum
 import networkx as nx
 
 from pyrigi.util.union_find import UnionFind
-from pyrigi import Edge
+from pyrigi.data_type import Edge
 
 
 class MonochromaticClassType(Enum):
@@ -20,9 +20,9 @@ class MonochromaticClassType(Enum):
     """Each edge is its own monochromatic class."""
     EDGES = "EDGES"
     """Each triangle-connected component it its own monochromatic class."""
-    TRIANGLES = "TRIANGLES"
+    TRIANGLES = "TRIANGLE_CONNECTED_COMPONENTS"
     """Creates monochromatic classes according to the paper."""
-    MONOCHROMATIC = "MONOCHROMATIC"
+    MONOCHROMATIC = "MONOCHROMATIC_CLASSES"
 
 
 def _trivial_monochromatic_classes(
@@ -39,7 +39,6 @@ def _trivial_monochromatic_classes(
 def find_monochromatic_classes(
     graph: nx.Graph,
     class_type: MonochromaticClassType = MonochromaticClassType.MONOCHROMATIC,
-    is_cartesian_NAC_coloring: bool = False,
 ) -> Tuple[Dict[Edge, int], List[List[Edge]]]:
     """
     Finds all the components of triangle equivalence.
@@ -118,24 +117,6 @@ def find_monochromatic_classes(
                         # if something changed, we may have another
                         # change for improvement the next round
                         done &= not components.join((v, w), (v, u))
-
-    # Finds squares
-    for edge in graph.edges if is_cartesian_NAC_coloring else []:
-        v, u = edge
-
-        v_neighbours = set(graph.neighbors(v))
-        v_neighbours.remove(u)
-
-        for w in graph.neighbors(u):
-            if w == v:
-                continue
-            for n in graph.neighbors(w):
-                if n not in v_neighbours:
-                    continue
-
-                # hooray, we have an intersection
-                components.join((u, v), (w, n))
-                components.join((u, w), (v, n))
 
     edge_to_component: Dict[Edge, int] = {}
     component_to_edge: List[List[Edge]] = []

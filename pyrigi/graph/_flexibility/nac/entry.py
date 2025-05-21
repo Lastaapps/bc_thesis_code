@@ -6,17 +6,20 @@ from typing import *
 
 import networkx as nx
 
-from pyrigi.graph.flexibility.nac.data_type import NACColoring
-from pyrigi.graph.flexibility.nac.search import NAC_colorings_impl
-from pyrigi.graph.flexibility.nac.single import (
+from pyrigi.graph._flexibility.nac.search import NAC_colorings_impl
+from pyrigi.graph._flexibility.nac.single import (
     has_NAC_coloring_impl,
     single_NAC_coloring_impl,
 )
-from pyrigi.graph.flexibility.nac.single import (
+from pyrigi.graph._flexibility.nac.single import (
     has_cartesian_NAC_coloring_impl,
     single_cartesian_NAC_coloring_impl,
 )
-from pyrigi.graph.flexibility.nac.monochromatic_classes import MonochromaticClassType
+from pyrigi.graph._flexibility.nac.monochromatic_classes import MonochromaticClassType
+from pyrigi.data_type import Edge
+
+# TODO frozen set
+NACColoring: TypeAlias = Tuple[Collection[Edge], Collection[Edge]]
 
 
 def NAC_colorings(

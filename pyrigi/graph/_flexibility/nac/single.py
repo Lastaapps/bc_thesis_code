@@ -9,15 +9,13 @@ from typing import *
 
 import networkx as nx
 
-from pyrigi.graph.flexibility.nac.data_type import NACColoring
-
-from pyrigi.graph.flexibility.nac.search import NAC_colorings
-from pyrigi.graph.flexibility.nac.existence import (
+from pyrigi.graph._flexibility.nac.existence import (
     check_NAC_constrains,
     _check_for_simple_stable_cut,
     _can_have_flexible_labeling,
     has_NAC_coloring_checks,
 )
+from pyrigi.graph._flexibility.nac.core import NACColoring
 
 
 def _single_general_NAC_coloring(self) -> Optional[NACColoring]:

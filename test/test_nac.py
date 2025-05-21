@@ -3,15 +3,17 @@ Tests for all the NAC coloring search related functions
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import Collection, List, Optional, Set, Tuple, TypeAlias
 import pyrigi.graphDB as graphs
 from pyrigi import Graph
 import networkx as nx
 import random
 from tqdm import tqdm
 
-from pyrigi.graph.flexibility import nac
-from pyrigi.graph.flexibility.nac import NACColoring, Edge
+from pyrigi.graph._flexibility import nac
+from pyrigi.data_type import Edge
+
+NACColoring: TypeAlias = Tuple[Collection[Edge], Collection[Edge]]
 
 import pytest
 
@@ -82,8 +84,7 @@ def DiamondWithZeroExtension():
     )
 
 
-# TODO move into PyRigi
-def SquareGrid2D(w: int, h: int):
+def Grid(w: int, h: int):
     """
     Creates a square grid with width and height given.
 
@@ -1374,7 +1375,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
     ("graph", "coloring", "result"),
     [
         (
-            SquareGrid2D(4, 2),
+            Grid(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7)]),
@@ -1382,7 +1383,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             True,
         ),
         (
-            SquareGrid2D(4, 2),
+            Grid(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6)]),
                 set([(0, 4), (1, 5), (2, 6), (3, 7), (6, 7)]),
@@ -1390,7 +1391,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            SquareGrid2D(4, 2),
+            Grid(4, 2),
             (
                 set([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (3, 7)]),
                 set([(0, 4), (1, 5), (2, 6)]),
@@ -1398,7 +1399,7 @@ def test_is_cartesian_NAC_coloring_on_not_event_NAC_colorings(
             False,
         ),
         (
-            SquareGrid2D(4, 2),
+            Grid(4, 2),
             (
                 set([(0, 1), (1, 2), (4, 5), (5, 6), (0, 4), (1, 5)]),
                 set([(2, 6), (3, 7), (2, 3), (6, 7)]),

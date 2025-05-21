@@ -7,13 +7,13 @@ from typing import *
 import networkx as nx
 import math
 
-from pyrigi.graph.flexibility.nac.core import (
+from pyrigi.graph._flexibility.nac.core import (
     coloring_from_mask,
     create_bitmask_for_component_graph_cycle,
     mask_matches_templates,
     mask_to_vertices,
 )
-from pyrigi.graph.flexibility.nac.strategies_merging import (
+from pyrigi.graph._flexibility.nac.strategies_merging import (
     dynamic,
     linear,
     log,
@@ -25,7 +25,7 @@ from pyrigi.graph.flexibility.nac.strategies_merging import (
     sorted_bits,
     sorted_size,
 )
-from pyrigi.graph.flexibility.nac.strategies_split import (
+from pyrigi.graph._flexibility.nac.strategies_split import (
     degree_ordered_nodes,
     subgraphs_strategy_degree_cycles,
     subgraphs_strategy_cycles,
@@ -39,9 +39,8 @@ from pyrigi.graph.flexibility.nac.strategies_split import (
 )
 from pyrigi.util.repetable_iterator import RepeatableIterator
 
-from pyrigi.graph.flexibility.nac.data_type import NACColoring
 from pyrigi.data_type import Edge
-from pyrigi.graph.flexibility.nac.development import (
+from pyrigi.graph._flexibility.nac.development import (
     NAC_PRINT_SWITCH,
     NAC_statistics_generator,
     NAC_statistics_colorings_merge,
@@ -49,9 +48,10 @@ from pyrigi.graph.flexibility.nac.development import (
     graphviz_component_graph,
 )
 
-from pyrigi.graph.flexibility.nac.cycle_detection import find_cycles
-import pyrigi.graph.flexibility.nac.check
+from pyrigi.graph._flexibility.nac.cycle_detection import find_cycles
+import pyrigi.graph._flexibility.nac.check
 from pyrigi.util.union_find import UnionFind
+from pyrigi.graph._flexibility.nac.core import NACColoring
 
 
 def NAC_colorings_naive(
@@ -1025,7 +1025,7 @@ def _colorings_merge(
     colorings_1: Tuple[Iterable[int], int],
     colorings_2: Tuple[Iterable[int], int],
 ) -> Tuple[Iterable[int], int]:
-    pyrigi.graph.flexibility.nac.check._NAC_MERGE += 1
+    pyrigi.graph._flexibility.nac.check._NAC_MERGE += 1
 
     (epoch1, subgraph_mask_1) = colorings_1
     (epoch2, subgraph_mask_2) = colorings_2
@@ -1041,7 +1041,7 @@ def _colorings_merge(
     vertices_2 = mask_to_vertices(ordered_comp_ids, component_to_edges, colorings_2[1])
 
     if len(vertices_1.intersection(vertices_2)) <= 1:
-        pyrigi.graph.flexibility.nac.check._NAC_MERGE_NO_COMMON_VERTEX += 1
+        pyrigi.graph._flexibility.nac.check._NAC_MERGE_NO_COMMON_VERTEX += 1
 
         def generator() -> Iterator[int]:
             for c1 in epoch1:
