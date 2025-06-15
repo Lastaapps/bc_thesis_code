@@ -19,5 +19,6 @@ venv
 
 !NAC_presentation.ipynb
 !NAC_playground.ipynb
+!reviewers_questions.ipynb
 figures
 .vscode
